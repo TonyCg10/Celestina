@@ -1,0 +1,17 @@
+# HEM-H1-H exact change inventory
+
+Base revision	ca5192c17e5bbac6770e932d689a3edc1f25270d
+Pathspec	hematita/STATUS.md
+Pathspec	hematita/docs/evidence/2026-11-25-status-trim.md
+Pathspec	hematita/docs/history/status-through-2026-11-25.md
+Pathspec	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-H.numstat.tsv
+Pathspec	hematita/docs/plans/active/2026-09-26-hardening.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+15	511	2e0aa1bb965368c3ae47fd418e0a99349c0981f0630b523da599010b2fe26603	hematita/STATUS.md
+46	0	e62471db444d9f7efb22b3293af76504734d495f34f93d637fbd8992e1ecd6e0	hematita/docs/evidence/2026-11-25-status-trim.md
+521	0	3b10ea57b7adc5764a14d52eb1236f01ef1e8e95a88961b398a18c64ab06240d	hematita/docs/history/status-through-2026-11-25.md
+17	0	self	hematita/docs/inventories/2026-09-26-hardening/HEM-H1-H.numstat.tsv
+1	0	7237718eab38e09de56fa932c0226c05a68a872e09c01fd3b57ae365b3db5b42	hematita/docs/plans/active/2026-09-26-hardening.md

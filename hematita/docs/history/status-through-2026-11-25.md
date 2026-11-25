@@ -1,0 +1,521 @@
+# Hematita status history through 2026-11-25
+
+Moved verbatim from [the status](../../STATUS.md) on 2026-11-25: the delivered
+checkpoints, the closed phases and the per-unit records, including statements
+that were true when written (versions, "not landed") and are not any more.
+
+## From the status header
+
+- **Active checkpoint:** `HEM-H1`, the hardening that follows the 2026-09-26
+  monorepo audit ([plan](../../docs/plans/active/2026-09-26-hardening.md)):
+  `HEM-H1-A` active — the storage walk, the permanent deletion and the
+  trash admission tell a mount by its mount id (a bind mount reached
+  through a link included), the walk resolves its root on the scan thread
+  and stops at ten million entries, duplicates are keyed by size and read
+  only from the regular file the scan recorded, and the core tests pass as
+  root and as a user; not landed
+  ([evidence](../../docs/evidence/2026-09-26-mount-and-delete-safety.md));
+  `HEM-H1-B` active — the storage page lists forty rows per folder through
+  the core's capped projection, and forty more each time the merged row is
+  activated, so every entry stays reachable; it filters before the cap, and
+  receives the content check's verdicts in batches that change only their
+  own groups' marks; a unit action waits at most five minutes under a
+  watchdog that closes its connection; a D-Bus error reply no longer reads
+  as a malformed listing; a process's owner is read every time and its
+  name and application again after an `exec` or every half minute, and the
+  account table again when an unknown uid appears (at most once a minute); every
+  kernel file is read bounded; closing the window waits at most half a
+  second for the sampler; application names come from the shared bounded
+  `.desktop` lookup on the sampler thread; one byte formatter; not landed
+  ([evidence](../../docs/evidence/2026-09-26-storage-page-and-readers.md))
+- **Smoke fix in `HEM-H1-G`:** the smoke's race gate reads its two exit codes
+  from their own line and keeps gvfs off the private bus, so a bus-activated
+  service's shutdown message can no longer fail it
+  ([evidence](../../docs/evidence/2026-10-15-smoke-race-log.md))
+- **Delivered as 1.2.2:** `S3-C` — a section change no longer resets the
+  storage analysis: `open()` runs only when the section is shown on the
+  locations zone, so the folder, scan, filters, selection and cursor survive;
+  the details card starts shown; built, verified and deployed. `VAL-S3`
+  covers the round trip
+  ([evidence](../../docs/evidence/2026-09-25-s3-section-persistence.md))
+- **Delivered as 1.2.1:** `S3-B` — each storage entry paints its list bar
+  and its tile in one of the six `CelestinaTheme.usagePalette` tones by size
+  rank; duplicate, empty and unreadable keep their colours; the shared
+  controls' corner fix from `celestina-style` 1.9.1 arrives through the
+  symlinks; built, verified and deployed. `VAL-S3` covers the look
+  ([evidence](../../docs/evidence/2026-09-25-s3-rank-tones.md))
+- **Delivered as 1.2.0:** `S3` (shared usage view) — `S3-A` done: the usage projection
+  lives in `hematita-core::usage::view`, the Storage page draws the shared
+  `CelestinaTreemap` and `CelestinaUsageList`, and a folder handed on the
+  command line, through D-Bus `Open` or the desktop entry's `%f` opens the
+  storage section browsing it; built and verified, not deployed
+  ([evidence](../../docs/evidence/2026-09-25-s3-shared-usage.md)); `S3-Z` closed
+  the checkpoint at `1.2.0`: the release binary is built, verified and
+  deployed to the author's prefix. Nobody has tried Space, Delete or the
+  D-Bus hand-off on a real session yet: `VAL-S3` stays pending. See the
+  [production completion record](../../docs/evidence/2026-09-25-s3-production-completion.md)
+- **Delivered as 1.1.1:** `S2` (storage hardening) — `S2-A` done:
+  `hematita-core::usage` deletes permanently through directory descriptors
+  (the analysed folder and every folder down to the target opened without
+  following a link, every entry removed relative to the folder that holds
+  it), checks the scanned device and inode itself, and reports what it had
+  removed when it stops midway; the walk remembers only files with more
+  than one name; `scan_subtree`, `Tree::graft` and `Tree::is_live` let the
+  hub put a fresh sub-scan in place of a stale subtree; crate-only, no
+  build, see the [core evidence](../../docs/evidence/2026-09-23-s2-core.md);
+  `S2-A2` corrected it after review: a read-only pass over the whole
+  subtree refuses an inner mount, an unlistable folder or a tree deeper
+  than 256 folders before anything is removed, every opened folder is
+  checked again by device and inode, and a folder gone on the way reads as
+  missing ([core fixes](../../docs/evidence/2026-09-23-s2-core-fixes.md));
+  `S2-B` done: the hub is split into `analysis_session.rs` (the session
+  state and its rules, unit-tested) and `analysis_workers.rs` (worker
+  glue) under a 779-line `analysis.rs`; a deletion that stopped inside an
+  item reports it as partial and the hub grafts a fresh scan of what is
+  left; the content check holds the tree weakly; ids of pruned or replaced
+  subtrees are refused; the confirmation's count is checked by the hub
+  ([hub evidence](../../docs/evidence/2026-09-23-s2-hub.md)); `S2-B2` corrected
+  it after review: a cancel inside the last item reads as cancelled, and
+  the confirmation is bound to a selection revision instead of its count
+  ([hub fixes](../../docs/evidence/2026-09-23-s2-hub-fixes.md)); `S2-Z` closed
+  the checkpoint at `1.1.1`: the release binary is built, verified and
+  deployed to the author's prefix. Nobody has run a deletion, a cancel or a
+  graft from it on a real session yet: `VAL-S2` stays pending, alongside
+  `VAL-S1`, `VAL-H2` and `VAL-H5`. See the
+  [production completion record](../../docs/evidence/2026-09-23-s2-production-completion.md)
+- **Delivered as 1.1.0:** `S1` (storage) — `S1-A` done: `hematita-core::usage`
+  walks one device under a folder into an indexed tree (hard links once,
+  symbolic links never followed, unreadable folders marked), finds empty
+  folders and duplicate candidates verified by content, lays out a
+  squarified treemap, reads the mount table, and holds the suite's only
+  permanent deletion, which refuses the scanned root, anything outside it
+  and any mount root; crate-only, no build, see the
+  [core evidence](../../docs/evidence/2026-09-23-s1-core.md); `S1-A2` corrected
+  it after review: the deletion refuses a path whose folders on the way
+  became links, a folder holding only a link is no longer "empty", and
+  mount points read from `mountinfo` bound the walk and the deletion even
+  where a bind mount or subvolume shares the device
+  ([core fixes](../../docs/evidence/2026-09-23-s1-core-fixes.md)); `S1-B` done:
+  the Almacenamiento section lists the mount points with their occupation
+  and browses any readable one folder by folder, on worker threads, with
+  the hub's whole contract declared and the scan and action invokables
+  answering `refused` until `S1-C`/`S1-D`
+  ([locations](../../docs/evidence/2026-09-23-s1-locations.md)); `S1-C` done:
+  the section scans the folder one is in on a worker thread with progress
+  and cancellation, shows the result as a size list beside a treemap,
+  filters duplicates and empty folders, verifies duplicates by content on
+  demand and keeps a real selection, while the actions still answer
+  `refused` until `S1-D`
+  ([analysis](../../docs/evidence/2026-09-23-s1-analysis.md)); `S1-D` done:
+  the selection opens in Siderita, goes to the trash through
+  `siderita-ops` (asked first for more than one entry) or is deleted
+  permanently through the guarded deletion (always asked first), on a
+  worker thread with a typed outcome; the tree is pruned of exactly what
+  was removed, and the content check can no longer land on an older tree
+  ([actions](../../docs/evidence/2026-09-23-s1-actions.md)); `S1-E` corrected
+  it after review: a running trash or deletion can be cancelled and still
+  prunes what it removed, each entry is checked again by device and inode
+  before it is removed, and a mount root is refused for trash as for
+  deletion ([actions fixes](../../docs/evidence/2026-09-23-s1-actions-fixes.md));
+  `S1-Z` closed the checkpoint at `1.1.0`: the release binary is built,
+  verified and deployed to the author's prefix. Nobody has looked at the
+  Storage page on a real session yet, scanned a real folder or run an
+  action from it: `VAL-S1` stays pending, alongside `VAL-H2` and `VAL-H5`.
+  See the
+  [production completion record](../../docs/evidence/2026-09-23-s1-production-completion.md)
+- **Delivered as 1.0.0:** `REL-1` — the author validated `VAL-VIS-2` on the
+  real session (the process table kept its scroll position across
+  refreshes, applications opened folded, no flicker) and asked to close
+  version 1; `VAL-VIS-2` and the remediated `VAL-H1`, `VAL-H3` and `VAL-H4`
+  are recorded passed; no code changed
+- **Delivered as 0.6.3:** `VIS-2` — a refresh no longer throws the
+  process, service or sensor list back to its top, the view moves only when
+  the person moves the cursor, and every application opens folded
+- **Delivered as 0.6.2:** `VIS-1` — the correction of the author's first
+  real-session look: the strip's items centred, sparklines inside their
+  corners, a colour per resource and sensor kind, the process and service
+  tables as one inset card under a bar on the canvas, readable process,
+  unit and sensor names, the kernel's sentinel limits dropped, and a
+  measured idle disk rate told from an unreadable one
+- **Delivered as 0.6.1:** `H5-D` — the whole-branch review's correction: a
+  unit action now carries the D-Bus `AllowInteractiveAuth` flag, without
+  which polkit never consults an agent and every system-unit action is
+  refused before anybody is asked; the action waits five minutes for the
+  person and the listing two seconds for the bus, each on its own connection;
+  polkit's `NotAuthorized` reads as `denied` rather than as a missing agent;
+  the hub is the authority on which unit exists and publishes the acted
+  manager; and `AGENTS.md`, `VAL-H5` and the foreign kill question say what
+  the code does
+- **Delivered as 0.6.0:** H5 — the Services page lists every user and
+  system unit read from both buses; the person starts, stops and restarts
+  their own units without authorisation, and reaches a system unit or a
+  foreign process only through polkit, with every privileged outcome typed
+  and read as a sentence, including a missing authentication agent; built,
+  verified and deployed to the author's prefix
+- **Delivered as 0.4.0:** H3 — the Processes page lists every process with
+  live CPU, memory and IO, sortable columns, search, terminate and kill
+  behind a confirming dialog; the Applications page groups the same rows
+  under their application's icon; both the Performance list and the process
+  table are reachable by keyboard; built, verified and deployed to the
+  author's prefix
+- **Delivered as 0.4.1:** `H3-E` — the whole-branch review's correction: the
+  cursor follows the selection across every rebuild, the last action's
+  outcome outlives the next reading, the signal path re-reads `/proc` before
+  it acts, and the table is one Tab stop with keyboard folds and columns that
+  fit the minimum window
+- **Delivered as 0.5.0:** H4 — `hematita-core` reads every hwmon chip and
+  channel into a typed value with its unit and kernel limits, captured from
+  the author's processor, GPU and board chips; the sampler reads the value
+  files every tick, `HematitaSensors` publishes them with the session's
+  extremes, and the Sensors page shows every chip as a card, one row per
+  channel, coloured by a thermal load graded against the chip's own `crit`.
+  The six process-table items parked by `H3-E` are closed; built, verified
+  and deployed to the author's prefix
+- **Delivered as 0.5.1:** `H4-D` — the whole-branch review's correction: the
+  Sensors page is its own single Tab stop whose arrows scroll card by card
+  instead of forty-six rows each answering Tab, a tick that cannot read
+  `/sys/class/hwmon` shows only its reason rather than the last good values
+  beneath an error line, and the smoke fails unless the page publishes chips
+- **Closed phase:** `S1` (storage), closed 2026-09-23; the archived
+  [plan](../../docs/plans/archive/2026-09-23-s1-storage.md); `VAL-S1` pending
+- **Closed phase:** `S2` (storage hardening), closed 2026-09-23; the
+  archived [plan](../../docs/plans/archive/2026-09-23-s2-hardening.md); `VAL-S2`
+  pending
+- **Closed phase:** `S3` (shared usage view), closed 2026-09-25; the
+  archived [plan](../../docs/plans/archive/2026-09-25-s3-shared-usage.md);
+  `VAL-S3` pending
+
+## From "Current checkout truth"
+
+- The project is registered and builds a release binary at `1.2.2`, the
+  version deployed to the author's prefix. The window shows the pill strip
+  with six sections, each with its page: Performance, Processes,
+  Applications, Sensors, Services and Almacenamiento. The Services page
+  lists units from both the session and the system bus; the person's own
+  user units start, stop and restart without authorisation, while a system
+  unit and a foreign process go through polkit — a `pkexec` prompt for the
+  process case, a system-bus call for the unit case — and every privileged
+  outcome is one of five typed words (`done`, `no-agent`, `denied`,
+  `failed`, `refused`) read as a sentence. The headless smoke steps through
+  every section one second apart and asserts four shape lines: the CPU
+  contract on the first row, the Sensors page publishing at least one chip
+  and one channel, the Services page listing at least one system unit and
+  the Storage page listing at least one location. On the real session
+  `VAL-H1`, `VAL-H3`, `VAL-H4` and `VAL-VIS-2` passed; `VAL-H2`, `VAL-H5`
+  and the storage validations stay pending (see Author validation above),
+  and the session running this suite has no authentication agent registered
+  on either bus today, so the privileged paths this checkout can exercise
+  answer only `no-agent`.
+- Nobody has looked at the page on a real session yet: the evidence for H1-C
+  and for H2-B is offscreen only, and appearance, keyboard and focus belong
+  to `VAL-H1` and `VAL-H2`.
+- The release binary is installed at `~/.local/bin/hematita` at `1.2.2`,
+  with its desktop entry and icon set registered under `~/.local/share`; each
+  landing's production completion checks the installed bytes against the
+  verified artifact. See the latest
+  [production completion record](../../docs/evidence/2026-09-25-s3-production-completion.md).
+- As of `H3-A` the side list is a list for the keyboard and for AT: it takes
+  Tab, arrows move the current item, the selection and the current index are
+  one value, and the view carries `Accessible.List` with a name, so an
+  off-screen row is reachable without a pointer. The smoke now fails unless
+  the first row publishes the CPU contract (`hematita-shape cpu 3 60`), the
+  network subtitle waits for the row to be ready, `no-rate` is reserved for
+  the error that means it, the core count comes from each second's reading,
+  the static sysfs facts are read once per name, `sample_gpu` has no dead arm,
+  and the capture asserts the exact disk set. Nobody has walked the list on a
+  real session yet: that is `VAL-H2`.
+- As of `H3-B` the crate also parses one process: `process` reads
+  `/proc/PID/stat`, `/proc/PID/status`, `/proc/PID/cmdline` and
+  `/proc/PID/io`, decodes the desktop application behind a systemd scope from
+  `/proc/PID/cgroup` (`app-<launcher->id-<n>.scope` and
+  `app-id[@instance].service`, including `dbus-:1.3-id@0`), and
+  `ProcessSampler` turns successive per-PID tick readings into a percentage
+  of the whole machine keyed on `(pid, start_ticks)` so a reused pid does not
+  inherit another process's ticks. `passwd` maps uid to login name from
+  `/etc/passwd`, skipping malformed lines rather than refusing the file.
+  `process_view` decides the table's shape without Qt: a case-insensitive
+  filter over name/pid/application, six sortable fields with ties broken by
+  pid, and grouping filtered rows under their application in first-appearance
+  order. All of it is under unit test and captured from the author's own
+  session; none of it is wired into the sampler thread or any page yet — that
+  is `H3-C`.
+- As of `H3-C` it is wired. The sampler reads every process on every second
+  tick (`PROCESS_TICKS`), caching per PID what does not change while it
+  lives, and one process-global thread now publishes to both hub objects
+  rather than one thread per object; the window joins it from
+  `Component.onDestruction`. `HematitaProcesses` publishes the rows, the
+  groups, the counts, the availability and the outcome of the last action as
+  index-aligned lists plus a `revision`, and owns the only signal path:
+  `terminate` and `kill` refuse any PID the latest snapshot does not show as
+  the user's own, and refuse `0`, `1` and this process besides.
+  `ProcessTable` serves both the Processes page and the Applications page,
+  which differ only in `grouped` — the window sets it, because the two pages
+  share one hub. Killing is asked first, in `ConfirmDialog` (`KillDialog`
+  until `H5-B` generalised it). Every check is
+  offscreen: no row was looked at, no signal was sent, and the application
+  icons were never seen resolving. That is `VAL-H3`. See the
+  [processes page evidence](../../docs/evidence/2026-09-22-h3-processes-page.md).
+- As of `H3-D` the table answers the keyboard. Every column title is a button
+  that Tab reaches and Space sorts by, with the shared focus ring; the list's
+  current item and the selected pid write each other, so an arrow key moves
+  the selection instead of an invisible cursor, and landing on an application
+  row selects nothing. The last action's outcome is cleared when a new
+  reading lands and when the selection moves, the IO counters are keyed by
+  `(pid, start_ticks)` so a recycled PID cannot inherit them, a poisoned
+  subscriber lock is now an error instead of a silent drop, and the
+  application row no longer declares itself `checkable` against its own
+  `expanded` binding. Still nobody has pressed a key: that is `VAL-H3`. See
+  the [keyboard table evidence](../../docs/evidence/2026-09-22-h3-keyboard-table.md).
+- `H3-Z` closed the checkpoint at `0.4.0`: the release binary is built,
+  verified and deployed to the author's prefix. Nobody has looked at the
+  Processes or Applications page on a real session yet, pressed a key on the
+  table, or asked the kill dialog to act on a real process: `VAL-H1`,
+  `VAL-H2` and `VAL-H3` all stay pending. See the
+  [production completion record](../../docs/evidence/2026-09-22-h3-production-completion.md).
+- As of `H3-E` the table's cursor is re-anchored wherever `entries` is
+  rebuilt — every revision and every fold — so the selection no longer drifts
+  a row per tick, and a selected process that died or was filtered out is let
+  go rather than pointed at. `apply` no longer clears the action outcome, so
+  a refusal or a failure stays readable until the selection moves or another
+  action answers; `send_signal` re-reads `/proc/<pid>/stat` and
+  `/proc/<pid>/status` immediately before the syscall and refuses unless the
+  start time and the owner still match the snapshot's, which closes the gap a
+  two-second-old snapshot leaves. The rows are `Qt.NoFocus` so the list is the
+  table's one Tab stop, Space, Return, Left and Right fold an application
+  under the cursor, the user column sorts by uid, the active column says its
+  direction to a screen reader, the name column takes what the other columns
+  leave and the two rate columns go below 760 logical pixels, `sampler::stop`
+  drains its subscribers and lowers its flag so the hub can start again, the
+  application row reports `Accessible.checkable`, and an unreadable `/proc` is
+  announced before any note about a selected row. Deployed as `0.4.1`. Still
+  nobody has pressed a key or sent a signal: `VAL-H3`. See the
+  [table fixes evidence](../../docs/evidence/2026-09-22-h3-table-fixes.md).
+- As of `H4-A` the crate also parses sensors: `sensors` reads one `hwmonN`
+  directory's files into a `Chip` of `Channel`s, one per readable
+  `<kind><n>_input` (a power channel prefers `_average`), each typed by
+  `ChannelKind` (temperature, fan, voltage, power, current) with its own unit
+  and kernel integer conversion, its label when the chip has one and its
+  `max`/`crit` limits (a power channel's `cap` is its max), sorted by kind
+  then index; a channel whose value file does not parse is skipped without
+  disturbing the chip's other channels. All of it is under unit test and
+  captured from the author's processor (`k10temp`), GPU (`amdgpu`) and board
+  (`it8696`) chips; none of it is wired into the sampler thread or a page
+  yet — that is `H4-B`. The deferred cgroup regression test from `H3-B`
+  (a reverse-DNS application scope without an instance number) is in place
+  too. See the [core evidence](../../docs/evidence/2026-09-22-h4-core.md).
+- As of `H4-B` it is wired and the window is complete. The sampler reads
+  `/sys/class/hwmon` on every tick — the labels and limits once per
+  directory, the 46 `_input`/`_average` files of this machine's nine chips
+  each second — and publishes a `sensors` section; an unreadable
+  `/sys/class/hwmon` marks only that section. `publish::thermal_load` gives
+  a temperature the same 80/90 thresholds as a fraction of the chip's own
+  `crit`, and nothing else is ever other than `normal`. `HematitaSensors`
+  publishes chips and channels as index-aligned lists with `revision` last,
+  and is the only thing that remembers the session's extremes per channel.
+  The Sensors page shows each chip as a `ListSection` card with one row per
+  channel — label, value coloured by its load, the session's extremes and
+  the kernel's limit — composing every word from tokens and showing the
+  kernel's labels raw. The six process-table items parked by `H3-E` are
+  closed: a successful action keeps its sentence through a rebuild, the
+  header and the rows share one inset, a hidden table weaves nothing, the
+  search is debounced by 150 ms, `layout()` is one pass, and
+  `sampler::subscribe` registers inside the `handle` lock. Nobody has looked
+  at the page: `VAL-H4`. See the
+  [sensors page evidence](../../docs/evidence/2026-09-22-h4-sensors-page.md).
+- As of `H4-C` the sensor reading and its gate are honest. `hwmonN` is an
+  index, not an identity, so the cached labels and limits are re-validated
+  against the chip's own `name` every tick and the session's extremes are
+  keyed by that name too: a device given a freed index cannot inherit
+  another's `crit` — which is what colours a temperature — or its extremes.
+  A chip's rows are no longer torn down and rebuilt every second, so the
+  keyboard can hold one. The smoke now walks every section one second apart,
+  because a `StackLayout` builds only the page it shows and the three pages
+  nobody selected had never been constructed in any headless run; all four
+  now are, with no QML errors. `channelStates` is struck from the published
+  contract rather than added: `discover` skips an unreadable channel, so the
+  state it would carry is unreachable. Return applies the process search at
+  once, and an untranslated chip name gets its ordinal. Still nobody has
+  looked at the page: `VAL-H4`. See the
+  [sensor gates evidence](../../docs/evidence/2026-09-22-h4-sensor-gates.md).
+- `H4-Z` closed the checkpoint at `0.5.0`: the release binary is built,
+  verified and deployed to the author's prefix. The Sensors page reads every
+  hwmon chip the machine exposes and shows it as a card, one row per
+  channel, with the value, the session's minimum and maximum, the kernel's
+  own limit, and a thermal load graded against the chip's own `crit`; the
+  headless smoke steps through Performance, Processes, Applications and
+  Sensors one second apart and finds no QML error on any of them. Nobody has
+  looked at the page on a real session yet: `VAL-H1` through `VAL-H4` all
+  stay pending. See the
+  [production completion record](../../docs/evidence/2026-09-22-h4-production-completion.md).
+- As of `H4-D` the Sensors page is crossed the way the rest of the window is.
+  It is a `ListView` of chip cards: one Tab stop, arrows that move card by
+  card and scroll to what they reach, and a scroll bar reporting on it. The
+  cards and the rows take no focus — forty-six focusable rows inside a
+  surface with no current item were forty-six stops and a focus that could be
+  stranded below the fold with nothing able to scroll to it — and each row
+  still names its label, value, extremes and limit to a screen reader. A tick
+  that cannot read `/sys/class/hwmon` now publishes empty lists and bumps its
+  ticket, so the page shows only the reason; the session's extremes survive
+  it, ready for the next good tick. The smoke prints and asserts the page's
+  chip and channel counts, so a page that builds but publishes nothing fails
+  the gate. Deployed as `0.5.1`. Still nobody has pressed a key on it:
+  `VAL-H4`, which now asks for exactly that. See the
+  [sensors fixes evidence](../../docs/evidence/2026-09-22-h4-sensors-fixes.md).
+- As of `H5-A` the crate also decides the Services page's shape and a
+  privileged action's outcome: `services` reads a unit's kind from its
+  name's suffix (`UnitKind::of_name`), says only a service or a socket is
+  ever actionable, and `project` narrows `Unit`s by the scope toggles, the
+  `services_only` kind filter and a case-insensitive name/description
+  search, sorted by scope (user before system), then active state (`failed`
+  before `active` before anything else), then name — the same shape as
+  `process_view::project`, ported to units. `Outcome` names the five words a
+  privileged action can end in (`done`, `no-agent`, `denied`, `failed`,
+  `refused`), and `outcome_of_dbus_error`/`outcome_of_pkexec` read a
+  system-bus error name or a `pkexec` exit status into one, per [ADR
+  0010](../../../docs/decisions/0010-one-shot-privilege-through-polkit.md). All of
+  it is under unit test; none of it is wired into the sampler thread or a
+  page yet — that is `H5-B`. See the
+  [core evidence](../../docs/evidence/2026-09-22-h5-core.md).
+- As of `H5-B`, that projection is on the machine. The sampler asks both
+  systemd managers for `ListUnits` every fifth tick and on the first, each
+  bus its own section; `HematitaServices` publishes the rows, the counts and
+  the per-bus availability, and is the only place a unit is started, stopped
+  or restarted — one call per action on a named worker thread, whose typed
+  outcome is queued back to Qt. `privilege.rs` is the one place `pkexec`
+  runs, around `/usr/bin/kill` with a fixed argument shape, which is how a
+  process that is not the person's own is ended; `HematitaProcesses` now
+  distinguishes a foreign PID from one it will not touch and reports
+  `pending` while polkit waits. The Services page lists every unit in one
+  Tab stop with the search, the scope toggles, the three actions and a
+  sentence for every outcome, and a shared `ConfirmDialog` replaced
+  `KillDialog`. This session has no authentication agent, so the privileged
+  paths can only answer `no-agent` today, and no action was performed during
+  verification. The three items `H4-D` deferred closed with it: the sensor
+  facts are re-enumerated every thirtieth tick, a channel keeps its session
+  extremes while its chip is listed, and a power reading is graded against
+  the chip's own cap. See the
+  [services page evidence](../../docs/evidence/2026-09-22-h5-services-page.md).
+- As of `H5-C`, the review's correction: both process actions are offered on
+  any selected row — a foreign one asks for authorisation instead of being
+  disabled, which is what made the privileged path reachable at all — an
+  answer about the selected row outranks the note about who owns it, each hub
+  drops the outcome of an action superseded while its prompt stood open, a bus
+  connection that proves dead is reopened on the next service tick, `pending`
+  reads as an authorisation wait only for a system unit, and both pages assign
+  their rows under `anchoring`. The PID-recycling window while a polkit prompt
+  stands open is named as a limit, not closed. See the
+  [privilege fixes evidence](../../docs/evidence/2026-09-22-h5-privilege-fixes.md).
+- As of `H5-D`, a unit action carries `AllowInteractiveAuth`, so polkit is
+  actually asked instead of refusing before anyone is; the action's
+  connection waits five minutes and the listing's two, so a human answer is
+  not a timeout and a stuck bus is not a frozen sampler; `NotAuthorized`
+  reads as `denied`; the hub refuses a unit its latest listing of that
+  manager does not carry and publishes the acted scope for the page to word
+  by; `Refusal::Foreign` carries no payload; and `AGENTS.md`, `VAL-H5`, the
+  process page's `no-agent` sentence and the foreign kill question say what
+  the code does. Deployed as `0.6.1`. See the
+  [privilege fixes 2 evidence](../../docs/evidence/2026-09-22-h5-privilege-fixes-2.md).
+- As of `VIS-1` (2026-09-23) the author has looked at the window. What they
+  saw: the strip's glyph and word sat at the top of each pill because a
+  `Control` overrides a `contentItem`'s own anchors; the sparklines' fill
+  reached past the background's rounded corners; every graph was the
+  accent blue; the Processes page's search, capsule and table read as one
+  flat surface with the capsule's glyphs crowded and the rows running into
+  the card's corners; a Windows executable read as `Z:\mnt\...\x.exe`, a unit
+  as its file name, a sensor as `Tctl` or `vddgfx`, an NVMe drive's limit as
+  65 261.8 °C and a fan's with a thousands separator; every one of the
+  author's own processes read "—" for its disk rates; and two `hematita`
+  processes were running at once. What changed: the item centres its column
+  inside an `Item`; the graph draws inside a clipped inset; the trace takes
+  the resource kind's glyph accent (processor blue, memory violet, GPU
+  coral, disk amber, network green) and a sensor value the channel kind's,
+  the load still overriding to warning and danger; both tables are one
+  Panel card with a section-label header, a hairline and inset rows, under a
+  bar on the canvas whose capsules are spaced; `process_view::display_name`
+  shows a path's last segment (the full name stays the row's accessible
+  name), a unit leads with its description, and the page words the known
+  hwmon labels; `sensors::plausible_limit` drops a limit no sensor of its
+  kind can mean, the kernel's maximum is worded as a limit and readings carry no
+  thousands separator; and the disk-rate pipeline, which was sound, now
+  publishes `-1` rather than `0` for a rate it cannot read, so a measured
+  idle process reads "0 B/s" and only a foreign or not-yet-read one reads
+  "—". The second window is the activation hand-off failing without a
+  session bus; that failure is now said once on stderr. Deployed as
+  `0.6.2`. See the
+  [visual feedback evidence](../../docs/evidence/2026-09-23-visual-feedback.md).
+- Known open item, recorded 2026-09-22 and closed in this checkout by
+  `HEM-H1-B` (not landed): the unit action's `ACTION_TIMEOUT` was inert,
+  because `zbus::Proxy::call_with_flags` does not consult the connection's
+  `method_timeout`, so an unanswered prompt parked one worker thread and its
+  connection until the bus replied or the process exited. The call now runs
+  under a watchdog (`src/watchdog.rs`) that answers `failed` after five
+  minutes and closes the call's connection; the listing's two-second
+  timeout was and is effective — see the addendum in the
+  [privilege fixes 2 evidence](../../docs/evidence/2026-09-22-h5-privilege-fixes-2.md)
+  and the [HEM-H1-B evidence](../../docs/evidence/2026-09-26-storage-page-and-readers.md).
+- `H5-Z` closed the checkpoint at `0.6.0`: the release binary is built,
+  verified and deployed to the author's prefix. The Services page lists
+  every user and system unit from both buses, manages the person's own
+  freely and a system unit or a foreign process through polkit, and reports
+  every privileged outcome truthfully. This session still has no
+  authentication agent, so those paths could only be verified as
+  `no-agent`. Nobody has looked at the page on a real session yet: `VAL-H1`
+  through `VAL-H5` all stay pending. See the
+  [production completion record](../../docs/evidence/2026-09-22-h5-production-completion.md).
+  The design's five phases (`H1` through `H5`) are delivered; no next phase
+  is open.
+- As of `REL-1` (2026-09-23), version 1 is released as `1.0.0`. Version 1 is
+  the five design phases (Performance with every resource, Processes and
+  Applications, Sensors, and Services with polkit-mediated privileged
+  actions) plus the two visual correction units `VIS-1` and `VIS-2`, all
+  validated by the author on the real session through `VAL-VIS-2` ("no
+  flicker, works well"). What stays pending: `VAL-H2` (every resource, live,
+  with a USB disk and Wi-Fi) and `VAL-H5` (the with-agent half — a system
+  unit or a foreign process actually asked through polkit); the
+  `ACTION_TIMEOUT` watchdog on the unit-action worker thread, known inert
+  because `zbus::Proxy::call_with_flags` does not consult the connection's
+  timeout; and PID recycling during an open polkit prompt, a named limit
+  rather than a closed one. See the
+  [release evidence](../../docs/evidence/2026-09-23-release-1.md).
+- As of `S1-Z` (2026-09-23), storage is delivered as `1.1.0`: the release
+  binary is built, verified and deployed to the author's prefix. The
+  Almacenamiento section lists the mount points and their occupation,
+  browses any readable one, scans the folder one is in on a worker thread
+  with visible progress and cancellation, shows the result as a size list
+  beside a squarified treemap, verifies duplicates by content and finds
+  empty folders, and acts on a selection through Siderita's trash or a
+  confirmed permanent deletion, refusing the scanned root, anything outside
+  it, any mount root and any symlinked component. The headless smoke now
+  walks six sections and asserts four shape lines: the CPU contract on the
+  first row, the Sensors page publishing at least one chip, the Services
+  page listing at least one system unit, and the Storage page listing at
+  least one location. Known limits: a btrfs subvolume is its own mount
+  boundary rather than part of the filesystem it lives on, there is a
+  residual window between a scan and an action where the scanned entry
+  could be replaced (narrowed, not closed, by the device-and-inode
+  re-validation in `S1-E`), and a duplicate group beyond the five-hundredth
+  is not listed, only counted. Nobody has looked at the Storage page on a
+  real session yet, scanned a real folder or run a trash or deletion from
+  it: `VAL-S1` stays pending, alongside `VAL-H2` and `VAL-H5`. See the
+  [production completion record](../../docs/evidence/2026-09-23-s1-production-completion.md).
+- As of `S2-Z` (2026-09-23), the storage hardening is delivered as
+  `1.1.1`: the release binary is built, verified and deployed to the
+  author's prefix. `delete_tree` walks directory descriptors opened with
+  `O_NOFOLLOW` and removes each entry with `unlinkat` relative to the folder
+  that holds it, so a folder swapped for a symbolic link while it runs
+  cannot redirect it; a read-only pass refuses an inner mount before
+  anything is removed; a deletion that stops midway reports what it removed
+  and the hub grafts a fresh sub-scan in its place. `hematita/src/analysis.rs`
+  went from 1533 to 784 lines after S2-B2 (bridge, navigation, publication), with the
+  session in `analysis_session.rs` and the worker glue in
+  `analysis_workers.rs`; the confirmation is bound to a selection revision.
+  See the
+  [production completion record](../../docs/evidence/2026-09-23-s2-production-completion.md).
+- As of `S3-Z` (2026-09-25), the shared usage view is delivered as `1.2.0`:
+  the release binary is built, verified and deployed to the author's
+  prefix. The Storage page draws `CelestinaTreemap` and
+  `CelestinaUsageList` from `celestina-style` over rows and rectangles from
+  `hematita-core::usage::view`, and `hematita FOLDER`, D-Bus `Open(s)` or
+  the desktop entry's `%f` open the storage section browsing that folder.
+  See the
+  [production completion record](../../docs/evidence/2026-09-25-s3-production-completion.md).
