@@ -114,7 +114,7 @@ This manual lane does not contain implementation and does not block
 
 - **Status:** pending
 - **Related implementation:** unit `GRA-H1-G` in the
-  [plan](docs/plans/active/2026-09-26-hardening.md);
+  [plan](docs/plans/archive/2026-09-26-hardening.md);
   [evidence](docs/evidence/2026-10-07-syntax-colouring.md)
 - **Requires:** the deployed Grafita on the author's session, and real files:
   `~/.config/niri/config.kdl`, a `.desktop` entry, a Markdown note, a

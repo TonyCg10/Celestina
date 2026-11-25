@@ -1,12 +1,11 @@
 # Grafita status
 
-- **Updated:** 2026-09-28
+- **Updated:** 2026-11-25
 - **Implementation:** checkpoints G0-G13 are present and delivered; `GRA-H1`,
-  the hardening that follows the 2026-09-26 monorepo audit, is the active
-  checkpoint: `GRA-H1-A` (the importer refuses hostile input) is written and
-  tested, awaiting its landing, and so is `GRA-H1-B` (the editor stops
-  doing quadratic or disk work on its GUI thread)
-  ([plan](docs/plans/active/2026-09-26-hardening.md))
+  the hardening that follows the 2026-09-26 monorepo audit, closed on
+  2026-11-25 with every row, `GRA-H1-A` to `GRA-H1-G`, landed; its
+  [plan](docs/plans/archive/2026-09-26-hardening.md) is archived and no
+  checkpoint is active
 - **Author validation:** the version-1 interaction pass is closed; `VAL-G7`,
   `VAL-GRA-SAVEAS`, `VAL-G8` and `VAL-G9` are requested and intentionally
   excluded coverage is recorded in [VALIDATION.md](VALIDATION.md)

@@ -70,7 +70,7 @@ The checkpoint closes when every row below is `done` and, on the landed
 
 `CONV-1-C` was delivered as `CUP-1-I` under `cuprita:`, with its row and
 [inventory](../../../cuprita/docs/inventories/2026-10-08-cup-1-foundation/CUP-1-I.numstat.tsv)
-in [Cuprita's foundation plan](../../../cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md);
+in [Cuprita's foundation plan](../../../cuprita/docs/plans/archive/2026-10-08-cup-1-foundation.md);
 it has no row here, because a `done` row needs an inventory of its own.
 
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |

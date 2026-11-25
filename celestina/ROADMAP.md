@@ -1,29 +1,32 @@
 # Celestina implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** CEL-2
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** every `VAL-CEL-*` and `VAL-CEL2-*` row of
   [VALIDATION.md](VALIDATION.md), in the order of
   [the cutover's validation list](../docs/superpowers/plans/2026-10-23-cel-2-m-live-validation-order.md)
   (they do not block the implementation exit)
 
-## CEL-2 — Shell parity with Noctalia
+## CEL-2 — Shell parity with Noctalia (closed 2026-11-25)
 
 **Hypothesis:** a Rust shell with the piece contract of
 [the parity design](../docs/superpowers/specs/2026-10-16-celestina-parity-program-design.md)
 can take over, duty by duty and beside a running Noctalia, everything Noctalia
 does in the author's niri session. **Plan:**
-[CEL-2](docs/plans/active/2026-10-16-cel-2-parity.md), thirteen units
+[CEL-2](docs/plans/archive/2026-10-16-cel-2-parity.md), thirteen units
 (CEL-2-A to CEL-2-M) in the plan's order; its ledger is the source of each
 unit's status and exit.
 
 **Landed:** CEL-2-A to CEL-2-L, with CEL-2-H split into H-a and H-b and the
 corrective units CEL-2-G-SYNC, CEL-2-K-SMOKE, SMOKE-FIX, CEL-2-L-CLIPPY,
 CEL-2-C-DDC, CEL-2-B-GAMMA, CEL-2-C-KEYS, CEL-2-B-CAFFEINE and
-CEL-2-I-CANCEL; the ledger links each unit's inventory and evidence.
-celestina is at 1.13.5.
+CEL-2-I-CANCEL; then CEL-2-M (1.14.0), CEL-2-M-LOCK-POLKIT (1.15.0),
+NEST-BACKLIGHT (1.15.1), SYSMON-STALE-FRAME (1.15.2), CEL-2-ICONS (1.15.3) and
+CEL-2-ICON-READ (1.15.4), and the maintenance units SMOKE-REST, SMOKE-LOCK,
+OVERVIEW-SLOT-FLAKY, SMOKE-PHASES and SMOKE-ORDER. The ledger links each
+unit's inventory and evidence. Every row is done and the plan is archived.
 
-**CEL-2-M (implemented on its branch, not landed):** the cutover. Its code
+**CEL-2-M (landed as 1.14.0):** the cutover. Its code
 retires the `off` defaults of the shipped duties (`lock` and `polkit` kept
 `off` there; the unit below flips them), removes the `bar` duty and the capsule-only
 surface, adds the cutover run to the nested smoke and the probe of the niri
@@ -32,10 +35,10 @@ configuration, and rewrites [the handover note](docs/handover.md);
 The design and the plan are
 [the cutover design](../docs/superpowers/specs/2026-10-23-celestina-cel-2-m-cutover-design.md)
 and [its plan](../docs/superpowers/plans/2026-10-23-cel-2-m-cutover.md). The
-author switched the session over on 2026-11-24 and the unit lands after it;
+author switched the session over on 2026-11-24 and the unit landed after it;
 no agent edited the niri configuration or replaced the live shell.
 
-**CEL-2-M-LOCK-POLKIT (implemented on its branch, not landed):** one unit
+**CEL-2-M-LOCK-POLKIT (landed as 1.15.0):** one unit
 that flips the defaults of `lock` and of `polkit` to on, after the author
 reported their live rows as passed on 2026-11-24, with both failing closed
 ([ADR 0026](docs/decisions/0026-lock-and-polkit-on-by-default.md)). The five

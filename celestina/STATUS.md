@@ -1,11 +1,11 @@
 # Celestina status
 
-- **Updated:** 2026-11-23
+- **Updated:** 2026-11-25
 - **Version:** the one `celestina/Cargo.toml` carries, set by each landing
 - **Implementation:** CEL-1 (1.0.0) and every unit of the parity program
-  CEL-2 but its last are landed on `main`; the last, CEL-2-M (the cutover),
-  closes the program: the author switched the session over on 2026-11-24
-  (Noctalia is no longer started) and the unit lands after it. One process draws a full-width bar per output with the Island
+  CEL-2 are landed on `main`; CEL-2-M (the cutover) closed the program after
+  the author switched the session over on 2026-11-24 (Noctalia is no longer
+  started), and its plan was archived on 2026-11-25. One process draws a full-width bar per output with the Island
   in its centre zone and the pieces of the `bar` table; it serves the
   launcher, notifications and the tray, and performs the duties of
   `shell.json`: idle, caffeine, night light, wallpaper, OSD, media, clipboard
@@ -34,8 +34,8 @@
   the amendment of
   [ADR 0021](docs/decisions/0021-polkit-agent.md)). Each
   unit's evidence is linked from
-  [the plan's ledger](docs/plans/active/2026-10-16-cel-2-parity.md).
-- **CEL-2-M (implemented on its branch, not landed):** the cutover's code:
+  [the plan's ledger](docs/plans/archive/2026-10-16-cel-2-parity.md).
+- **CEL-2-M (landed as 1.14.0):** the cutover's code:
   every shipped duty defaults to on, with `lock` and `polkit` off
   (CEL-2-M-LOCK-POLKIT, below, turns those two on); the clipboard reads an
   unknown value as off; a `shell.json`
@@ -45,7 +45,7 @@
   cutover configuration in a nest and every script that writes a `shell.json`
   names every duty; `scripts/cutover-config-probe.sh` checks a copy of the
   niri configuration. Reviewed twice by a model other than the implementer.
-  The branch is rebased on 1.13.5. With these defaults and CEL-2-C-DDC, a
+  With these defaults and CEL-2-C-DDC, a
   start that chooses nothing has the OSD duty on and the `brightness` piece
   placed, so it runs one `ddcutil` detection and one read per monitor;
   `scripts/dev-session.sh` therefore starts every nest with
@@ -55,7 +55,7 @@
   `energy.night_light` is switched on.
   [The handover note](docs/handover.md) holds the switch-over and the way
   back.
-- **CEL-2-M-LOCK-POLKIT (implemented on its branch, not landed):** `lock` and
+- **CEL-2-M-LOCK-POLKIT (landed as 1.15.0):** `lock` and
   `polkit` default to on, both in one unit, after the author reported
   `VAL-CEL2-LOCK-PAM`, `-LIVE`, `-RECOVERY`, `-SUSPEND` and
   `VAL-CEL2-POLKIT-LIVE` as passed on 1.13.5 on 2026-11-24. Both fail closed:
@@ -66,8 +66,8 @@
   other lock rows stay pending and do not gate the default.
 - **Focus:** the session runs Celestina since the author's switch-over of
   2026-11-24 ([evidence](docs/evidence/2026-11-23-cutover.md), "The author's
-  switch-over"); what is left is the rows the author has not run and the landing
-  of the two default flips above.
+  switch-over"); both default flips above have landed, and what is left is
+  the rows the author has not run. The shell is at 1.15.4.
 - **Author validation:** the author ran most rows live on 1.13.0 to 1.13.5
   between 2026-11-23 and 2026-11-24 and reported them through the
   coordinating session; the cutover's evidence lists what was reported to

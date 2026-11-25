@@ -1,8 +1,7 @@
 # Active Celestina plans
 
-| Plan | Checkpoint | Scope |
-|---|---|---|
-| [CEL-2 — shell parity with Noctalia](2026-10-16-cel-2-parity.md) | CEL-2 | Thirteen units (A to M) that let the author stop Noctalia, beginning with the bar and the piece contract |
+No plan is active. CEL-2 closed on 2026-11-25 and moved to
+[`../archive/`](../archive/).
 
 A dated plan is added here only when the project roadmap names the same active
 implementation checkpoint. Unit inventories live under

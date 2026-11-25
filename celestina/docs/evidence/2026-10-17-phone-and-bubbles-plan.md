@@ -6,7 +6,7 @@
 - **Scope:** unit CEL-2-J, as planned before implementation
 - **Environment:** none; nothing in this record was run
 - **Evidence:** [2026-10-17-phone-and-bubbles.md](2026-10-17-phone-and-bubbles.md); decisions in [ADR 0020](../decisions/0020-phone-and-bubbles.md)
-- **Unit:** CEL-2-J of the ledger [the ledger](../plans/active/2026-10-16-cel-2-parity.md)
+- **Unit:** CEL-2-J of the ledger [the ledger](../plans/archive/2026-10-16-cel-2-parity.md)
   (prefix `celestina:`, project `celestina`)
 - **Design:** [the design](../../../docs/superpowers/specs/2026-10-16-celestina-parity-program-design.md)
   (§4 principles, §5 row J, §7 row J, §8 extension points)

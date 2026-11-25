@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-28
 - **Scope:** unit `GRA-H1-B` (program unit P-19) of the
-  [hardening plan](../plans/active/2026-09-26-hardening.md); it closes GRA-4,
+  [hardening plan](../plans/archive/2026-09-26-hardening.md); it closes GRA-4,
   GRA-5, GRA-8 and GRA-9 of
   [the Hematita and Grafita audit record](../../../docs/evidence/2026-09-26-monorepo-audit-hematita-grafita.md)
   and Grafita's half of RS-1 from

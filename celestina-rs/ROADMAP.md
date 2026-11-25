@@ -1,14 +1,14 @@
 # Celestina Rust workspace implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** RS-H1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** product-level queues linked from
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
 `CORE-M1` remains the next settled candidate after `RS-H1` and has no
 active execution plan.
 
-## RS-H1 — Shared owners after the monorepo audit
+## RS-H1 — Shared owners after the monorepo audit (closed 2026-11-25)
 
 The falsifiable problem found by the audit: the same rule is implemented
 several times with different answers. `file://` URIs are turned into paths
@@ -24,7 +24,7 @@ unit adopts it. The tangible outcome is those owners with their tests, and a
 workspace README, AGENTS and crate docs that match the checkout.
 
 The plan is
-[Shared owners after the monorepo audit](docs/plans/active/2026-09-26-hardening.md),
+[Shared owners after the monorepo audit](docs/plans/archive/2026-09-26-hardening.md),
 with the single unit `RS-H1-A`. It records `dotfiles-core`'s missing consumer
 as an exclusion for the author's decision (ruling R-A4). The findings are in
 [the shared crates audit record](../docs/evidence/2026-09-26-monorepo-audit-shared-crates.md).

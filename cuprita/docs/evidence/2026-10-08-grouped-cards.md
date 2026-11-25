@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-08
 - **Scope:** `CUP-1-H` of
-  [`../plans/active/2026-10-08-cup-1-foundation.md`](../plans/active/2026-10-08-cup-1-foundation.md):
+  [`../plans/archive/2026-10-08-cup-1-foundation.md`](../plans/archive/2026-10-08-cup-1-foundation.md):
   `celestina-rs/crates/cuprita-core/src/` (`model.rs`, `fake.rs`,
   `nm/mod.rs`), `celestina-rs/crates/cuprita-core/tests/` (`fakes.rs`,
   `order.rs`), `cuprita/src/controller/network_model.rs`, `cuprita/build.rs`,

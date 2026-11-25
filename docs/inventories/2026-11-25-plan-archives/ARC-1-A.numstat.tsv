@@ -1,0 +1,101 @@
+# ARC-1-A exact change inventory
+
+Base revision	5a0c48560185e9c9e3b8317c4512acf60e1d7fde
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	celestina-rs/ROADMAP.md
+Pathspec	celestina-rs/STATUS.md
+Pathspec	celestina-rs/docs/evidence/2026-09-26-shared-owners.md
+Pathspec	celestina-rs/docs/plans/active/2026-09-26-hardening.md
+Pathspec	celestina-rs/docs/plans/active/README.md
+Pathspec	celestina-rs/docs/plans/archive/2026-09-26-hardening.md
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/docs/evidence/2026-10-16-wallpaper.md
+Pathspec	celestina/docs/evidence/2026-10-17-media.md
+Pathspec	celestina/docs/evidence/2026-10-17-phone-and-bubbles-plan.md
+Pathspec	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+Pathspec	celestina/docs/plans/active/README.md
+Pathspec	celestina/docs/plans/archive/2026-10-14-cel-1-island.md
+Pathspec	celestina/docs/plans/archive/2026-10-16-cel-2-parity.md
+Pathspec	cuprita/ROADMAP.md
+Pathspec	cuprita/STATUS.md
+Pathspec	cuprita/docs/evidence/2026-10-08-audio.md
+Pathspec	cuprita/docs/evidence/2026-10-08-bluetooth.md
+Pathspec	cuprita/docs/evidence/2026-10-08-domain.md
+Pathspec	cuprita/docs/evidence/2026-10-08-exit.md
+Pathspec	cuprita/docs/evidence/2026-10-08-final-review.md
+Pathspec	cuprita/docs/evidence/2026-10-08-grouped-cards.md
+Pathspec	cuprita/docs/evidence/2026-10-08-network.md
+Pathspec	cuprita/docs/evidence/2026-10-08-skeleton.md
+Pathspec	cuprita/docs/evidence/2026-10-09-appearance.md
+Pathspec	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+Pathspec	cuprita/docs/plans/active/README.md
+Pathspec	cuprita/docs/plans/archive/2026-10-08-cup-1-foundation.md
+Pathspec	docs/evidence/2026-11-25-plan-archives.md
+Pathspec	docs/inventories/2026-11-25-plan-archives/ARC-1-A.numstat.tsv
+Pathspec	docs/plans/active/README.md
+Pathspec	docs/plans/archive/2026-10-09-suite-conventions.md
+Pathspec	docs/plans/archive/2026-11-25-plan-archives.md
+Pathspec	docs/superpowers/plans/2026-10-17-celestina-cel-2-h-session-lock.md
+Pathspec	docs/superpowers/plans/2026-10-17-celestina-polkit-agent.md
+Pathspec	docs/superpowers/specs/2026-10-17-celestina-polkit-agent-design.md
+Pathspec	grafita/ROADMAP.md
+Pathspec	grafita/STATUS.md
+Pathspec	grafita/VALIDATION.md
+Pathspec	grafita/docs/evidence/2026-09-26-app-responsiveness.md
+Pathspec	grafita/docs/evidence/2026-09-26-importer-hardening.md
+Pathspec	grafita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	grafita/docs/plans/active/README.md
+Pathspec	grafita/docs/plans/archive/2026-09-26-hardening.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+13	0	2f85205684b9756cb58d5045708a18ec907c0e6d6652644fa37b7995a2dab6db	ROADMAP.md
+4	0	f021ea368ad5bba7837ba47512f95d533fd39daff45c2638fde211b8799d3ad1	STATUS.md
+4	4	76d3fbb23f69fb328e4ed1aff97eaebd2bcf2296652779ec7b55fa5e3d4df008	celestina-rs/ROADMAP.md
+6	5	fccd24505cfb15d68f52c92c88965619cad611809ad86d0c67111aa959fdb70f	celestina-rs/STATUS.md
+1	1	b9f0aace8e6d4fa092d87e7424b5407257a1821bf4c03d6744e89b00d378add4	celestina-rs/docs/evidence/2026-09-26-shared-owners.md
+0	67	deleted	celestina-rs/docs/plans/active/2026-09-26-hardening.md
+2	4	84c6fe9a7461fbc8913c9b8ffba36ca70e7506e1da3d2175b66eaf3741b9f1fb	celestina-rs/docs/plans/active/README.md
+69	0	721edbae02af27adfc8d589e7554b5693a7215903eedd1aa21dba8afb4748098	celestina-rs/docs/plans/archive/2026-09-26-hardening.md
+12	9	a2605042cc80df77adc07f93f8b5232e2b724cd4eaa342230431983407e5bee7	celestina/ROADMAP.md
+10	10	845e86f273286a7695046d6a89acf3f5b1e835e90349783dd711e91507d7a00e	celestina/STATUS.md
+1	1	3255fe25cb63c1fcf03439d187c335cd10863acc2cbe6cd0e3a391cf8d25c247	celestina/docs/evidence/2026-10-16-wallpaper.md
+1	1	0b0ea67a7e01099b0377be7377e8262dc56491e6f05ddb05c47a7c52070bb622	celestina/docs/evidence/2026-10-17-media.md
+1	1	a19c3ba3bf7fdbfe5c9c2dc820701ae7a7f34148f094dada2db258753455ed58	celestina/docs/evidence/2026-10-17-phone-and-bubbles-plan.md
+0	94	deleted	celestina/docs/plans/active/2026-10-16-cel-2-parity.md
+2	3	6543543e4a608811984eeae66974e93ae6d1377d66faf98b7c32b15f4552c00f	celestina/docs/plans/active/README.md
+1	1	0eac82647b6b7e2a61324f911305eaba6fca390dae45b2332f9e1427c35f5c12	celestina/docs/plans/archive/2026-10-14-cel-1-island.md
+96	0	68386634aa2e309fc5c085a9203779721ea94999cc7366ce92759e0fda039b04	celestina/docs/plans/archive/2026-10-16-cel-2-parity.md
+5	5	b65a562d400f95fd67126c0a72b71c02a77c07cd4943a07450663b5bec55410e	cuprita/ROADMAP.md
+4	2	3c87a039f2a35827495e54a5548114be6c33ad22333b2b4ce1eb34a265789c01	cuprita/STATUS.md
+1	1	c7951418004e29740333a4ffe7d57294825eed2bab4959217a9a380f7c4864a2	cuprita/docs/evidence/2026-10-08-audio.md
+1	1	872951e63822bf3cc89139d4646230e9e0826f7996583504e805040490a5b0e9	cuprita/docs/evidence/2026-10-08-bluetooth.md
+1	1	8b57e53608549c3ed69e88631af46741a520f626c619015e1c3eaa80c9d20ec6	cuprita/docs/evidence/2026-10-08-domain.md
+1	1	d98c1c0db203bf55e9c97a33f2cc34f237b68fa5b7f6a2bcb1f47701dd336d70	cuprita/docs/evidence/2026-10-08-exit.md
+1	1	a7b83a223c0cf40c831403ecb7adc648ba0fce2ed0d20424e9d61188c8339ffc	cuprita/docs/evidence/2026-10-08-final-review.md
+1	1	d46c3da0f480971f0fc3a1d179d3063ba4d8b70ccca4e09b573edac033a50a65	cuprita/docs/evidence/2026-10-08-grouped-cards.md
+1	1	7febc4a2e8c1bd924c95138d807f85bc0b0291c27bf8e01ab9f7023abac2438c	cuprita/docs/evidence/2026-10-08-network.md
+1	1	042abce158e6680c1f991019bbaa45e0c8499074853627b7f57572fc3d665489	cuprita/docs/evidence/2026-10-08-skeleton.md
+1	1	ef88b5556be60101414249d2dc6c83089aff9c7377af39108840c0d0792182f5	cuprita/docs/evidence/2026-10-09-appearance.md
+0	70	deleted	cuprita/docs/plans/active/2026-10-08-cup-1-foundation.md
+2	2	f9bfe6fbeca56ec63f4ef728abcba7154ccc18aee6f0559f42450499b04df094	cuprita/docs/plans/active/README.md
+72	0	716a32e0ba0c8a86cc5e42835e629448fdaad630824f07c23c8242da202e14e7	cuprita/docs/plans/archive/2026-10-08-cup-1-foundation.md
+30	0	07aef2c53fd9b18dc757b26050c84cbf3f4fc1545f920e5200e083694cf7eccf	docs/evidence/2026-11-25-plan-archives.md
+101	0	self	docs/inventories/2026-11-25-plan-archives/ARC-1-A.numstat.tsv
+1	1	c025714ce05d100b1df9a9f1a343990ad30a2cf8a0d6f30bdadd683ecc984375	docs/plans/active/README.md
+1	1	5359bd90fe929126904ab274b08e22414eee44dafaa27c878e732848c2218025	docs/plans/archive/2026-10-09-suite-conventions.md
+58	0	d90513ada17992fffdf81e918fc6619004c9d808494ce44147ff6e7657615fac	docs/plans/archive/2026-11-25-plan-archives.md
+1	1	7d3998b49e0f74f12ba00e69ac32d269f16c86fc54f276de72c84c4fbf90710e	docs/superpowers/plans/2026-10-17-celestina-cel-2-h-session-lock.md
+1	1	832946797db6b0f721ba7780b8909eed20ff811b8272b181b13b171ee6fcaabd	docs/superpowers/plans/2026-10-17-celestina-polkit-agent.md
+1	1	9c532a571cafd8378640edaffbe4e92aa3ebc8b3d4c0299de47a2018c765ac7e	docs/superpowers/specs/2026-10-17-celestina-polkit-agent-design.md
+4	4	7ba3672e981673dd98a888c5b219024d8afb9f7ba14c9bccc3fca641774342dc	grafita/ROADMAP.md
+5	6	42d473e52d26a03992b39f4c314a4e02d4b0a1db68295dff94010df70343da44	grafita/STATUS.md
+1	1	4d75834c7333c8e099d42b607a37270d850232a3c6a530f4fd446b3a5c2fc0da	grafita/VALIDATION.md
+1	1	2173a86ca1585faca516bf444bd8de3180d96abdd566214da51f69a5d185b785	grafita/docs/evidence/2026-09-26-app-responsiveness.md
+1	1	4b961b506ba38fc02d0736d3e3a265948944500c66db8fdf90c7bec9a8d1945e	grafita/docs/evidence/2026-09-26-importer-hardening.md
+0	68	deleted	grafita/docs/plans/active/2026-09-26-hardening.md
+2	4	f2948d55cce2d9050294a505300583ecc55dc8bbac00c06e23b903a6e68028e5	grafita/docs/plans/active/README.md
+70	0	4dd9122b80a9b46d3c0a37012c2fb6610b09e4d2a9c7bfe4305922bc8b9aea64	grafita/docs/plans/archive/2026-09-26-hardening.md

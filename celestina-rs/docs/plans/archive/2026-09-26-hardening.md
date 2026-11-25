@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-09-26
 - **Plan ID:** hardening
-- **Status:** active
+- **Closed:** 2026-11-25
+- **Successor:** none; the author named no next RS-H1 successor. Archived by the suite unit `ARC-1-A` ([its plan](../../../../docs/plans/archive/2026-11-25-plan-archives.md))
+- **Status:** done
 - **Authorization:** after the 2026-09-26 monorepo audit the author asked
   for its whole program to be done; the findings and rulings are in
   [the audit evidence](../../../../docs/evidence/2026-09-26-monorepo-audit.md)

@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-10-08
 - **Plan ID:** cup-1-foundation
-- **Status:** active
+- **Closed:** 2026-11-25
+- **Successor:** none; the author named no next CUP-1 successor. Archived by the suite unit `ARC-1-A` ([its plan](../../../../docs/plans/archive/2026-11-25-plan-archives.md))
+- **Status:** done
 - **Authorization:** the author approved the design and asked for the
   foundation plan on 2026-10-08
 - **Scope:** cuprita

@@ -18,7 +18,7 @@
   `systemctl` on system units, Hematita's service and process actions) can be
   answered in the author's niri session once Noctalia stops being the agent
 - **Identifiers:** project `celestina`, plan `cel-2-parity`
-  ([the ledger](../../../celestina/docs/plans/active/2026-10-16-cel-2-parity.md)),
+  ([the ledger](../../../celestina/docs/plans/archive/2026-10-16-cel-2-parity.md)),
   unit `CEL-2-I`, commit prefix `celestina:`
 - **Builds on:** [the parity program](2026-10-16-celestina-parity-program-design.md)
   (§4.4 privileged units, §5 row I, §7), [the shell design](2026-10-14-celestina-rust-shell-design.md),

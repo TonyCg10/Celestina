@@ -1,7 +1,7 @@
 # Active Cuprita plans
 
-The active plan is [CUP-1 — foundation](2026-10-08-cup-1-foundation.md), which the
-project roadmap names as its active implementation checkpoint.
+No plan is active. CUP-1 closed on 2026-11-25 and moved to
+[`../archive/`](../archive/).
 
 Unit inventories live under
 [`../../inventories/<plan-slug>/<unit>.numstat.tsv`](../../inventories/) and do

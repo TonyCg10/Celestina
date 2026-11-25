@@ -21,7 +21,7 @@
   `celestina/rust-toolchain.toml` pins; cargo commands run from `celestina/`.
 - **Artifact:** none sealed by this record; the landing builds and seals its own.
 - **Plan:** the unit's decisions and deviations are in this record; the ledger
-  row is in [the CEL-2 ledger](../plans/active/2026-10-16-cel-2-parity.md).
+  row is in [the CEL-2 ledger](../plans/archive/2026-10-16-cel-2-parity.md).
   The working implementation plan stayed with the session that executed it,
   outside the repository.
 

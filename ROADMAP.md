@@ -339,6 +339,19 @@ The build order, exclusions and ledger are in
 [the spec](docs/superpowers/specs/2026-11-24-suite-dev-speed-design.md) and the
 decision in [ADR 0013](docs/decisions/0013-development-speed.md).
 
+## ARC-1 — Archive the finished project plans (closed 2026-11-25)
+
+Four project plans had every row done and stayed active: CEL-2 (the shell),
+CUP-1 (Cuprita), GRA-H1 (Grafita) and RS-H1 (`celestina-rs`). One suite unit
+moved them to their archives and left those projects idle; a suite unit,
+because documents of the suite link to CEL-2.
+
+- [x] Archive the four finished project plans and mark their roadmaps idle
+      (`ARC-1-A`).
+
+The plan, opened and closed in the same commit, is
+[the archived plan](docs/plans/archive/2026-11-25-plan-archives.md).
+
 ## Project implementation fronts
 
 | Project | Canonical implementation queue |

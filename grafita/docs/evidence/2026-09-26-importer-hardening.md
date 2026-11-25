@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-26
 - **Scope:** unit `GRA-H1-A` (program unit P-5) of the
-  [hardening plan](../plans/active/2026-09-26-hardening.md); it closes GRA-1,
+  [hardening plan](../plans/archive/2026-09-26-hardening.md); it closes GRA-1,
   GRA-2, GRA-3 and GRA-7 of
   [the Hematita and Grafita audit record](../../../docs/evidence/2026-09-26-monorepo-audit-hematita-grafita.md).
   Code: `celestina-rs/crates/grafita-core` (`src/inflate.rs`,

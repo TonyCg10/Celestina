@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-26
 - **Scope:** `RS-H1-A` (program unit P-6) of the
-  [RS-H1 plan](../plans/active/2026-09-26-hardening.md): the owner halves of
+  [RS-H1 plan](../plans/archive/2026-09-26-hardening.md): the owner halves of
   RS-1, RS-2/FLU-2, RS-3, RS-4, RS-6, RS-9 and RS-10, and RS-7 and RS-19 from
   the [shared crates audit](../../../docs/evidence/2026-09-26-monorepo-audit-shared-crates.md)
   (FLU-2 in the [Fluorita audit](../../../docs/evidence/2026-09-26-monorepo-audit-fluorita.md));

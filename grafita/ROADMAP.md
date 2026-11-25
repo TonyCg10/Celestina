@@ -1,7 +1,7 @@
 # Grafita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** GRA-H1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Authorised sequence:** G8-G13, opened by author decision on 2026-08-19 and
   closed the same day. `GRA-H1` is the hardening the author asked for after
   the 2026-09-26 monorepo audit
@@ -9,7 +9,7 @@
   and none blocking; earlier completed observations and deliberate exclusions
   are in [VALIDATION.md](VALIDATION.md)
 
-## GRA-H1 — Hardening after the monorepo audit
+## GRA-H1 — Hardening after the monorepo audit (closed 2026-11-25)
 
 The falsifiable problem, reproduced by the audit: a PDF of about 20 KB aborts
 the process through unbounded recursion and unchecked slices under
@@ -25,7 +25,7 @@ a typed refusal for every hostile document, under tests that also pass as root,
 and no disk IO or quadratic work on the GUI thread.
 
 The plan is
-[Hardening after the monorepo audit](docs/plans/active/2026-09-26-hardening.md):
+[Hardening after the monorepo audit](docs/plans/archive/2026-09-26-hardening.md):
 `GRA-H1-A` (importer hardening) and `GRA-H1-B` (highlighting, IO off the GUI
 thread, the shared `file_uri` owner and STATUS). The findings are in
 [the Hematita and Grafita audit record](../docs/evidence/2026-09-26-monorepo-audit-hematita-grafita.md).

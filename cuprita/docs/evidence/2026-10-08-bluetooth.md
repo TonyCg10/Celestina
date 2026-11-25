@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-08
 - **Scope:** `CUP-1-D` of
-  [`../plans/active/2026-10-08-cup-1-foundation.md`](../plans/active/2026-10-08-cup-1-foundation.md):
+  [`../plans/archive/2026-10-08-cup-1-foundation.md`](../plans/archive/2026-10-08-cup-1-foundation.md):
   `celestina-rs/crates/cuprita-core/` (`bluez/`, `bus.rs`, `agent.rs`,
   `order.rs`, `error.rs`, `nm/`, `examples/snapshot.rs`, the `bluez`
   feature), `cuprita/src/` (`agent.rs`, backend, worker, Bluetooth and

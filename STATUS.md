@@ -47,6 +47,10 @@ requires.
 
 ## Completed cross-project work
 
+ARC-1 archived, on 2026-11-25, four project plans whose rows were all done:
+CEL-2, CUP-1, GRA-H1 and RS-H1. The ledger is
+[the archived plan](docs/plans/archive/2026-11-25-plan-archives.md).
+
 DEV-1 made suite development faster (2026-11-24 to 2026-11-25). The session
 build cache has a cap of 40 GiB and a landing closes the landed unit's
 worktree (`DEV-1-A`); the agent preflight reads a `now` tier with a byte budget

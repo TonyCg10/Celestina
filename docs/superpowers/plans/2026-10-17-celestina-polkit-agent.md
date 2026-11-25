@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Identifiers:** project `celestina`, plan `cel-2-parity` ([ledger](../../../celestina/docs/plans/active/2026-10-16-cel-2-parity.md)), unit `CEL-2-I`, commit prefix `celestina:`; layer-shell namespace `celestina-polkit-prompt`; agent object path `/org/celestina/PolkitAgent1`, interface `org.freedesktop.PolicyKit1.AuthenticationAgent`; duty key `polkit`.
+- **Identifiers:** project `celestina`, plan `cel-2-parity` ([ledger](../../../celestina/docs/plans/archive/2026-10-16-cel-2-parity.md)), unit `CEL-2-I`, commit prefix `celestina:`; layer-shell namespace `celestina-polkit-prompt`; agent object path `/org/celestina/PolkitAgent1`, interface `org.freedesktop.PolicyKit1.AuthenticationAgent`; duty key `polkit`.
 - **The halt:** `celestina-qt/` and `celestina-rs/crates/celestina-shell-core` are never edited. The C++ agent is a **read-only reference**; nothing is copied. Before the unit's first commit the author adds `celestina-qt/src/polkit{agent,conversation,promptcontroller}.cpp` and `celestina-qt/src/polkitconverse/main.cpp` as reference to the "Halted projects" salvage list (spec §8). **Task 0 stops until that edit exists.**
 - **Root `AGENTS.md`:** no `unsafe` (the workspace denies it; only `egl.rs` is exempt); no production `unwrap`, `expect` or `panic!`; typed errors with context; every dependency justified in its manifest; blocking IO never on the loop thread; D-Bus, socket and file input hostile and bounded.
 - **Language:** development truth in English; product copy in Spanish only in `celestina/src/copy.rs` (head `// language-contract: product-copy`). No Spanish string in any other file, tests included.

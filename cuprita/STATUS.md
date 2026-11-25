@@ -1,8 +1,10 @@
 # Cuprita status
 
-- **Updated:** 2026-10-09
+- **Updated:** 2026-11-25
 - **Version:** 1.0.1
-- **Implementation:** CUP-1-A to CUP-1-I are done; CUP-1-I, the
+- **Implementation:** CUP-1-A to CUP-1-I are done, and CUP-1 closed on
+  2026-11-25 with its [plan](docs/plans/archive/2026-10-08-cup-1-foundation.md)
+  archived; CUP-1-I, the
   Appearance section, was `CONV-1-C` of the suite program (maintenance, no
   version change).
   Red runs on NetworkManager, Bluetooth on BlueZ with Cuprita as the pairing
