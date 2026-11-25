@@ -1,0 +1,23 @@
+# CEL-I-009 exact change inventory
+
+Base revision	3c87039b8f73d200d82eca7c5bbe3d37c6f6743d
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-11-25-cel-i-009-brightness-gaps.md
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-009.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/osd/popup.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	b510a638e58b9a97bef419b6ac223ccce097a102ec94053e77027e5df4cbd59c	celestina/Cargo.lock
+1	1	75120e0c395817ed44daa9386333b2634feb5d2338b12e794935d8e998f8c552	celestina/Cargo.toml
+16	0	a88c6c5b4fd12290d6f5919ce2787c51a87db3f87be5975b0bb7e9cd083661d6	celestina/VALIDATION.md
+41	0	ed872b004aa2ec644274a96192023f871cd2d00bce1c2615d069549ba38ceeca	celestina/docs/evidence/2026-11-25-cel-i-009-brightness-gaps.md
+23	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-009.numstat.tsv
+1	0	dc2e48a96735f1c76dbd2b2746cc7f342621a14a8a2f62864a3983b831157938	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+113	6	dc2bc04147903d4305b4135147e6b300a5985c2c04c5522379ab5452631cc74c	celestina/src/osd/popup.rs
+1	0	4f56f482719da53c762fd23fba2ecda548a333485f7c797cb35a47c7de3d01c1	docs/version-history.tsv

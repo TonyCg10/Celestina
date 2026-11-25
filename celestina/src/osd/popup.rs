@@ -45,7 +45,7 @@ use super::audio_rows::{
     apps_list, device_list, list_h, section_of, Audio, GraphMirror, Lists, Section, Shape,
 };
 use super::monitor_rows::{
-    monitors_card, monitors_size, MonitorFeed, MonitorMirror, SharedMonitors,
+    monitors_card, monitors_size, MonitorFeed, MonitorMirror, SharedMonitors, ASK_HOLD,
 };
 use super::readings::Target;
 use crate::island::menu::SharedPainter;
@@ -573,6 +573,10 @@ pub struct LevelCore {
     /// notch within [`WHEEL_BURST`] steps from that level, not from what is
     /// shown, so a late read-back of an earlier notch cannot lose a step.
     wheel_last: Option<(Control, u8, Instant)>,
+    /// The single brightness slider's last asked level and when: shown until
+    /// the monitor reads it back or the hold passes, as each row of the
+    /// monitor list does.
+    brightness_asked: Option<(u8, Instant)>,
     sink: Sink,
     cell: SharedLevels,
     graph: SharedGraph,
@@ -654,6 +658,7 @@ impl LevelCore {
             throttle: Throttle::default(),
             wheel_rest: (None, 0),
             wheel_last: None,
+            brightness_asked: None,
             sink,
             cell,
             graph,
@@ -705,7 +710,10 @@ impl LevelCore {
         if self.held() {
             None
         } else {
-            [self.mirror.wait(now), self.monitors.wait(now)]
+            let brightness = self
+                .brightness_asked
+                .map(|(_, since)| (since + ASK_HOLD).saturating_duration_since(now));
+            [self.mirror.wait(now), self.monitors.wait(now), brightness]
                 .into_iter()
                 .flatten()
                 .min()
@@ -779,6 +787,9 @@ impl LevelCore {
             self.shown = external;
             changed = true;
         }
+        if !self.held() {
+            changed |= self.hold_brightness(now);
+        }
         if !self.held() && self.monitors.adopt(&self.monitor_cell, now) {
             changed = true;
         }
@@ -818,7 +829,12 @@ impl LevelCore {
         let slot = match control {
             Control::Output => self.shown.audio.output.as_mut().map(|l| &mut l.percent),
             Control::Input => self.shown.audio.input.as_mut().map(|l| &mut l.percent),
-            Control::Brightness => self.shown.brightness.as_mut(),
+            Control::Brightness => {
+                if self.shown.brightness.is_some() {
+                    self.brightness_asked = Some((percent, now));
+                }
+                self.shown.brightness.as_mut()
+            }
             Control::Stream(id) => return self.mirror.set_level(id, percent),
             Control::Monitor(at) => return self.monitors.set_level(usize::from(at), percent, now),
             Control::AllMonitors => return,
@@ -826,6 +842,27 @@ impl LevelCore {
         if let Some(slot) = slot {
             *slot = percent;
         }
+    }
+
+    /// Keeps the single brightness slider at its asked level while the
+    /// monitor's readings say otherwise, until it reads that level back or
+    /// [`ASK_HOLD`] passes. Whether what is shown changed.
+    fn hold_brightness(&mut self, now: Instant) -> bool {
+        let Some((want, since)) = self.brightness_asked else {
+            return false;
+        };
+        let read = self.seen.brightness;
+        let shown = if read == Some(want) || now.duration_since(since) >= ASK_HOLD {
+            self.brightness_asked = None;
+            read
+        } else {
+            Some(want)
+        };
+        let changed = self.shown.brightness != shown && self.shown.brightness.is_some();
+        if self.shown.brightness.is_some() {
+            self.shown.brightness = shown;
+        }
+        changed
     }
 
     /// The popup asks `percent` of `control`: shown at once and sent through
@@ -883,7 +920,17 @@ impl LevelCore {
         };
         let percent = (i32::from(level) - notches).clamp(0, 100);
         let percent = u8::try_from(percent).unwrap_or(level);
-        if percent == level {
+        // All starts from the rounded mean; rows that differ still take the
+        // level, so 100 and 99 meet at 100 on a notch up.
+        let unmoved = if control == Control::AllMonitors {
+            self.monitors
+                .known()
+                .into_iter()
+                .all(|at| self.monitors.level(at) == Some(percent))
+        } else {
+            percent == level
+        };
+        if unmoved {
             return false;
         }
         self.wheel_last = Some((control, percent, now));
@@ -1556,7 +1603,11 @@ mod tests {
         assert!(!rig.core.sync(&Theme::dark(), now, cut), "held: no change");
         assert_eq!(rig.core.shown.brightness, Some(100));
         rig.core.input(&release(track.x + track.w - 1.0, y), now);
-        assert!(rig.core.sync(&Theme::dark(), now, cut));
+        // After the release the monitor has not read 100 back yet: the
+        // slider keeps it until the hold passes (CEL-I-009), then follows.
+        rig.core.sync(&Theme::dark(), now, cut);
+        assert_eq!(rig.core.shown.brightness, Some(100));
+        assert!(rig.core.sync(&Theme::dark(), now + ASK_HOLD, cut));
         assert_eq!(rig.core.shown.brightness, Some(33));
         assert_eq!(
             rig.core
@@ -1566,7 +1617,7 @@ mod tests {
             Some(33)
         );
         // The same reading again changes nothing.
-        assert!(!rig.core.sync(&Theme::dark(), now, cut));
+        assert!(!rig.core.sync(&Theme::dark(), now + ASK_HOLD, cut));
     }
 
     #[test]
@@ -2833,6 +2884,62 @@ mod tests {
         wheel_over(&mut rig, monitor_slider(0), 15.0, now);
         assert_eq!(rig.core.monitors.level(0), Some(30));
         assert_eq!(rig.core.monitors.level(1), dragged);
+    }
+
+    #[test]
+    fn the_single_brightness_slider_keeps_its_level_until_the_monitor_reads_it_back() {
+        let mut rig = rig(Kind::Brightness, brightness(Some(50)));
+        let t0 = Instant::now();
+        let track = rect_of(&rig.core, slider_key(Control::Brightness));
+        let (x, y) = (track.x + track.w - 1.0, track.y + track.h / 2.0);
+        rig.core.input(&press(x, y), t0);
+        rig.core.input(&release(x, y), t0);
+        assert_eq!(rig.core.shown_level(Control::Brightness), Some(100));
+        // A read-back of an earlier write of the drag: the slider stays.
+        rig.cell.set(brightness(Some(70)));
+        rig.core
+            .sync(&Theme::dark(), t0 + Duration::from_secs(1), cut);
+        assert_eq!(rig.core.shown_level(Control::Brightness), Some(100));
+        assert!(rig.core.graph_wait(t0 + Duration::from_secs(1)).is_some());
+        // The monitor reads the asked level back: the hold ends.
+        rig.cell.set(brightness(Some(100)));
+        rig.core
+            .sync(&Theme::dark(), t0 + Duration::from_secs(2), cut);
+        assert_eq!(rig.core.shown_level(Control::Brightness), Some(100));
+        assert!(rig.core.graph_wait(t0 + Duration::from_secs(2)).is_none());
+        // A reading from elsewhere then shows at once.
+        rig.cell.set(brightness(Some(40)));
+        rig.core
+            .sync(&Theme::dark(), t0 + Duration::from_secs(3), cut);
+        assert_eq!(rig.core.shown_level(Control::Brightness), Some(40));
+    }
+
+    #[test]
+    fn the_single_brightness_slider_shows_the_reading_after_the_hold() {
+        let mut rig = rig(Kind::Brightness, brightness(Some(50)));
+        let t0 = Instant::now();
+        wheel_over(&mut rig, slider_key(Control::Brightness), -15.0, t0);
+        assert_eq!(rig.core.shown_level(Control::Brightness), Some(51));
+        // The monitor never confirms 51.
+        rig.core.sync(&Theme::dark(), t0 + ASK_HOLD, cut);
+        assert_eq!(rig.core.shown_level(Control::Brightness), Some(50));
+    }
+
+    #[test]
+    fn the_wheel_on_all_brings_close_monitors_together() {
+        let mut rig = rig_monitors(&[
+            ("LG ULTRAGEAR+", true, Some(100)),
+            ("DELL U2720Q", false, Some(99)),
+        ]);
+        // The rounded mean is 100: a notch up still sets the 99 one to 100.
+        wheel_over(
+            &mut rig,
+            slider_key(Control::AllMonitors),
+            -15.0,
+            Instant::now(),
+        );
+        assert_eq!(rig.core.monitors.level(0), Some(100));
+        assert_eq!(rig.core.monitors.level(1), Some(100));
     }
 
     #[test]

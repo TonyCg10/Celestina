@@ -1509,3 +1509,19 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-I-008](docs/evidence/2026-11-25-cel-i-008-slider-wheel.md)
+
+## VAL-CEL-I-009 — Brightness gaps after CEL-I-007 and CEL-I-008
+
+- **Status:** pending
+- **Related implementation:** CEL-I-009 (the brightness popup)
+- **Requires:** the deployed shell after the landing of CEL-I-009; a session
+  with one DDC monitor for the first check (or one output's monitor alone),
+  two monitors for the second
+- **Procedure:** (1) with the single-slider popup, drag the slider quickly and
+  release; watch it for ten seconds. (2) Set two monitors to 100 % and 99 %,
+  then turn the wheel one notch up over All
+- **Pass condition:** (1) the slider stays where it was released; (2) both
+  monitors end at 100 %
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-I-009](docs/evidence/2026-11-25-cel-i-009-brightness-gaps.md)
