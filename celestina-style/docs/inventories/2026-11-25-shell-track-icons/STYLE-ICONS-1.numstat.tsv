@@ -1,0 +1,37 @@
+# STYLE-ICONS-1 exact change inventory
+
+Base revision	101f2da8f6e5f83536c51d5a270eb7d2b280e29d
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaIcons.qml
+Pathspec	celestina-style/ROADMAP.md
+Pathspec	celestina-style/STATUS.md
+Pathspec	celestina-style/docs/evidence/2026-11-25-shell-track-icons.md
+Pathspec	celestina-style/docs/inventories/2026-11-25-shell-track-icons/STYLE-ICONS-1.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-11-25-shell-track-icons.md
+Pathspec	celestina-style/docs/plans/active/README.md
+Pathspec	celestina-style/icons.qrc
+Pathspec	celestina-style/icons/calendar.svg
+Pathspec	celestina-style/icons/lock.svg
+Pathspec	celestina-style/icons/log-out.svg
+Pathspec	celestina-style/icons/moon.svg
+Pathspec	celestina-style/tests/tst_iconcatalog.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+5	1	b613a8b9423a5723b8a648e096947bbd6a2bda19b733caa15c3965a8b86325ed	celestina-style/CMakeLists.txt
+4	0	53e71002d747c3a5123168df7d87a0307a68701d6fb2b9fdef66c2705cfe7d09	celestina-style/CelestinaIcons.qml
+9	2	ad8d22bbb41d40154b754d0245c2be94a8c5ffed3298fe3eadb1e189a5c3ee3a	celestina-style/ROADMAP.md
+3	1	c4042ff11bf32ee21745595fd2d54f743c0eb2a96309a2f5b2f8e87db8e28f81	celestina-style/STATUS.md
+51	0	7eab12aa70b0fe8a319507a0254792299517e79ddae8bb3ff11c60160ee7dcd5	celestina-style/docs/evidence/2026-11-25-shell-track-icons.md
+37	0	self	celestina-style/docs/inventories/2026-11-25-shell-track-icons/STYLE-ICONS-1.numstat.tsv
+53	0	e651814c9adca64c961b7896ab19fea1cadea260de50ecdae370ce5ee1a0053a	celestina-style/docs/plans/active/2026-11-25-shell-track-icons.md
+5	3	51b5ca9edd6ca57163ebe02331f18f6dcf394c6b6be318128951023517863ecc	celestina-style/docs/plans/active/README.md
+4	0	2db5b953beac8c3d6bb75590069cb19127ee996549d35cd7dc865b7f24aad50a	celestina-style/icons.qrc
+16	0	9bf22907dfcaa76aad3b426e05cc997cf7000e93bb5d76214be63ab2ce94a82c	celestina-style/icons/calendar.svg
+14	0	df58b80ad47d2efa2706aede08ed0c033af1172e298170d629e69579dc909514	celestina-style/icons/lock.svg
+15	0	31e02f6a05364d202f2fb4e998301a6a5b069d34ebde61445a6cf048c935b993	celestina-style/icons/log-out.svg
+13	0	3d58e8ce47c98baf5c572a255857ec686cdb1ba35736a5b2fe5b009c89c5a13d	celestina-style/icons/moon.svg
+1	1	40a351865fbf05f6156ca798945453b20d13a9a17a4e9423046d8b28a51e2b54	celestina-style/tests/tst_iconcatalog.qml
+1	0	ce90c9442dd21b0e1deb99f4e4c083300c5aa3734d6318ba85a3402fbb93844b	docs/version-history.tsv

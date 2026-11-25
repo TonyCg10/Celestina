@@ -1,12 +1,19 @@
 # CelestinaStyle implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** STYLE-T1
 - **Related author validation:** `VAL-STYLE-01` through `VAL-STYLE-03` in
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
 `STYLE-M1` remains the next settled maintenance checkpoint after `STYLE-G7`
 and has no active execution plan.
+
+## STYLE-T1 — Icons for the shell's standing tracks (standing, opened 2026-11-25)
+
+The shell's standing tracks need a new glyph now and then. Each batch is one
+unit of [the STYLE-T1 plan](docs/plans/active/2026-11-25-shell-track-icons.md),
+vendored from Lucide with the catalogue's recipe. The first batch,
+`STYLE-ICONS-1`, adds `calendar`, `lock`, `log-out` and `moon`.
 
 ## STYLE-G7 — Shared reading controls and demonstrated visual primitives (closed 2026-11-25)
 

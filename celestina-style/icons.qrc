@@ -46,6 +46,7 @@
     <file alias="binary.svg">icons/binary.svg</file>
     <file alias="bluetooth.svg">icons/bluetooth.svg</file>
     <file alias="bookmark-plus.svg">icons/bookmark-plus.svg</file>
+    <file alias="calendar.svg">icons/calendar.svg</file>
     <file alias="check.svg">icons/check.svg</file>
     <file alias="chevron-down.svg">icons/chevron-down.svg</file>
     <file alias="chevron-right.svg">icons/chevron-right.svg</file>
@@ -83,8 +84,11 @@
     <file alias="layout-template.svg">icons/layout-template.svg</file>
     <file alias="leaf.svg">icons/leaf.svg</file>
     <file alias="list-x.svg">icons/list-x.svg</file>
+    <file alias="lock.svg">icons/lock.svg</file>
+    <file alias="log-out.svg">icons/log-out.svg</file>
     <file alias="mail.svg">icons/mail.svg</file>
     <file alias="monitor.svg">icons/monitor.svg</file>
+    <file alias="moon.svg">icons/moon.svg</file>
     <file alias="paintbrush.svg">icons/paintbrush.svg</file>
     <file alias="pencil.svg">icons/pencil.svg</file>
     <file alias="pin.svg">icons/pin.svg</file>

@@ -55,7 +55,7 @@ TestCase {
         for (const name of ["wifi", "bluetooth", "cpu", "memory-stick", "mic", "mic-off",
                             "bell", "bell-off", "power", "sun", "gauge", "leaf", "zap",
                             "toolbox", "system-tray", "pin", "eye", "eye-off",
-                            "plus", "minus"]) {
+                            "plus", "minus", "calendar", "lock", "log-out", "moon"]) {
             compare(CelestinaIcons.resolve(name, ""), name)
             verify(CelestinaIcons.source(name, "").endsWith(name + ".svg"))
         }

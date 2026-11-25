@@ -6,7 +6,9 @@
   roles and the vendored icon catalogue published; `STYLE-G7` closed on
   2026-11-25 and its plan is archived (`STYLE-G7-K` delivered by `1e30380a`,
   `STYLE-G7-J` obsolete with the Qt shell); `STYLE-M1` remains planned with
-  no execution plan
+  no execution plan; the standing plan `STYLE-T1` (2026-11-25) adds the
+  glyphs the shell's track entries need, starting with `calendar`, `lock`,
+  `log-out` and `moon` (`STYLE-ICONS-1`)
 - **Author validation:** previous real-session review exists, with focused
   follow-ups pending in [VALIDATION.md](VALIDATION.md)
 
