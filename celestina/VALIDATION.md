@@ -1377,3 +1377,37 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [2026-11-25-cel-i-004-audio.md](docs/evidence/2026-11-25-cel-i-004-audio.md)
+
+## VAL-CEL-I-006 — The session menu
+
+- **Status:** pending
+- **Related implementation:** CEL-I-006 (the `session` piece and its menu)
+- **Requires:** the deployed shell started by hand in the author's niri
+  session, after the landing of CEL-I-006, with `"session"` added last to
+  `bar.end` in `~/.config/celestina/shell.json` (the file sets `bar.end`
+  explicitly, so the new default does not reach it); the lock duty on; all
+  your work saved first, because the last step reboots the machine
+- **Procedure:** click the power glyph at the end of the bar and check that a
+  menu opens under it with five rows (lock, suspend, then after a divider log
+  out, reboot and power off). Move through the rows with the arrow keys (the
+  divider is skipped) and close the menu with Escape, then again with a click
+  outside. (1) Choose the lock row and check that the session locks and that
+  your password returns you. (2) Choose the suspend row and check that the
+  session locks, the machine suspends and, after waking it, the lock is still
+  up. (3) For each of the log-out, reboot and power-off rows: choose it and
+  check that it turns into a red card with a question and two buttons (cancel
+  and the row's own action), that the menu grows downward with its top edge
+  fixed and that the keyboard is on the cancel button. Press the cancel button
+  and check that the list comes back; open the card again and press Escape and
+  check the same. Do not confirm log out or power off. (4) Last, with your
+  work saved, choose the reboot row and confirm it
+- **Pass condition:** the menu opens under the glyph with the five rows; the
+  arrows skip the divider; Escape on the list and a click outside close it;
+  the lock row locks; the suspend row locks and suspends; each dangerous row
+  asks first in the red card, grows the menu downward, and the cancel button
+  and Escape go back to the list; confirming the reboot row reboots the
+  machine. (After log out niri shows its own confirmation: that is known and
+  not a failure.)
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [2026-11-25-cel-i-006-session-menu.md](docs/evidence/2026-11-25-cel-i-006-session-menu.md)

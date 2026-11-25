@@ -218,6 +218,42 @@ const XKB_KEY_TAB: u32 = 0xff09;
 const XKB_KEY_UP: u32 = 0xff52;
 const XKB_KEY_DOWN: u32 = 0xff54;
 
+/// The UI events of `ev` in a popup menu of rows: Up and Down are Shift+Tab
+/// and Tab through the rows, other keys and focus loss go to the keyboard,
+/// the popup's own close and focus entry are nothing, and the rest is the
+/// pointer's.
+pub(crate) fn menu_events(
+    input: &mut Interaction,
+    tree: &mut Tree,
+    ev: &InputEvent,
+    now: Instant,
+) -> Vec<UiEvent> {
+    match ev {
+        InputEvent::Key {
+            keysym: keysym @ (XKB_KEY_UP | XKB_KEY_DOWN),
+            utf8,
+            modifiers,
+            pressed,
+            serial,
+        } => {
+            let tab = InputEvent::Key {
+                keysym: XKB_KEY_TAB,
+                utf8: utf8.clone(),
+                modifiers: celestina_wayland::Modifiers {
+                    shift: *keysym == XKB_KEY_UP,
+                    ..*modifiers
+                },
+                pressed: *pressed,
+                serial: *serial,
+            };
+            input.key(tree, &tab)
+        }
+        InputEvent::Key { .. } | InputEvent::FocusLost => input.key(tree, ev),
+        InputEvent::PopupClosed { .. } | InputEvent::FocusEnter { .. } => Vec::new(),
+        _ => input.pointer(tree, ev, now),
+    }
+}
+
 impl MenuCore {
     /// The menu for `state` in `theme`, under `reduced` motion.
     #[must_use]
@@ -260,30 +296,7 @@ impl MenuCore {
     /// rows; Escape closes; a click or Enter on a row chooses it.
     pub fn input(&mut self, ev: &InputEvent, now: Instant) -> Outcome {
         let before = self.tree.highlight();
-        let events = match ev {
-            InputEvent::Key {
-                keysym: keysym @ (XKB_KEY_UP | XKB_KEY_DOWN),
-                utf8,
-                modifiers,
-                pressed,
-                serial,
-            } => {
-                let tab = InputEvent::Key {
-                    keysym: XKB_KEY_TAB,
-                    utf8: utf8.clone(),
-                    modifiers: celestina_wayland::Modifiers {
-                        shift: *keysym == XKB_KEY_UP,
-                        ..*modifiers
-                    },
-                    pressed: *pressed,
-                    serial: *serial,
-                };
-                self.input.key(&mut self.tree, &tab)
-            }
-            InputEvent::Key { .. } | InputEvent::FocusLost => self.input.key(&mut self.tree, ev),
-            InputEvent::PopupClosed { .. } | InputEvent::FocusEnter { .. } => Vec::new(),
-            _ => self.input.pointer(&mut self.tree, ev, now),
-        };
+        let events = menu_events(&mut self.input, &mut self.tree, ev, now);
         for event in &events {
             match event {
                 UiEvent::Escape => return Outcome::Close(None),

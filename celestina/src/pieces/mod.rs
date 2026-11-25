@@ -62,6 +62,7 @@ pub mod network;
 pub mod notifications;
 pub mod phone;
 pub mod power_profile;
+pub mod session;
 pub mod sysmon;
 pub mod tray;
 pub mod volume;
@@ -333,6 +334,8 @@ pub enum PieceAction {
     OpenSelector,
     /// Something the media worker does to the shown player.
     Media(MediaCommand),
+    /// Open the session menu below the node the input landed on.
+    SessionMenu,
 }
 
 /// One thing the bar can hold.
@@ -368,6 +371,7 @@ pub static PIECES: &[&dyn Piece] = &[
     &phone::Phone,
     &bubbles::Bubbles,
     &media::Media,
+    &session::Session,
 ];
 
 /// The piece the layout names `id`, if the table has it.
@@ -427,7 +431,8 @@ mod tests {
                 "brightness",
                 "phone",
                 "bubbles",
-                "media"
+                "media",
+                "session"
             ]
         );
         assert_eq!(

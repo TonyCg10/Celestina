@@ -122,6 +122,12 @@ pub enum IslandAction {
         kind: level_popup::Kind,
         anchor: Rect,
     },
+    /// The Session piece was clicked: the app builds the session menu and
+    /// hands it to [`Island::open_session_menu`], anchored at `anchor` (a
+    /// rect of the surface).
+    OpenSessionMenu {
+        anchor: Rect,
+    },
     /// A transport button of the Phone page: the app asks Magnetita for
     /// the same request `phone media` makes.
     PhoneMedia(MediaKind),
@@ -329,6 +335,8 @@ pub struct Island {
     /// The Volume or Brightness slider popup, while it is open. It hangs from
     /// the bar, so it outlives the page.
     level_popup: Option<PopupId>,
+    /// The session menu, while it is open. It hangs from the bar too.
+    session_menu: Option<PopupId>,
     /// What the Volume and Brightness pieces read.
     levels: Levels,
     /// The open tray menu hangs from the bar, not from the Tray page, so it
@@ -408,6 +416,7 @@ impl Island {
             scroll: ScrollRemainder::default(),
             bar: None,
             level_popup: None,
+            session_menu: None,
             levels: Levels::default(),
             tray_menu_on_bar: false,
             bar_menu_asked: false,
@@ -1142,7 +1151,8 @@ impl Island {
             InputEvent::PointerPress { .. }
                 if self.menu.is_some()
                     || self.tray_menu.is_some()
-                    || self.level_popup.is_some() =>
+                    || self.level_popup.is_some()
+                    || self.session_menu.is_some() =>
             {
                 self.close_menu(ctl);
                 true
@@ -1348,6 +1358,7 @@ impl Island {
                 }),
                 PieceAction::OpenSelector => out.push(IslandAction::OpenSelector),
                 PieceAction::Media(command) => out.push(IslandAction::Media(command)),
+                PieceAction::SessionMenu => out.extend(self.session_menu_action(key)),
             }
             if open && !scroll && !page && self.state.is_open() {
                 self.close(now);
@@ -1362,6 +1373,46 @@ impl Island {
         Some(IslandAction::OpenLevelPopup { kind, anchor })
     }
 
+    /// The action that opens the session menu below the bar node `key`.
+    fn session_menu_action(&self, key: Key) -> Option<IslandAction> {
+        let anchor = self.bar.as_ref()?.node_rect(key)?;
+        Some(IslandAction::OpenSessionMenu { anchor })
+    }
+
+    /// Opens the session `menu` of `size` below the piece at `anchor` (the
+    /// rect [`IslandAction::OpenSessionMenu`] carried) and returns it. `None`
+    /// while another popup of this Island is open or the bar is off.
+    pub fn open_session_menu(
+        &mut self,
+        anchor: Rect,
+        size: (f32, f32),
+        menu: Box<dyn PopupShell>,
+        ctl: &mut SurfaceCtl<'_>,
+    ) -> Option<PopupId> {
+        if self.bar.is_none() || self.any_popup_open() {
+            return None;
+        }
+        let id = ctl.open_popup(level_popup::placement(&self.theme, anchor), size, menu);
+        tracing::debug!(output = %self.output, popup = id.0, "island: session menu opened");
+        self.session_menu = Some(id);
+        Some(id)
+    }
+
+    /// Whether a popup of this Island is open: its menu, a tray menu, a
+    /// slider popup or the session menu.
+    fn any_popup_open(&self) -> bool {
+        self.menu.is_some()
+            || self.tray_menu.is_some()
+            || self.level_popup.is_some()
+            || self.session_menu.is_some()
+    }
+
+    /// Whether the session menu hangs from this Island right now.
+    #[must_use]
+    pub fn session_menu_open(&self) -> bool {
+        self.session_menu.is_some()
+    }
+
     /// Opens the slider `popup` of `size` below the piece at `anchor` (the
     /// rect [`IslandAction::OpenLevelPopup`] carried) and returns it. `None`
     /// while another popup of this Island is open or the bar is off.
@@ -1372,11 +1423,7 @@ impl Island {
         popup: Box<dyn PopupShell>,
         ctl: &mut SurfaceCtl<'_>,
     ) -> Option<PopupId> {
-        if self.bar.is_none()
-            || self.menu.is_some()
-            || self.tray_menu.is_some()
-            || self.level_popup.is_some()
-        {
+        if self.bar.is_none() || self.any_popup_open() {
             return None;
         }
         let id = ctl.open_popup(level_popup::placement(&self.theme, anchor), size, popup);
@@ -1432,7 +1479,11 @@ impl Island {
         ctl: &mut SurfaceCtl<'_>,
     ) -> Option<PopupId> {
         let on_bar = self.bar_menu_asked && self.bar.is_some();
-        if self.menu.is_some() || self.tray_menu.is_some() || !(on_bar || self.on_tray_page()) {
+        if self.menu.is_some()
+            || self.tray_menu.is_some()
+            || self.session_menu.is_some()
+            || !(on_bar || self.on_tray_page())
+        {
             return None;
         }
         let id = ctl.open_popup(crate::tray::menu::placement(&self.theme, row), size, menu);
@@ -1729,6 +1780,7 @@ impl Island {
             self.menu.take(),
             self.tray_menu.take(),
             self.level_popup.take(),
+            self.session_menu.take(),
         ]
         .into_iter()
         .flatten()
@@ -1766,6 +1818,8 @@ impl Island {
             self.tray_menu_on_bar = false;
         } else if self.level_popup == Some(id) {
             self.level_popup = None;
+        } else if self.session_menu == Some(id) {
+            self.session_menu = None;
         } else {
             return false;
         }
@@ -2521,6 +2575,43 @@ mod tests {
         island.open(PageId::ACTIVITY, t0);
         island.level_popup = Some(PopupId(8));
         assert!(island.menu_closed(PopupId(8), CloseReason::Dismissed, t0));
+        assert!(!island.state.is_open());
+    }
+
+    #[test]
+    fn the_session_piece_asks_for_its_menu_anchored_at_its_node() {
+        let (mut island, t0) = bar_island(1920.0);
+        let session = Key::named("session");
+        let at = centre(bar_rect(&island, session));
+        feed(
+            &mut island,
+            InputEvent::PointerMotion { x: at.0, y: at.1 },
+            t0,
+        );
+        assert_eq!(
+            click_at(&mut island, at, BTN_LEFT, t0),
+            [IslandAction::OpenSessionMenu {
+                anchor: bar_rect(&island, session)
+            }]
+        );
+        assert!(click_at(&mut island, at, BTN_RIGHT, t0).is_empty());
+        assert!(!island.state.is_open(), "no page opened");
+    }
+
+    #[test]
+    fn the_session_menu_is_one_of_the_islands_popups() {
+        let (mut island, t0) = bar_island(1920.0);
+        island.session_menu = Some(PopupId(9));
+        assert!(island.session_menu_open() && island.any_popup_open());
+        assert!(!island.menu_closed(PopupId(1), CloseReason::Shell, t0));
+        assert!(island.session_menu_open());
+        assert!(island.menu_closed(PopupId(9), CloseReason::Shell, t0));
+        assert!(!island.session_menu_open() && !island.any_popup_open());
+        // A compositor dismissal is a click outside: it closes an open page.
+        island.set_reduced_motion(true);
+        island.open(PageId::ACTIVITY, t0);
+        island.session_menu = Some(PopupId(10));
+        assert!(island.menu_closed(PopupId(10), CloseReason::Dismissed, t0));
         assert!(!island.state.is_open());
     }
 

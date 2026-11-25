@@ -19,7 +19,7 @@ use std::time::Instant;
 use celestina_paint::{Painter, Rect, Role, Theme};
 
 use crate::{
-    highlight::{box_fill, focus_ring, FOCUS_WIDTH},
+    highlight::{box_fill, box_wash, focus_ring, FOCUS_WIDTH},
     slider::{self, SliderPaint},
     tree::{NodeId, Slot, Tree, Visit},
     view::ViewKind,
@@ -28,6 +28,8 @@ use crate::{
 /// The alpha the accent is painted at behind selected text: a wash that
 /// leaves the text readable in both schemes.
 const SELECTION_ALPHA: f32 = 0.35;
+/// A box outline's width, logical px.
+const STROKE_WIDTH: f32 = 1.0;
 /// The text caret's width, and the preedit underline's thickness, in
 /// logical px.
 const CARET_WIDTH: f32 = 1.5;
@@ -105,19 +107,27 @@ impl Tree {
             painter.opacity(opacity.max(0.0));
         }
         match &slot.kind {
-            ViewKind::Box { fill, haze, radius } => {
+            ViewKind::Box {
+                fill,
+                stroke,
+                haze,
+                radius,
+            } => {
                 if *haze {
                     painter.haze(rect, *radius);
                 }
                 let h = self.highlight;
-                let fill = box_fill(
-                    *fill,
-                    slot.interactive,
-                    h.hovered == Some(id),
-                    h.pressed == Some(id),
-                );
-                if let Some(role) = fill {
+                let (hovered, pressed) = (h.hovered == Some(id), h.pressed == Some(id));
+                let shown = box_fill(*fill, slot.interactive, hovered, pressed);
+                if let Some(role) = shown {
                     painter.fill_rounded(rect, *radius, theme.color(role));
+                }
+                if let Some(role) = box_wash(*fill, slot.interactive, hovered, pressed) {
+                    painter.fill_rounded(rect, *radius, theme.color(role));
+                }
+                if let Some(role) = stroke {
+                    let (edge, radius) = stroke_edge(rect, *radius);
+                    painter.stroke_rounded(edge, radius, STROKE_WIDTH, theme.color(*role));
                 }
             }
             ViewKind::Text { style, .. } => {
@@ -233,6 +243,20 @@ fn paint_field(slot: &Slot, painter: &mut Painter, theme: &Theme, rect: Rect, fo
     painter.pop_clip();
 }
 
+/// The rect and radius a box's outline is stroked on: the stroke is centred
+/// on that rect, so the rect is inset by half the width and the outline lies
+/// wholly inside the box.
+fn stroke_edge(rect: Rect, radius: f32) -> (Rect, f32) {
+    let inset = STROKE_WIDTH / 2.0;
+    let edge = Rect {
+        x: rect.x + inset,
+        y: rect.y + inset,
+        w: (rect.w - STROKE_WIDTH).max(0.0),
+        h: (rect.h - STROKE_WIDTH).max(0.0),
+    };
+    (edge, (radius - inset).max(0.0))
+}
+
 /// The clip pushed around a node's subtree: its own rect and radius, for a
 /// `Box` with `clip` set. Pushed after the node's own haze and fill (which
 /// it does not clip) and popped before its focus ring.
@@ -275,6 +299,7 @@ mod tests {
     fn clip_applies_to_clipping_boxes_only() {
         let boxed = ViewKind::Box {
             fill: None,
+            stroke: None,
             haze: false,
             radius: 20.0,
         };
@@ -286,6 +311,15 @@ mod tests {
             size: 16.0,
         };
         assert_eq!(clip_of(&icon, true, R), None);
+    }
+
+    #[test]
+    fn the_outline_lies_inside_the_box() {
+        let (edge, radius) = stroke_edge(R, 10.0);
+        assert_eq!((edge.x, edge.y, edge.w, edge.h), (1.5, 2.5, 2.0, 3.0));
+        assert_eq!(radius, 9.5);
+        let (_, radius) = stroke_edge(R, 0.0);
+        assert_eq!(radius, 0.0);
     }
 
     #[test]

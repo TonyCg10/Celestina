@@ -76,6 +76,7 @@ use crate::{
         tray::TrayProvider,
         weather::WeatherReading,
     },
+    session_menu::{SessionMenu, SessionSlot},
     tray::{
         menu::{AskSink, Chain, ChoiceSlot as TrayChoiceSlot, MenuContext, MenuModel, TrayMenu},
         ItemId, MenuTree, TrayCommand, TrayEvent,
@@ -375,6 +376,8 @@ pub struct App {
     settings: ShellSettings,
     /// Where the open menu leaves the row chosen in it.
     menu_choice: ChoiceSlot,
+    /// What the session menu chose, read once its popup is gone.
+    session_choice: SessionSlot,
     model: Option<NiriModel>,
     /// Who holds the bus names the Notifications and Tray pages depend on;
     /// nobody until the owner detection of CEL-1-F / CEL-1-G fills it.
@@ -501,6 +504,7 @@ impl App {
             appearance,
             settings,
             menu_choice: ChoiceSlot::default(),
+            session_choice: SessionSlot::default(),
             model: None,
             owners: NameOwner::default(),
             keyboard: None,
@@ -1716,6 +1720,25 @@ impl App {
                         )));
                     }
                 }
+                IslandAction::OpenSessionMenu { anchor } => {
+                    let Ok(painter) = shared.try_borrow() else {
+                        tracing::warn!("the painter is in use; the session menu is not opened");
+                        continue;
+                    };
+                    let theme = painter.theme().clone();
+                    drop(painter);
+                    self.session_choice.set(None);
+                    let menu = SessionMenu::new(
+                        Rc::clone(shared),
+                        &theme,
+                        self.appearance.reduced_motion,
+                        Rc::clone(&self.session_choice),
+                    );
+                    let size = menu.size();
+                    if let Some(island) = self.islands.get_mut(surface) {
+                        island.open_session_menu(anchor, size, Box::new(menu), ctl);
+                    }
+                }
                 IslandAction::OpenMenu { more, keyboard } => {
                     let Ok(painter) = shared.try_borrow() else {
                         tracing::warn!("the painter is in use; the menu is not opened");
@@ -2705,6 +2728,12 @@ impl Shell for App {
                     }
                 }
                 let gone = self.islands.remove_output(output);
+                // A session menu that went with its Island sends no close:
+                // a row chosen in it is dropped, never fired by a later
+                // popup's close.
+                if !gone.is_empty() {
+                    self.session_choice.set(None);
+                }
                 if self.keyboard.is_some_and(|k| gone.contains(&k)) {
                     self.keyboard = None;
                 }
@@ -2933,6 +2962,14 @@ impl Shell for App {
             return;
         }
         let closed = matches!(ev, InputEvent::PopupClosed { .. });
+        // Taken at once, so a choice never outlives its menu: if the close
+        // is dropped below, the destructive verb is dropped with it rather
+        // than fired by some later popup's close.
+        let session_choice = if closed {
+            self.session_choice.take()
+        } else {
+            None
+        };
         let (Some(shared), Some(island)) = (self.painter.clone(), self.islands.get_mut(surface))
         else {
             return;
@@ -2953,6 +2990,11 @@ impl Shell for App {
         if closed {
             if let Some(choice) = self.menu_choice.take() {
                 self.menu_chose(choice, surface, ctl);
+            }
+            // The session menu's row goes out as the same command the bus
+            // and the keybindings send, now that no popup grab is held.
+            if let Some(action) = session_choice {
+                self.post(Message::Command(action.verb()));
             }
             // A tray menu's chosen entry goes to its item once the chain
             // is gone, and the host hears that the chain closed.
@@ -3204,6 +3246,7 @@ mod tests {
             "volume".to_owned(),
             "brightness".to_owned(),
             "clipboard".to_owned(),
+            "session".to_owned(),
         ]);
         assert_eq!(bar_change(&settings, &chosen_end), BarChange::Nothing);
         // Do-not-disturb and the duties are not the surfaces' business.

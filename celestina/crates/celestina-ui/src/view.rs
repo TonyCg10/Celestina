@@ -17,6 +17,8 @@ pub enum ViewKind {
     /// interactive box lifts it on hover and press).
     Box {
         fill: Option<Role>,
+        /// A one-px outline drawn inside the box after the fill.
+        stroke: Option<Role>,
         haze: bool,
         radius: f32,
     },
@@ -88,6 +90,15 @@ impl View {
     pub fn fill(mut self, role: Role) -> View {
         if let ViewKind::Box { fill, .. } = &mut self.kind {
             *fill = Some(role);
+        }
+        self
+    }
+
+    /// A `Box`'s one-px outline, drawn inside its rect after the fill;
+    /// other kinds are left alone.
+    pub fn stroke(mut self, role: Role) -> View {
+        if let ViewKind::Box { stroke, .. } = &mut self.kind {
+            *stroke = Some(role);
         }
         self
     }
@@ -226,6 +237,7 @@ fn flex_box(key: Key, direction: FlexDirection) -> View {
         key,
         ViewKind::Box {
             fill: None,
+            stroke: None,
             haze: false,
             radius: 0.0,
         },
@@ -328,6 +340,7 @@ mod tests {
             c.kind,
             ViewKind::Box {
                 fill: None,
+                stroke: None,
                 haze: false,
                 radius: 0.0
             }
@@ -352,6 +365,7 @@ mod tests {
             v.kind,
             ViewKind::Box {
                 fill: Some(Role::Card),
+                stroke: None,
                 haze: true,
                 radius: 20.0
             }
@@ -363,6 +377,24 @@ mod tests {
         // Opacity is clamped to 0..=1; NaN is fully transparent.
         assert_eq!(col(Key::named("c")).opacity(3.0).opacity, 1.0);
         assert_eq!(col(Key::named("c")).opacity(f32::NAN).opacity, 0.0);
+    }
+
+    #[test]
+    fn a_box_stroke_is_kept_and_other_kinds_ignore_it() {
+        let v = col(Key::named("c")).fill(Role::Card).stroke(Role::Divider);
+        assert_eq!(
+            v.kind,
+            ViewKind::Box {
+                fill: Some(Role::Card),
+                stroke: Some(Role::Divider),
+                haze: false,
+                radius: 0.0
+            }
+        );
+        let icon = icon(Key::named("i"), "bell", 16.0);
+        assert_eq!(icon.clone().stroke(Role::Divider), icon);
+        let t = text(Key::named("t"), "x", body());
+        assert_eq!(t.clone().stroke(Role::Divider), t);
     }
 
     #[test]

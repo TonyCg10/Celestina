@@ -298,3 +298,4 @@ celestina	1.15.3	bug	CEL-2-ICONS	Fix the missing `.desktop` icons: an absolute `
 celestina	1.15.4	bug	CEL-2-ICON-READ	Fix the painter's icon read blocking on a FIFO or reading without bound: an icon file is read through `celestina-core`'s bounded non-blocking read, and an SVG icon's `<image href>` naming a file or URL is refused
 celestina	1.16.0	milestone	CEL-I-004	Add the output and input device selector and per-application volume and mute to the volume popup, in sections folded by default
 celestina-style	1.14.0	milestone	STYLE-ICONS-1	Add the calendar, lock, log-out and moon glyphs for the shell's session menu and Island tabs
+celestina	1.17.0	milestone	CEL-I-006	Add a Session piece at the end of the bar whose menu locks, suspends (lock and suspend), logs out, reboots and powers off, the last three asking first in an inline danger card (preview approved 2026-11-25, variant A)

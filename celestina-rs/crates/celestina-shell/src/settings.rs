@@ -398,8 +398,9 @@ impl Default for BarLayout {
             centre: Vec::new(),
             // Noctalia's order: tray, network, bluetooth (CEL-2-F), the
             // volume and the brightness (CEL-2-C; both absent until a reading
-            // exists), then the clipboard (CEL-2-G). `battery` and
-            // `power-profile` are registered pieces but not placed.
+            // exists), then the clipboard (CEL-2-G) and the session menu
+            // (CEL-I-006) at the very end. `battery` and `power-profile` are
+            // registered pieces but not placed.
             end: ids(&[
                 "tray",
                 "network",
@@ -407,6 +408,7 @@ impl Default for BarLayout {
                 "volume",
                 "brightness",
                 "clipboard",
+                "session",
             ]),
             // Blueman's item `Id` is expected to be `blueman` (the halted
             // shell's fixtures of this session); `blueman-tray` is its
@@ -1903,7 +1905,8 @@ mod tests {
                 "bluetooth",
                 "volume",
                 "brightness",
-                "clipboard"
+                "clipboard",
+                "session"
             ])
         );
         assert_eq!(
@@ -1955,7 +1958,8 @@ mod tests {
                 "bluetooth",
                 "volume",
                 "brightness",
-                "clipboard"
+                "clipboard",
+                "session"
             ])
         );
         // A person who chose their end zone keeps exactly that choice.
@@ -1967,7 +1971,14 @@ mod tests {
         assert_eq!(layout.start, ids(&["network"]));
         assert_eq!(
             layout.end,
-            ids(&["tray", "bluetooth", "volume", "brightness", "clipboard"])
+            ids(&[
+                "tray",
+                "bluetooth",
+                "volume",
+                "brightness",
+                "clipboard",
+                "session"
+            ])
         );
     }
 

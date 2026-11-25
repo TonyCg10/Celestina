@@ -1204,9 +1204,53 @@ pub fn shortcuts_mode_heading(name: &str, enter: Option<&str>) -> String {
     }
 }
 
+/// The Session piece's accessible name.
+pub const PIECE_SESSION: &str = "Sesión";
+/// The session menu's rows, in order.
+pub const SESSION_LOCK: &str = "Bloquear";
+pub const SESSION_SUSPEND: &str = "Suspender";
+pub const SESSION_LOG_OUT: &str = "Cerrar sesión";
+pub const SESSION_REBOOT: &str = "Reiniciar";
+pub const SESSION_POWER_OFF: &str = "Apagar";
+/// The session menu's confirmation card: the way back.
+pub const SESSION_CANCEL: &str = "Cancelar";
+/// The question the confirmation card asks for each dangerous row.
+pub const SESSION_ASK_LOG_OUT: &str = "¿Cerrar la sesión? Se cerrarán todas las aplicaciones.";
+pub const SESSION_ASK_REBOOT: &str = "¿Reiniciar el equipo ahora?";
+pub const SESSION_ASK_POWER_OFF: &str = "¿Apagar el equipo ahora?";
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_session_menu_copy_is_pinned() {
+        assert_eq!(PIECE_SESSION, "Sesión");
+        assert_eq!(
+            [
+                SESSION_LOCK,
+                SESSION_SUSPEND,
+                SESSION_LOG_OUT,
+                SESSION_REBOOT,
+                SESSION_POWER_OFF,
+                SESSION_CANCEL
+            ],
+            [
+                "Bloquear",
+                "Suspender",
+                "Cerrar sesión",
+                "Reiniciar",
+                "Apagar",
+                "Cancelar"
+            ]
+        );
+        assert_eq!(
+            SESSION_ASK_LOG_OUT,
+            "¿Cerrar la sesión? Se cerrarán todas las aplicaciones."
+        );
+        assert_eq!(SESSION_ASK_REBOOT, "¿Reiniciar el equipo ahora?");
+        assert_eq!(SESSION_ASK_POWER_OFF, "¿Apagar el equipo ahora?");
+    }
 
     #[test]
     fn names_cover_their_ranges_and_nothing_outside() {

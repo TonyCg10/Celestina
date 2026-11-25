@@ -31,11 +31,19 @@ pub enum Role {
     Danger,
     /// The dim under a modal layer (the scheme's `scrim`).
     Scrim,
+    /// Ink on a [`Role::Danger`] fill (the scheme's `danger_ink`).
+    DangerInk,
+    /// The danger card's fill (the scheme's `danger_fill`).
+    DangerFill,
+    /// The danger card's outline (the scheme's `danger_border`).
+    DangerBorder,
+    /// Text on the danger card (the scheme's `danger_fill_ink`).
+    DangerFillInk,
 }
 
 impl Role {
     /// Every role, in declaration order.
-    pub const ALL: [Role; 16] = [
+    pub const ALL: [Role; 20] = [
         Role::Canvas,
         Role::Card,
         Role::TextHi,
@@ -52,6 +60,10 @@ impl Role {
         Role::GlassFallback,
         Role::Danger,
         Role::Scrim,
+        Role::DangerInk,
+        Role::DangerFill,
+        Role::DangerBorder,
+        Role::DangerFillInk,
     ];
 }
 
@@ -129,6 +141,14 @@ pub struct Theme {
     pub glass_tint: Color,
     pub glass_fallback: Color,
     pub danger: Color,
+    /// Ink on a danger fill.
+    pub danger_ink: Color,
+    /// The danger card's fill.
+    pub danger_fill: Color,
+    /// The danger card's outline.
+    pub danger_border: Color,
+    /// Text on the danger card.
+    pub danger_fill_ink: Color,
     /// The dim a modal layer lays over the output.
     pub scrim: Color,
     /// Haze's grain alpha, drawn under the tint.
@@ -194,6 +214,10 @@ impl From<&Scheme> for Theme {
             // role of the scheme, so it follows the canvas here too.
             glass_fallback: color_of(scheme.canvas),
             danger: color_of(scheme.danger),
+            danger_ink: color_of(scheme.danger_ink),
+            danger_fill: color_of(scheme.danger_fill),
+            danger_border: color_of(scheme.danger_border),
+            danger_fill_ink: color_of(scheme.danger_fill_ink),
             scrim: color_of(scheme.scrim),
             grain_alpha: haze::GRAIN,
             radius_lg: radius::LG,
@@ -254,6 +278,10 @@ impl Theme {
             Role::GlassFallback => self.glass_fallback,
             Role::Danger => self.danger,
             Role::Scrim => self.scrim,
+            Role::DangerInk => self.danger_ink,
+            Role::DangerFill => self.danger_fill,
+            Role::DangerBorder => self.danger_border,
+            Role::DangerFillInk => self.danger_fill_ink,
         }
     }
 
@@ -330,7 +358,7 @@ mod tests {
             let c = t.color(role);
             assert!((0.0..=1.0).contains(&c.3), "{role:?} alpha {}", c.3);
         }
-        assert_eq!(Role::ALL.len(), 16);
+        assert_eq!(Role::ALL.len(), 20);
     }
 
     #[test]
@@ -371,6 +399,10 @@ mod tests {
                 Role::GlassFallback => DARK.canvas,
                 Role::Danger => DARK.danger,
                 Role::Scrim => DARK.scrim,
+                Role::DangerInk => DARK.danger_ink,
+                Role::DangerFill => DARK.danger_fill,
+                Role::DangerBorder => DARK.danger_border,
+                Role::DangerFillInk => DARK.danger_fill_ink,
             };
             assert_eq!(
                 t.color(role),

@@ -69,9 +69,10 @@ tried live by the author. A failed live check opens a corrective entry.
 
 Current order (2026-11-25):
 
-1. `CEL-I-004`;
-2. `CEL-D-001` to `CEL-D-005`;
-3. `CEL-I-003`.
+1. `CEL-I-004` (done);
+2. `STYLE-ICONS-1`, then `CEL-I-006`, `CEL-D-001` and `CEL-D-006`;
+3. `CEL-D-002` to `CEL-D-005`;
+4. `CEL-I-003`.
 
 `CEL-D-002` is the foundation of `CEL-D-003`, `CEL-D-005` and `CEL-I-003`.
 
@@ -85,6 +86,7 @@ row closes on its own landing with its inventory and evidence.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | CEL-I-004 | `celestina:` | done | [inventory](../../inventories/2026-11-25-cel-tracks/CEL-I-004.numstat.tsv) | 28 files, +4409/-147 | Add the output and input device selector and per-application volume and mute to the volume popup ([design](../../../../docs/superpowers/specs/2026-11-25-celestina-cel-i-004-audio-design.md), [plan](../../../../docs/superpowers/plans/2026-11-25-celestina-cel-i-004-audio-plan.md)); needs `CUP-WPCTL-STATUS` of Cuprita; absorbs `CEL-I-005` | [evidence](../../evidence/2026-11-25-cel-i-004-audio.md) | VAL-CEL-I-004 |
+| CEL-I-006 | `celestina:` | done | [inventory](../../inventories/2026-11-25-cel-tracks/CEL-I-006.numstat.tsv) | 27 files, +1703/-57 | Add a Session piece at the end of the bar whose menu locks, suspends (lock and suspend), logs out, reboots and powers off, the last three asking first in an inline danger card (preview approved 2026-11-25, variant A) | [evidence](../../evidence/2026-11-25-cel-i-006-session-menu.md) | VAL-CEL-I-006 |
 | CEL-D-001 | `celestina:` | planned | `src/island/pages/` | pending | Show each Island tab as its page icon instead of its title ([plan](../../../../docs/superpowers/plans/2026-11-24-celestina-standing-tracks-plan-1.md)) | pending | VAL-CEL-D-001 |
 | CEL-D-002 | `celestina:` | planned | `crates/celestina-ui/`, `src/island/`, `src/bar/` | pending | Add anchored panels inside the bar surface and the new hover and press language (design §6.2) | pending | VAL-CEL-D-002 |
 | CEL-D-003 | `celestina:` | planned | `src/pieces/`, `src/osd/popup.rs`, `src/island/` | pending | Open every piece's menu as an anchored panel; tray menus stay `xdg_popup` (design §6.3) | pending | VAL-CEL-D-003 |
@@ -106,5 +108,7 @@ ledger.
     `SMOKE-LOCK`, `OVERVIEW-SLOT-FLAKY`, `SMOKE-PHASES` and `SMOKE-ORDER` in
     the same ledger.
   - `CEL-I-005`: the device selector, merged into `CEL-I-004`.
+  - `CEL-I-006`: the author asked for the session menu on 2026-11-25; it is a
+    ledger row now.
 
 This plan records intent; it grants no authority.

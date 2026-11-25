@@ -30,6 +30,7 @@ pub mod phone;
 pub mod pieces;
 pub mod polkit;
 pub mod providers;
+pub mod session_menu;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod tray;

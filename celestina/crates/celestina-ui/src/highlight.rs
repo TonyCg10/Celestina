@@ -30,16 +30,24 @@ pub const FOCUS_WIDTH: f32 = 2.0;
 /// How far inside the node the ring's outer edge sits.
 pub(crate) const FOCUS_INSET: f32 = 2.0;
 
-/// The fill a box is drawn with: an interactive box lifts to
-/// `ControlPressed` while pressed and `ControlHover` while hovered (the
-/// pointer lift), whatever its own fill; any other box keeps its fill.
+/// Whether `fill` is the quiet plate the pointer lift replaces: no fill, or
+/// the control fill. Any other fill (the accent, the danger tone) is the
+/// control's own colour and is kept under the pointer.
+fn is_plate(fill: Option<Role>) -> bool {
+    matches!(fill, None | Some(Role::ControlFill))
+}
+
+/// The fill a box is drawn with: an interactive box with no fill or the
+/// control fill lifts to `ControlPressed` while pressed and `ControlHover`
+/// while hovered (the pointer lift); any other box keeps its fill, and an
+/// interactive one gets [`box_wash`] on top.
 pub(crate) fn box_fill(
     fill: Option<Role>,
     interactive: bool,
     hovered: bool,
     pressed: bool,
 ) -> Option<Role> {
-    if !interactive {
+    if !interactive || !is_plate(fill) {
         fill
     } else if pressed {
         Some(Role::ControlPressed)
@@ -47,6 +55,27 @@ pub(crate) fn box_fill(
         Some(Role::ControlHover)
     } else {
         fill
+    }
+}
+
+/// The wash drawn over a box whose own fill is kept under the pointer: the
+/// standard press and hover plates, so a coloured button still reacts and
+/// keeps its colour. `None` for a plain box, a control plate (which
+/// [`box_fill`] swaps instead) and an idle one.
+pub(crate) fn box_wash(
+    fill: Option<Role>,
+    interactive: bool,
+    hovered: bool,
+    pressed: bool,
+) -> Option<Role> {
+    if !interactive || is_plate(fill) {
+        None
+    } else if pressed {
+        Some(Role::ControlPressed)
+    } else if hovered {
+        Some(Role::ControlHover)
+    } else {
+        None
     }
 }
 
@@ -90,6 +119,28 @@ mod tests {
             box_fill(fill, true, false, true),
             Some(Role::ControlPressed)
         );
+    }
+
+    #[test]
+    fn a_coloured_fill_keeps_its_colour_under_the_pointer_with_a_wash_on_top() {
+        for fill in [Role::Accent, Role::Danger] {
+            let some = Some(fill);
+            for (hovered, pressed) in [(false, false), (true, false), (true, true), (false, true)] {
+                assert_eq!(box_fill(some, true, hovered, pressed), some, "{fill:?}");
+            }
+            assert_eq!(box_wash(some, true, false, false), None);
+            assert_eq!(box_wash(some, true, true, false), Some(Role::ControlHover));
+            assert_eq!(box_wash(some, true, true, true), Some(Role::ControlPressed));
+            assert_eq!(
+                box_wash(some, true, false, true),
+                Some(Role::ControlPressed)
+            );
+            assert_eq!(box_wash(some, false, true, true), None, "not interactive");
+        }
+        // A plate is swapped, never washed.
+        for fill in [None, Some(Role::ControlFill)] {
+            assert_eq!(box_wash(fill, true, true, true), None);
+        }
     }
 
     #[test]
