@@ -66,6 +66,13 @@ if [ "$#" -ne 1 ] || [ "$1" != "--production-runner-internal" ] || \
     exit 2
 fi
 
+# The smoke this verification ran, written only once it passed: `full`, or
+# the phase ids a landing of a series unit named in CELESTINA_SMOKE_ONLY
+# (land-unit.py --smoke). A landing without --smoke verifies again an
+# artifact whose scope is not `full`.
+scope_file=$project_root/target/release/smoke-scope
+rm -f "$scope_file"
+
 "$suite_root/scripts/test-production-artifacts.sh"
 bash "$suite_root/scripts/check-architecture-contract.sh"
 (cd "$project_root" && cargo fmt --all --check)
@@ -91,6 +98,11 @@ check_lock_artifacts "$project_root/target/release"
 # example next to the release binary; it is test support, not part of the
 # artifact.
 (cd "$project_root" && cargo build --release --locked --example fake-mpris-player)
-"$project_root/scripts/smoke.sh" --binary "$binary"
+if [ -n "${CELESTINA_SMOKE_ONLY:-}" ]; then
+    "$project_root/scripts/smoke.sh" --binary "$binary" --only "$CELESTINA_SMOKE_ONLY"
+else
+    "$project_root/scripts/smoke.sh" --binary "$binary"
+fi
+printf '%s\n' "${CELESTINA_SMOKE_ONLY:-full}" > "$scope_file"
 
 echo ">> Celestina verification steps completed; awaiting the runner seal"

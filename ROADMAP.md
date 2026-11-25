@@ -386,6 +386,17 @@ before its plan and its code.
 The plan, opened and closed in the same commit, is
 [the archived plan](docs/plans/archive/2026-11-25-visible-change-preview.md).
 
+## DEV-2 — Land a series unit with only its smoke phases (closed 2026-11-25)
+
+A unit of a series lands with `--smoke ID[,ID...]` and runs only those smoke
+phases; the series' last landing runs the full smoke, and verifies again an
+artifact whose last smoke was partial.
+
+- [x] `--smoke` in the landing and the scope file of the shell's verification (`DEV-2-A`).
+
+The plan, opened and closed in the same commit, is
+[the archived plan](docs/plans/archive/2026-11-25-landing-smoke-phases.md).
+
 ## Project implementation fronts
 
 | Project | Canonical implementation queue |

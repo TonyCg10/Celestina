@@ -295,7 +295,8 @@ redraw), so the order changes between runs and a run prints the order it
 used; `--order ID[,ID...]` repeats one exactly. `--only ID[,ID...]` runs the
 named phases; `--list` prints the phase ids. A phase whose rest-frame check is
 inconclusive is retried alone, up to three attempts. A session runs the phases
-of the area it touched; the landing always runs the full smoke.
+of the area it touched; the landing runs the full smoke, or for a unit of a
+series only its `--smoke` phases (see `docs/contracts/landing.md`).
 A measuring run (the smoke, `scripts/lock-rehearsal.sh`,
 `scripts/wallpaper-backdrop-probe.sh`) holds the host-wide nest lock
 (`$XDG_RUNTIME_DIR/celestina-nest.lock`, taken by `scripts/nest-run.sh`): a

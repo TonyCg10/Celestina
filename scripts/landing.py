@@ -136,6 +136,9 @@ class LandState:
     # The commit of refs/heads/<branch> that unbump snapshotted; the prune
     # step closes the session only while the branch still points at it.
     snapshot: str = ""
+    # The smoke phases (`--smoke`, comma-separated) a series unit's landing
+    # verifies with; empty for the full smoke.
+    smoke: str = ""
 
     def dump(self) -> str:
         lines = []
@@ -959,6 +962,59 @@ def affected_projects(
         if changed:
             affected.append(project)
     return owner + affected
+
+
+# The projects whose verification runs its smoke in phases: the driver that
+# prints the phase ids with `--list`, and the file the verify entry writes,
+# once the smoke passed, with the scope it ran (`full`, or the ids of
+# SMOKE_ENV). LAND_UNIT_SMOKE_PHASES="id:driver:scope" replaces the table for
+# fixtures.
+SMOKE_PHASES = {
+    "celestina": ("celestina/scripts/smoke.sh", "celestina/target/release/smoke-scope"),
+}
+SMOKE_ENV = "CELESTINA_SMOKE_ONLY"
+FULL_SMOKE = "full"
+
+
+def smoke_phases() -> dict[str, tuple[str, str]]:
+    override = os.environ.get("LAND_UNIT_SMOKE_PHASES")
+    if not override:
+        return SMOKE_PHASES
+    project, driver, scope = override.split(":")
+    return {project: (driver, scope)}
+
+
+def parse_smoke(value: str, known: list[str]) -> str:
+    """`--smoke`'s phase ids, unchanged once checked against the drivers' `known` ids."""
+    ids = value.split(",")
+    for index, phase in enumerate(ids):
+        if not phase:
+            raise LandingError(f"--smoke: an empty phase id in `{value}`")
+        if phase not in known:
+            raise LandingError(
+                f"--smoke: unknown phase `{phase}`; the phases are {', '.join(known)}"
+            )
+        if phase in ids[:index]:
+            raise LandingError(f"--smoke: `{phase}` twice")
+    return value
+
+
+def smoke_scope(root: Path, project_id: str) -> str | None:
+    """The smoke the project's last verification ran; None when it has no phases.
+
+    A missing file is `full`: every verification before the file existed ran
+    the whole smoke, and a verification that fails removes it before the
+    manifest can say verified.
+    """
+    entry = smoke_phases().get(project_id)
+    if entry is None:
+        return None
+    try:
+        return (root / entry[1]).read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return FULL_SMOKE
+    except OSError as error:
+        raise LandingError(f"cannot read {entry[1]}: {error}") from error
 
 
 def verification_only(check_output: str) -> bool:

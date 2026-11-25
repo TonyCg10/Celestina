@@ -49,6 +49,10 @@ requires.
 
 ## Completed cross-project work
 
+DEV-2 added `land-unit.py --smoke` on 2026-11-25: a unit of a series lands
+with only its smoke phases and the series' last unit with the full smoke; the
+ledger is [the archived plan](docs/plans/archive/2026-11-25-landing-smoke-phases.md).
+
 VIS-1 added on 2026-11-25 the rule that a visible change starts with a
 faithful preview the author approves, in the root `AGENTS.md`; the ledger is
 [the archived plan](docs/plans/archive/2026-11-25-visible-change-preview.md).

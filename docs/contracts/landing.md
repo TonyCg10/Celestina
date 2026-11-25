@@ -216,6 +216,7 @@ canonical checkout:
 python3 scripts/land-unit.py unit/siderita/SID-U2-A --kind bug
 python3 scripts/land-unit.py unit/siderita/SID-U2-A --kind bug --summary "Fix picker synchronization"
 python3 scripts/land-unit.py unit/suite/AUD-1-B --kind maintenance --accept-red-ci
+python3 scripts/land-unit.py unit/celestina/CEL-I-004 --kind milestone --smoke osd
 python3 scripts/land-unit.py --continue
 python3 scripts/land-unit.py --abort
 ```
@@ -224,8 +225,19 @@ python3 scripts/land-unit.py --abort
 `<prefix>-<kind>: <summary>`, where the summary is `--summary` or the row's
 `Intended change`. For a versioned kind the same text is the version-history
 summary, so the subject and the history row agree as the version contract
-requires. `--continue` and `--abort` take no branch, `--kind`, `--summary` or
-`--accept-red-ci`.
+requires. `--continue` and `--abort` take no branch, `--kind`, `--summary`,
+`--accept-red-ci` or `--smoke`; a resumed landing keeps the phases it started
+with.
+
+`--smoke ID[,ID...]` lands a unit of a series. A unit of a series lands with
+the smoke phases of the area it touched; the last unit of the series, and any
+unit outside a series, lands without the option and runs the full smoke. A
+series left unfinished closes with a landing without it or with
+`complete-production.sh`. The ids are those `smoke.sh --list` prints, on the
+rebased tip, for each project whose smoke runs in phases (`SMOKE_PHASES` in
+`scripts/landing.py`; today the shell), so a unit may name a phase it adds.
+An unknown, repeated or empty id stops the landing at `build_if_stale` before
+any entry runs; `--smoke ""` is a usage error.
 The tool prints `land-unit: <step>` as each step starts, and exits 0 when the
 unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
 
@@ -346,6 +358,14 @@ unit landed, 1 when the landing stopped or failed, and 2 on a usage error.
    and must pass, so the fingerprints the evidence records are the current
    ones; otherwise the landing stops at `build_if_stale`. A `suite` unit that
    changes no registered production or verification input runs nothing.
+   Every entry runs with `CELESTINA_SMOKE_ONLY` set to the `--smoke` ids, or
+   empty, so the shell's `verify-production.sh` runs only those phases or the
+   full smoke and, once the smoke passed, writes the scope it ran to
+   `celestina/target/release/smoke-scope`. A landing without `--smoke` treats a
+   current, verified shell artifact whose scope is not `full` as unverified and
+   runs the `verify_script` alone; the evidence's `Check` line says so, and its
+   `Build` line names the phases of a landing with `--smoke`. A missing scope
+   file reads as `full`.
 8. **`seal`.** On the canonical checkout, the index holds the rebased tip and
    `HEAD` the base. It appends a `## Landing` section to the evidence record,
    closes the ledger row and writes the inventory, then stages the unit.

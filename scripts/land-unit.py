@@ -2,7 +2,7 @@
 """Land one unit branch on main from the canonical checkout.
 
     land-unit.py BRANCH --kind bug|milestone|release|maintenance [--summary TEXT]
-                 [--accept-red-ci]
+                 [--accept-red-ci] [--smoke ID[,ID...]]
     land-unit.py --continue
     land-unit.py --abort
 
@@ -20,7 +20,10 @@ programs it runs; LAND_UNIT_NETWORK_TIMEOUT bounds a fetch or push (300 s);
 LAND_UNIT_CI_STATUS replaces, or with `off` skips, the read of the latest
 GitHub run on main of each workflow (`{workflow}` in it stands for the file name);
 LAND_UNIT_WORKTREE replaces scripts/worktree.sh, whose `close` the prune step
-runs on the landed unit's session worktree.
+runs on the landed unit's session worktree. `--smoke` lands a unit of a series:
+a project whose smoke runs in phases (landing.SMOKE_PHASES) verifies with only
+those phases, and a landing without it verifies again an artifact whose last
+smoke was partial.
 """
 
 from __future__ import annotations
@@ -41,7 +44,9 @@ import urllib.parse
 import urllib.request
 
 from landing import (
+    FULL_SMOKE,
     PLACEHOLDER_DIFFSTAT,
+    SMOKE_ENV,
     VERSIONED_KINDS,
     LandingError,
     LandingStop,
@@ -66,12 +71,15 @@ from landing import (
     other_unit_record,
     owner_docs_root,
     owner_tables,
+    parse_smoke,
     render_inventory,
     renamed_owner_roots,
     retired_owner_deletions,
     retired_owner_roots,
     scope_violations,
     sealed_diffstat,
+    smoke_phases,
+    smoke_scope,
     subject,
     unbumped_files,
     verification_only,
@@ -554,6 +562,19 @@ def red_workflow_runs(ctx: LandContext) -> list[tuple[str, str]]:
 # Steps.
 
 
+def smoke_phase_ids(ctx: LandContext) -> list[str]:
+    """Every phase id the phased projects' smoke drivers list on the rebased tip."""
+    ids: list[str] = []
+    for driver, _scope in smoke_phases().values():
+        listed = run_process(["sh", str(ctx.root / driver), "--list"], ctx.root, check=False)
+        if listed.returncode != 0:
+            raise LandingStop(
+                "build_if_stale", f"{driver} --list failed with exit {listed.returncode}", driver
+            )
+        ids.extend(listed.stdout.split())
+    return ids
+
+
 def preflight(ctx: LandContext) -> None:
     state = ctx.state
     if ctx.landing_dir.exists():
@@ -1026,17 +1047,29 @@ def check_and_build(ctx: LandContext, project: dict) -> tuple[str, str | None, b
     deployable = bool(project.get("deployable"))
     if deployable:
         registered_entries(project, ("deploy_script", "status_script"))
+    scope = smoke_scope(ctx.root, project_id)
     if checked.returncode == 0:
-        return check, None, deployable
-    if verification_only(checked.stderr):
+        # A landing without --smoke does not take a partially smoked artifact.
+        if scope in (None, FULL_SMOKE) or ctx.state.smoke:
+            return check, None, deployable
+        check += f"; smoke scope `{scope}`, not full: verify again"
+    if checked.returncode == 0 or verification_only(checked.stderr):
         label = "verify"
         keys: tuple[str, ...] = ("verify_script",)
     else:
         label = "build"
         keys = ("build_script", "verify_script")
     entries = registered_entries(project, keys)
+    # Always set, so a stray value in the author's shell never narrows a full smoke.
+    smoke_environment = {SMOKE_ENV: ctx.state.smoke}
     for entry in entries:
-        built = run_process([str(ctx.root / entry)], ctx.root, check=False, capture=False)
+        built = run_process(
+            [str(ctx.root / entry)],
+            ctx.root,
+            environment=smoke_environment,
+            check=False,
+            capture=False,
+        )
         if built.returncode != 0:
             raise LandingStop(
                 "build_if_stale", f"{entry} failed with exit {built.returncode}", entry
@@ -1057,6 +1090,11 @@ def check_and_build(ctx: LandContext, project: dict) -> tuple[str, str | None, b
     except tomllib.TOMLDecodeError as error:
         raise LandingError(f"cannot read the manifest {manifest_path}: {error}") from error
     ran = ", ".join(f"{posixpath.basename(entry)} exit 0" for entry in entries)
+    if scope is not None and ctx.state.smoke:
+        ran += (
+            f", smoke phases {ctx.state.smoke} only; the last landing of the series "
+            "runs the full smoke"
+        )
     # The manifest's git_revision names the temporary detached tip; the
     # fingerprints name the inputs and tests the artifact was made from.
     return check, (
@@ -1075,6 +1113,13 @@ def build_if_stale(ctx: LandContext) -> None:
     may rename one and register the new name; the base names what they were.
     """
     state = ctx.state
+    if state.smoke:
+        # Checked on the tip, which may add or rename a phase, before any entry runs.
+        known = smoke_phase_ids(ctx)
+        try:
+            parse_smoke(state.smoke, known)
+        except LandingError as error:
+            raise LandingStop("build_if_stale", str(error)) from error
     registry = registry_at(ctx, state.tip)
     projects = affected_projects(
         ctx.root,
@@ -1540,17 +1585,25 @@ def parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         action="store_true",
         help="land although a GitHub workflow failed on main (for the unit that fixes it)",
     )
+    parser.add_argument(
+        "--smoke",
+        metavar="ID[,ID...]",
+        help="verify with only these smoke phases (a unit of a series; its last landing omits it)",
+    )
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--continue", dest="resume", action="store_true")
     modes.add_argument("--abort", action="store_true")
     args = parser.parse_args(argv)
     if args.resume or args.abort:
-        if args.branch or args.kind or args.summary or args.accept_red_ci:
+        if args.branch or args.kind or args.summary or args.accept_red_ci or args.smoke:
             parser.error(
-                "--continue and --abort take no branch, --kind, --summary or --accept-red-ci"
+                "--continue and --abort take no branch, --kind, --summary, --accept-red-ci "
+                "or --smoke"
             )
     elif not args.branch or not args.kind:
         parser.error("a landing needs BRANCH and --kind")
+    if args.smoke == "":
+        parser.error("--smoke needs at least one phase id; omit it for the full smoke")
     return args
 
 
@@ -1559,7 +1612,8 @@ def main(argv: list[str] | None = None) -> int:
     root = Path(__file__).resolve().parent.parent
     landing_dir = root.parent / f"{root.name}.worktrees" / ".landing"
     placeholder = LandState(
-        "preflight", args.branch or "", args.kind or "", args.summary or "", "", "", 0
+        "preflight", args.branch or "", args.kind or "", args.summary or "", "", "", 0,
+        smoke=args.smoke or "",
     )
     ctx = LandContext(root, landing_dir, {}, placeholder, None, args.accept_red_ci)
     try:

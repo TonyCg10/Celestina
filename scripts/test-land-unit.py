@@ -1551,6 +1551,64 @@ class LandingFunctions(unittest.TestCase):
         )
         self.assertEqual(landing.LandState.load(older).snapshot, "")
 
+    def test_land_state_keeps_the_smoke_and_loads_older_states_without_it(self) -> None:
+        state = landing.LandState(
+            step="build_if_stale",
+            branch="unit/app/FX-A",
+            kind="bug",
+            summary="Fix it",
+            project_id="app",
+            unit="FX-A",
+            attempts=0,
+            smoke="osd,bar",
+        )
+        self.assertEqual(landing.LandState.load(state.dump()).smoke, "osd,bar")
+        older = "".join(
+            line for line in state.dump().splitlines(keepends=True)
+            if not line.startswith("smoke = ")
+        )
+        self.assertEqual(landing.LandState.load(older).smoke, "")
+
+    def test_parse_smoke_refuses_empty_unknown_and_repeated_ids(self) -> None:
+        known = ["osd", "bar", "media"]
+        self.assertEqual(landing.parse_smoke("osd", known), "osd")
+        self.assertEqual(landing.parse_smoke("bar,osd", known), "bar,osd")
+        for value, reason in (
+            ("osd,", "an empty phase id"),
+            ("", "an empty phase id"),
+            ("nope", "unknown phase `nope`"),
+            ("osd,osd", "`osd` twice"),
+        ):
+            with self.subTest(value=value):
+                with self.assertRaises(landing.LandingError) as raised:
+                    landing.parse_smoke(value, known)
+                self.assertIn(reason, str(raised.exception))
+
+    def test_smoke_scope_reads_the_file_and_a_missing_one_is_full(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            phased = {"app": ("app/scripts/smoke.sh", "app/target/release/smoke-scope")}
+            with mock.patch.dict(landing.SMOKE_PHASES, phased, clear=True):
+                self.assertIsNone(landing.smoke_scope(root, "lib"))
+                self.assertEqual(landing.smoke_scope(root, "app"), "full")
+                scope = root / "app/target/release/smoke-scope"
+                scope.parent.mkdir(parents=True)
+                scope.write_text("osd\n", encoding="utf-8")
+                self.assertEqual(landing.smoke_scope(root, "app"), "osd")
+                scope.write_text("", encoding="utf-8")
+                self.assertEqual(landing.smoke_scope(root, "app"), "")
+
+    def test_smoke_phases_take_the_fixture_override(self) -> None:
+        with mock.patch.dict(
+            os.environ, {"LAND_UNIT_SMOKE_PHASES": "app:app/scripts/smoke.sh:app/scope"}
+        ):
+            self.assertEqual(
+                landing.smoke_phases(), {"app": ("app/scripts/smoke.sh", "app/scope")}
+            )
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("LAND_UNIT_SMOKE_PHASES", None)
+            self.assertIn("celestina", landing.smoke_phases())
+
     def test_land_state_round_trip_outside_the_bmp(self) -> None:
         state = landing.LandState(
             step="seal",
@@ -1794,6 +1852,16 @@ LAND_UNIT = load_land_unit()
 
 
 class LandUnitFiles(unittest.TestCase):
+    def test_smoke_is_refused_with_continue_or_abort(self) -> None:
+        for mode in ("--continue", "--abort"):
+            with self.subTest(mode=mode), mock.patch("sys.stderr"):
+                with self.assertRaises(SystemExit):
+                    LAND_UNIT.parse_arguments([mode, "--smoke", "osd"])
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+            LAND_UNIT.parse_arguments(["unit/app/FX-A", "--kind", "bug", "--smoke", ""])
+        parsed = LAND_UNIT.parse_arguments(["unit/app/FX-A", "--kind", "bug", "--smoke", "osd"])
+        self.assertEqual(parsed.smoke, "osd")
+
     def test_file_errors_name_the_path(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             blocker = Path(temporary) / "file"
@@ -1861,11 +1929,12 @@ fi
 def production_entry(project: str, phase: str) -> str:
     """A build or verify entry in the real entries' shape over the artifact runner."""
     command = "run-build" if phase == "build" else "run-verification"
+    # The verify double writes the smoke scope as the shell's entry does.
     work = (
         f"mkdir -p {project}/target/release\n"
         f"printf '%s\\n' '{project} release' > {project}/target/release/{project}"
         if phase == "build"
-        else ":"
+        else f"printf '%s\\n' \"${{CELESTINA_SMOKE_ONLY:-full}}\" > {project}/target/release/smoke-scope"
     )
     return f"""#!/bin/sh
 set -eu
@@ -2164,6 +2233,12 @@ class LandUnitFixture(unittest.TestCase):
         self.write(root, "app/scripts/build-production.sh", APP_BUILD_ENTRY, 0o755)
         self.write(root, "app/scripts/verify-production.sh", production_entry("app", "verify"), 0o755)
         self.write(root, "app/scripts/complete-production.sh", COMPLETE_ENTRY, 0o755)
+        self.write(
+            root,
+            "app/scripts/smoke.sh",
+            '#!/bin/sh\n[ "$1" = --list ] && printf \'%s\\n\' osd bar\n',
+            0o755,
+        )
         for phase in ("deploy", "status"):
             self.write(root, f"app/scripts/{phase}-production.sh", recording_entry("app", phase), 0o755)
         self.write(root, "lib/src/lib.rs", "pub fn lib() {}\n")
@@ -3011,6 +3086,89 @@ class LandUnitFixture(unittest.TestCase):
         self.assertEqual(self.git(self.repo, "rev-parse", "refs/heads/main").strip(), head)
         self.assertEqual(self.git(self.repo, "symbolic-ref", "--short", "HEAD").strip(), "main")
         self.assertFalse(self.landing_dir.exists())
+
+    SMOKE_PHASES = {"LAND_UNIT_SMOKE_PHASES": "app:app/scripts/smoke.sh:app/target/release/smoke-scope"}
+
+    def smoke_scope(self) -> str:
+        return (self.repo / "app/target/release/smoke-scope").read_text(encoding="utf-8").strip()
+
+    def test_a_landing_with_smoke_verifies_with_only_those_phases(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        before = self.origin_main()
+
+        result = self.land("unit/app/FX-A", "--kind", "bug", "--smoke", "osd", **self.SMOKE_PHASES)
+
+        self.assert_landed(result, before)
+        self.assertEqual(self.smoke_scope(), "osd")
+        evidence = self.show_main("app/docs/evidence/2026-09-25-fx-a.md")
+        self.assertIn(
+            "smoke phases osd only; the last landing of the series runs the full smoke", evidence
+        )
+
+    def test_a_landing_without_smoke_verifies_a_partially_smoked_artifact_again(self) -> None:
+        # The shell's artifact is current, but its last verification ran one phase.
+        self.environment.update({"CELESTINA_SMOKE_ONLY": "osd", **self.SMOKE_PHASES})
+        self.build_main()
+        self.assertEqual(self.smoke_scope(), "osd")
+        (self.records / ".app-entries-ran").unlink(missing_ok=True)
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A", touch_source=False)
+        before = self.origin_main()
+
+        # A stray CELESTINA_SMOKE_ONLY in the author's shell does not narrow it.
+        result = self.land("unit/app/FX-A", "--kind", "maintenance")
+
+        self.assert_landed(result, before)
+        self.assertEqual(self.records_of(".app-entries-ran")[0], "verify")
+        self.assertEqual(self.smoke_scope(), "full")
+        evidence = self.show_main("app/docs/evidence/2026-09-25-fx-a.md")
+        self.assertIn("smoke scope `osd`, not full", evidence)
+
+    def test_a_partially_smoked_artifact_is_enough_for_another_series_unit(self) -> None:
+        self.environment.update({"CELESTINA_SMOKE_ONLY": "osd", **self.SMOKE_PHASES})
+        self.build_main()
+        (self.records / ".app-entries-ran").unlink(missing_ok=True)
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A", touch_source=False)
+        before = self.origin_main()
+
+        result = self.land("unit/app/FX-A", "--kind", "maintenance", "--smoke", "bar")
+
+        self.assert_landed(result, before)
+        self.assertNotIn("verify", self.records_of(".app-entries-ran"))
+
+    def test_an_unknown_smoke_phase_stops_before_any_entry(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write_unit(worktree, "FX-A")
+        before = self.origin_main()
+
+        result = self.land(
+            "unit/app/FX-A", "--kind", "bug", "--smoke", "osd,nope", **self.SMOKE_PHASES
+        )
+
+        self.assert_not_landed(result, before)
+        self.assertIn("stopped at build_if_stale: --smoke: unknown phase `nope`", result.stderr)
+        self.assertEqual(self.records_of(".app-entries-ran"), [])
+        self.assertEqual(self.land("--abort").returncode, 0)
+
+    def test_a_phase_the_unit_adds_is_known_to_its_own_landing(self) -> None:
+        worktree = self.open_branch("FX-A")
+        self.write(
+            worktree,
+            "app/scripts/smoke.sh",
+            '#!/bin/sh\n[ "$1" = --list ] && printf \'%s\\n\' osd bar fresh\n',
+            0o755,
+        )
+        self.write_unit(worktree, "FX-A")
+        before = self.origin_main()
+
+        result = self.land(
+            "unit/app/FX-A", "--kind", "bug", "--smoke", "fresh", **self.SMOKE_PHASES
+        )
+
+        self.assert_landed(result, before)
+        self.assertEqual(self.smoke_scope(), "fresh")
 
     def test_stale_artifact_after_the_build_stops(self) -> None:
         worktree = self.open_branch("FX-A")

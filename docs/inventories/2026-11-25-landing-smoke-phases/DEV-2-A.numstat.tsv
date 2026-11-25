@@ -1,0 +1,37 @@
+# DEV-2-A exact change inventory
+
+Base revision	985ce162094eabe10423812819577a65b66f8e65
+Pathspec	ROADMAP.md
+Pathspec	STATUS.md
+Pathspec	celestina/AGENTS.md
+Pathspec	celestina/README.md
+Pathspec	celestina/scripts/verify-production.sh
+Pathspec	docs/contracts/landing.md
+Pathspec	docs/evidence/2026-11-25-landing-smoke-phases.md
+Pathspec	docs/inventories/2026-11-25-landing-smoke-phases/DEV-2-A.numstat.tsv
+Pathspec	docs/plans/archive/2026-11-25-landing-smoke-phases.md
+Pathspec	docs/standards/verification.md
+Pathspec	docs/superpowers/plans/2026-11-25-landing-smoke-phases-plan.md
+Pathspec	docs/superpowers/specs/2026-11-25-landing-smoke-phases-design.md
+Pathspec	scripts/land-unit.py
+Pathspec	scripts/landing.py
+Pathspec	scripts/test-land-unit.py
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+11	0	8afacbb34ca7c59c857f0943b7cbbe029aa02ba06bb81dbddef81937a8b5bf3a	ROADMAP.md
+4	0	857ca39663fdbce80bb56ad21b23ed7c46f080ee23f8ca2dc735662c1b280e7d	STATUS.md
+4	2	1b4923450e01156576784fb83477c41bf69f25b1d39172687b47690838daf84b	celestina/AGENTS.md
+2	1	58f3128cc571d5793c0fd1231b102a04aa1cb956723aab24770b0553daa67088	celestina/README.md
+13	1	ce843d71fe6230029da168bbfe29748a97bc29a27c8f082fd1b9718a3d2c020d	celestina/scripts/verify-production.sh
+22	2	47bc299a8f1cc0a047d0e797b1519ca8ee60a7fb2581b2f215271c18e18c8937	docs/contracts/landing.md
+36	0	d17a340420ceb653a41c7e54ce2443ad2e119af95c77808ff866f2f728831c3f	docs/evidence/2026-11-25-landing-smoke-phases.md
+37	0	self	docs/inventories/2026-11-25-landing-smoke-phases/DEV-2-A.numstat.tsv
+66	0	27e7a5bfb072ffcfd5089b28c8be935b48bb136636590368d90e749377e3ac95	docs/plans/archive/2026-11-25-landing-smoke-phases.md
+3	1	51d7f7c3eb4118299441e3bd97811e5d184193594741e797bf3150335d5e52cc	docs/standards/verification.md
+160	0	1d4ab6999ee3c80f9c67b4c11fb0abcfb93963a7afffae1250d9d96c5752a095	docs/superpowers/plans/2026-11-25-landing-smoke-phases-plan.md
+77	0	162cccdc57f7cfbaa57f50051aac1ada6c421592e4deb72d40986d98c71320c8	docs/superpowers/specs/2026-11-25-landing-smoke-phases-design.md
+62	8	e470a3d854084aa1c0441e2784ee171b99daff1d4197c6dd0f732d46fbdf8819	scripts/land-unit.py
+56	0	cd8c0331016a325b61c5fb3098dc255b2be25c7fc26d35b69286e499c55b5f84	scripts/landing.py
+159	1	a892434dea7caa26961d314b4f548b19e68a44f4636c6dbf651d1cb1d7223aa3	scripts/test-land-unit.py

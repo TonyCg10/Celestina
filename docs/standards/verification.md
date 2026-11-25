@@ -117,7 +117,9 @@ A light unit:
   evidence (see "Visible changes" in the root `AGENTS.md`).
 
 Everything else is ordinary: the ledger row, the inventory, the version rule,
-and the landing's build, verification and full smoke.
+and the landing's build, verification and full smoke. A unit of a series,
+light or not, lands with only its smoke phases and the series' last unit with
+the full smoke (`--smoke` in [the landing contract](../contracts/landing.md)).
 
 ## Review rounds
 

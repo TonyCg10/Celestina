@@ -55,8 +55,10 @@ the shell's constraints; it cannot relax the root or grant authority.
   nested niri, a fake logind and no PAM service only, never the live session;
   it stops processes by recorded pid, never by name)
 
-A session runs the smoke phases of the area it touched; the landing always
-runs the full smoke. A phase whose rest-frame check is inconclusive is retried
+A session runs the smoke phases of the area it touched; the landing runs the
+full smoke, or for a unit of a series only the phases its `--smoke` names, the
+series' last unit running the full smoke (`docs/contracts/landing.md`). A
+phase whose rest-frame check is inconclusive is retried
 alone, up to three attempts.
 
 A measuring run (`smoke.sh`, `lock-rehearsal.sh`, `wallpaper-backdrop-probe.sh`)
