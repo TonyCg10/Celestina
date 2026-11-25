@@ -1,0 +1,17 @@
+# SID-H1-T exact change inventory
+
+Base revision	dd9827125c986c51ef303a6f85107ec8a5c864e3
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/docs/evidence/2026-11-25-status-trim.md
+Pathspec	siderita/docs/history/status-through-2026-11-25.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-T.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+16	331	ed8577acde2c2ac4f8087f06ad725d5269a77e6181516da91373d5fbf52a4974	siderita/STATUS.md
+42	0	72f19519860bfa336e3dfb6d9076ccd66e629d350628e0698e73ac7172798174	siderita/docs/evidence/2026-11-25-status-trim.md
+316	0	097dac3f3043d9cc73997768958af90395350d5c6a1b91bf6eb92c1ab7785407	siderita/docs/history/status-through-2026-11-25.md
+17	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-T.numstat.tsv
+1	0	dc38e3ff26264d5609f805677c1518d71bf5616ca32afd19ee88224ded1451cb	siderita/docs/plans/active/2026-09-26-hardening.md

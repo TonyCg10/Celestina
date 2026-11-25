@@ -1,0 +1,316 @@
+# Siderita status history through 2026-11-25
+
+Moved verbatim from [the status](../../STATUS.md) on 2026-11-25: the per-unit
+records of delivered and committed work. The status keeps the current product.
+
+## From "Current checkout truth"
+
+- `SID-H1-S` (author report and design of 2026-10-11): an entry is renamed in
+  place over its name in the list and the grid, from a slow click on the name
+  of the only selected entry, F2 or the menu's «Renombrar»; the name dialog
+  keeps only the create modes. A drag over the name now selects text while
+  renaming. The drag that selected nothing in the old rename dialog comes from
+  the shared `CelestinaInputShield` under every modal card, which takes the
+  pointer from a text field on its first pixel; it still affects the create,
+  format, password, compress and batch-rename dialogs until a
+  `celestina-style` unit fixes it. The hand check is `VAL-SID-19`. See
+  [the evidence](../../docs/evidence/2026-10-11-inline-rename.md).
+- `SID-H1-C` (P-15 of the 2026-09-26 audit): quitting cancels every running
+  job and waits (up to ten seconds) for each worker's rollback, so a copy is
+  no longer killed halfway under its final name; a job ends from its worker,
+  so closing the tab that started it no longer leaves its ring turning; folder
+  changes that arrive while a job writes are replayed when the jobs end; a
+  watcher refresh no longer cancels a navigation in flight. Search, Trash,
+  Recientes, «Abrir con…», the quick look's text, the compress name and the
+  favourites' kinds carry generations, so a stale answer is dropped. Undo and
+  the Trash verbs run as jobs with progress and Cancel; the device listings
+  come from one process-wide model on two bus workers; creations, renames,
+  paste planning, the text preview and launcher icons leave the Qt thread; the
+  thumbnail pool is bounded and cancellable; the PE icon reader reads a
+  bounded number of bytes; a scan stuck on a dead mount no longer blocks the
+  tab's later navigations. `file://` URIs go through `celestina-core`'s strict
+  parser (another host's file is refused) and the chooser through
+  `desktop_entry::scan`. The embedded player's close order and handle
+  generation are fixed in Siderita's own copy (FLU-12). Two dialogs gained
+  their role, spatial motion honours reduced motion, and the sizes menu uses
+  `CelestinaSlider`. The app crate was type-checked and its Qt-free tests run
+  against a CXX-Qt stub mirror; nothing ran with Qt. See
+  [the evidence](../../docs/evidence/2026-09-26-app-threading.md).
+- `SID-H1-A` (P-4 of the 2026-09-26 audit): a crafted archive no longer
+  steers extraction outside the folder it creates. The tar the audit used to
+  reach outside through a chain of links (SID-1) is now a regression test and
+  is refused. Every member is written through a folder held open, so no write
+  follows a link, not even one another program swaps in mid-extraction. Links
+  are created last and only when they resolve inside. A RAR or 7z is refused
+  from the tool's own listing before the tool writes, and its result is
+  checked again afterwards; what the tool writes that its listing did not
+  declare is caught only after the run. The tool's password travels on its
+  stdin instead of its command line, the tool runs without a controlling
+  terminal when `setsid` is installed, its output is kept bounded, and the
+  measurement can be cancelled (SID-17). The real tools are `VAL-SID-16`. See
+  [the evidence](../../docs/evidence/2026-09-26-archive-extraction.md).
+- Delivered as `1.7.2`: `SID-U1-C`. Each row of the occupation section and
+  its tile in the map now share one of the six `CelestinaTheme.usagePalette`
+  tones, rotating by size rank; a row with unreadable folders below stays
+  faint and the merged remainder stays neutral. The corner geometry of the
+  list and the map comes from `celestina-style` 1.9.1. See
+  [the evidence](../../docs/evidence/2026-09-25-folder-usage-tones.md).
+- Delivered as `1.7.1`: `SID-U1-B`. «Abrir en Hematita» hands over the
+  scanned folder while it is still being analysed; Up on the first row, Down
+  on the last and Enter on an empty list stay inside the occupation section
+  instead of stepping or closing the quick look; a failed analysis shows its
+  cause and no buttons; and the quick look analyses its folder again as soon
+  as the properties dialog lets the hub go. This retires the 1.7.0 residual
+  about the glyph after a takeover. See
+  [the evidence](../../docs/evidence/2026-09-25-folder-usage-fixes.md).
+- Delivered as `1.7.0`: `SID-U1`. A folder's properties and its quick look
+  scan it on a `siderita-usage` thread with Hematita's walk and show crumbs,
+  totals, a size-ordered list and a treemap, drill in memory, go to a folder
+  in Siderita (Ctrl+Enter or «Ir a la carpeta») and hand the folder to
+  Hematita. A folder's size now counts a hard link once, as `du` does, where
+  the removed sum counted every name. Known and unfixed: `bytesText` is a
+  third copy of the byte formatter, pending a shared one; `gtk-launch` fails
+  asynchronously, so a missing Hematita is not detected; after a properties
+  takeover the quick look shows the glyph until its entry changes; and Space
+  on a focused crumb or footer button presses it instead of closing, by
+  design. Nothing tried by hand: that is `VAL-SID-U1`. See
+  [the evidence](../../docs/evidence/2026-09-25-folder-usage.md) and
+  [its delivery](../../docs/evidence/2026-09-25-folder-usage-production-completion.md).
+- Delivered as `1.6.1`: the rows sliding while the heading folded, an
+  accepted limitation from `1.6.0`. The content frame only moves while the
+  heading is actively expanding or collapsing, and away from the exact
+  resting point the margin trick that compensates for it does not — the wheel
+  scrolled the listing at its own raw rate while the frame moved at the much
+  slower rate the heading's own span sets. Fixed by pinning the listing to
+  `originY` for the span where the frame moves, following the heading's own
+  clock rather than adding a second one. See
+  [the rows that slid](../../docs/evidence/2026-09-25-the-rows-that-slid-while-folding.md).
+- Delivered as `1.6.0`: `SID-B1`. The bottom strip that repeated what the
+  operation ring already said is gone, and with it the property that made it
+  undeletable — `status_text` carried a running job, an activity with no
+  knowable end, an outcome and two standing facts at once. Everything
+  transient now lives in one column anchored bottom right (rings, notices, and
+  the two error banners that used to band across the rows), the bottom bar is
+  one capsule of three icons, and the heading follows the scroll as one travel
+  instead of three states with a detent each. Unmounting a disk announces
+  itself and stops; it never could before. The heading took four rounds of the
+  author testing it: see
+  [the bottom chrome](../../docs/evidence/2026-09-22-bottom-chrome-and-notices.md),
+  [the heading's scroll](../../docs/evidence/2026-09-22-heading-scroll.md) and
+  [what testing it found](../../docs/evidence/2026-09-22-heading-corrections.md).
+  One thing is known and unfixed: as the heading folds, the content frame
+  rises and the rows slide with it.
+- Delivered as `1.5.12`: `FEEDBACK-8-SID`, the mouse's Back and Forward
+  buttons, which `FEEDBACK-6` had broken by sinking the window-wide history
+  area under the content on two mistaken beliefs: that a `MouseArea` always
+  imposes a cursor (it owns one only when `cursorShape` is assigned, and this
+  one never assigns it) and that a press nothing accepts falls through to it
+  (measured: at `z: -1` it received no Back press at all). Both areas are back
+  on top, the comments record the measurement, and the test that had guarded
+  the defect is replaced by one mirroring the real window. See
+  [the record](../../../docs/evidence/2026-09-08-the-side-buttons-that-stopped-navigating.md).
+- Delivered as `1.5.11`: `FEEDBACK-7-SID`. The path editor's sweep never
+  selected: the pill's input shield took the drag from the text input on the
+  first pixel. While editing, the pill's own handler claims the sweep and grows
+  the field's selection from the caret; the search pill does the same. The
+  rows behind still never see it. See
+  [the record](../../../docs/evidence/2026-09-07-the-sweep-the-shield-took.md).
+- Delivered as `1.5.10`: `FEEDBACK-6-SID`. The two window-level history
+  mouse areas sat above everything and, as every `MouseArea` does, imposed
+  their arrow cursor: no I-beam over the path pill, no hand over the crumbs,
+  ever. They sit under the content now and still receive the Back/Forward
+  presses nothing above accepts. The search glyphs take no focus, so the
+  magnifier no longer closes and reopens the search in one click; it is a
+  toggle. See
+  [the record](../../../docs/evidence/2026-09-07-the-cursor-that-was-always-an-arrow.md).
+- Delivered as `1.5.9`: `FEEDBACK-5-SID`. The floating pills press in the
+  accent wash with the sink and show the selection blue while on; the path
+  field opens only for a keyboard arrival, so the focus a collapsing search
+  hands on no longer leaves a blank pill; a click anywhere on the search glass
+  focuses the search; the sidebar's eight plates run the Content ramp. Three
+  new interaction tests, 111 in all. See
+  [the record](../../../docs/evidence/2026-09-07-the-press-that-stayed-grey.md).
+- Delivered as `1.5.8`: `FEEDBACK-4-SID`. The path pill is an editor with
+  crumbs on top: a press on empty pill places the caret under the pointer and
+  a sweep selects, the current folder's crumb opens the editor with that name
+  selected, ancestors stay links, Tab and Ctrl+L select the whole path. Files
+  as rows and cells, the picker cells and the chooser rows paint the Content
+  family — accent at 7 % under the pointer, 26 % under the finger, the grid
+  cell's icon sinking with its plate — while the sidebar, tabs and titles keep
+  the neutral lift and sink. Four new interaction tests, 108 in all. See
+  [the record](../../../docs/evidence/2026-09-07-two-families-and-a-path-editor.md).
+- Delivered as `1.5.7`: `FEEDBACK-3-SID`, the password a batch of archives kept
+  asking for. Extracting several encrypted archives protected with the same key
+  asked once per archive, because the worker cleared the password after the one
+  the question was about — a real guarantee (a person's key must not reach a
+  file they were never asked about) charged entirely to the common case. The
+  key is now carried through the batch as a *second* attempt and never as the
+  first: every following archive is opened with no password, and the carried
+  one is offered only to an archive that answers it needs one. So an
+  unencrypted archive still never sees it, and `extract` clearing its
+  destination when it refuses is what makes the retry land on a clean folder.
+  When the carried key does not fit, the modal appears already saying
+  the wrong-password heading rather than the protected-archive one, and
+  the new answer becomes the batch's key. 122 unit
+  tests, 13 domain tests, 102 QML tests; the hand check is `VAL-SID-13`.
+- Delivered as `1.5.5`: `FEEDBACK-1-SID`, the recording the author made of
+  the bottom pills. The size pill painted hover and open in the same colour, a
+  click whose pointer drifted a pixel was lost — the floating pill's input
+  shield took the grab on the first pixel — and the popover closed and
+  reopened on the same click. `FloatingButton` now reads rest, hover, active
+  and press as four fills, sinks by the suite recoil, yields the drag to its
+  own press and carries a glyph; the popover decides at press time. Every
+  floating action is a glyph whose words live in its accessible name — the
+  hidden-files toggle, the size pill, the trash, recents and search headers,
+  the operation callout — and none of them paints a hover card. The trash
+  header no longer slides the back button under the pointer,
+  the breadcrumbs are one hit target each at the pill's height, the search
+  glyph stays put when the pill expands, bookmarks open on the first click,
+  the eject glyph keeps its row lit, and every row and cell paints the shared
+  `CelestinaRowHighlight` — with a pressed state none of them had. 102 QML
+  tests; the hand check is `VAL-SID-12`.
+- Delivered as `1.5.2`: `SID-A4-B`, the freeze the author reported on
+  opening Recientes or the Papelera. Both are locations that are *listed*
+  rather than scanned, and both did their reading on the Qt thread: the Trash
+  asks every mounted volume whether it holds a trash of its own — 80 `stat`
+  calls and 25 ms here with everything healthy, before a single `.trashinfo` is
+  read — and the recently-used list names files that may live on a phone or a
+  share. One mount that has stopped answering held the window for as long as it
+  took to give up. They read on a worker now and publish only if the person is
+  still in the location; leaving is what cancels them, and it is no longer
+  gated on `loading`, which used to hold back the very way out of the location
+  being read. Four questions per row became one, and the recently-used list
+  stops probing once it has the hundred it will show. Formatted, Clippy-clean,
+  122 unit tests, 90 QML tests, qmllint and the offscreen smoke, and nothing
+  tried by hand: that is `VAL-SID-11`. The release binary was built at `1.5.2`
+  but **not** verified or deployed: `verify-production.sh` runs the shared
+  architecture guard, whose `celestina-style` visual rule fails on another
+  unit's uncommitted `celestina-qt/qml/MenuSection.qml`. The author's normal test
+  prefix therefore still holds `1.5.1`; re-run
+  `siderita/scripts/complete-production.sh` once that file is settled.
+- Committed (recorded before its landing): `SID-A1`, compressing and extracting. A new pure
+  crate, `siderita-archive`, identifies a container by its bytes, lists it,
+  extracts it into a folder and creates one, holding `siderita-ops`' own
+  guarantees: it never overwrites (a second extraction lands beside the first
+  under a freed name), it staged the whole extraction and promoted or removed
+  it whole (it now writes the visible destination directly, contained by
+  `SID-H1-A`), and it refuses any member whose stored name or symlink target would
+  land outside the destination — the stored bytes are read, never `zip`'s
+  sanitised spelling, so an escape is reported instead of quietly renamed. The
+  containers are pure Rust: no `unzip`, no `tar`, no process. The entry menu
+  gains the extract verb — offered only when the domain says every selected entry
+  really is an archive — and «Comprimir…», which asks for a name and a container
+  (ZIP or TAR.GZ) and suggests a free one. Both run on the paste operation's
+  worker, progress and Cancel button. `controller.rs` did not grow: `UndoAction`
+  and `ConflictStrategy` moved out to `controller/actions.rs` and the ratchet
+  fell to 1092.
+
+  Exercised against real archives rather than only fixtures, which is what
+  found the rest: a 12 MB zip from the cache extracts byte-identical to
+  `unzip`; archives this domain writes pass `unzip -t` and `tar tzf` and come
+  back identical through both tools; a hand-built zip-slip, an absolute member
+  and an escaping symlink are each refused with the destination left empty; a
+  truncated zip reports damage. Three defects that only a real archive shows
+  were fixed on the way — `next_available` cut `web-2.1.2` into
+  `web-2.1 (copia).2` (a folder name is not `stem.ext`, and the same defect hit
+  copying folders, so it was fixed in its owner and now takes a `NameShape`),
+  modification dates were dropped on both write and read, and the archive
+  refusals reached the person in English. Formatted, Clippy-clean, 14 domain
+  tests, 31 ops tests, 109 unit tests, 54 QML tests, the offscreen smoke and
+  the three repository guards — no production run, no version transition, no
+  inventory and nothing tried by hand: that is `VAL-SID-07`.
+- Committed (recorded before its landing): `SID-G7-I`. The tab strip keeps deriving its own
+  label: routing it through the adapter costs qmllint warnings the project's
+  inventoried debt ceiling refuses, and a ratchet is not raised for a label. The
+  folder heading, where it cost nothing, keeps the adapter.
+- Committed (recorded before its landing): `SID-G7-H`, two of the low findings of the
+  [light monorepo audit](../../../docs/evidence/2026-08-06-light-monorepo-audit.md).
+  Pressing Ctrl+V with nothing on the clipboard but a cut into the folder those
+  entries already occupy is no longer a silent no-op: the plan reports the
+  entries it drops instead of forgetting them, so the clipboard and its ghost
+  are settled — the system clipboard only while it still holds exactly those
+  entries — and the status line says why nothing moved. And the last two QML
+  surfaces that cut a label out of a path, the tab chip and the folder heading,
+  ask the adapter for it, which is what
+  [ADR 0008](../../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md) says
+  owns that answer; the chip gains the phone-name substitution it never made.
+  One visible consequence: at the filesystem root the chip now reads `/` rather
+  than `Inicio`, matching the heading beside it. Formatted, Clippy-clean, 109
+  unit tests and the three repository guards — no production run, no version
+  transition, no inventory and nothing tried by hand: that is `VAL-SID-06`. The
+  limits, including one comparison against a key left deliberately open, are in
+  the [evidence](../../docs/evidence/2026-08-06-silent-paste-and-label-surgery.md).
+- Committed (recorded before its landing): `SID-G7-G`, the three Siderita items of stage 3
+  of the [light monorepo audit](../../../docs/evidence/2026-08-06-light-monorepo-audit.md).
+  A breadcrumb is published key-first, so a folder whose name contains a tab — a
+  legal filename character — no longer moves the cut QML makes and leaves the
+  crumb holding a fragment instead of a key. A persisted path record is now
+  *marked* as a key when it is written (`key:`) rather than recognised by
+  re-encoding it and hoping the codec is idempotent, which could not tell a
+  pre-ADR raw path holding a literal `%20` from the key for a path holding a
+  space and silently answered with the second — for a bookmark, which is a
+  navigation and a paste target, that is the wrong folder. And the send-to-phone
+  menu item calls Magnetita's new `SendFileUri` with the byte-exact `file://` URI
+  `dbus::path_to_uri` already writes, closing the last verb that put a lossy
+  path out of the process; `SendFile` is untouched, because it is a published
+  interface with other possible callers. Formatted, Clippy-clean, 104 unit tests
+  and both repository guards — no production run, no version transition, no
+  inventory and nothing tried by hand: that is `VAL-SID-06`. A record written
+  before the mark keeps the old ambiguity until its store is saved once; that
+  limit and the rest are in the
+  [evidence](../../docs/evidence/2026-08-06-path-key-correctness-debt.md).
+- Committed (recorded before its landing): `SID-G7-F`, repairing a regression `SID-G7-E`
+  introduced. The thumbnail provider converts its id with `toUtf8`, so a name
+  carrying an accent resolves again; the seam is now exposed and tested through
+  the same URL a delegate writes, which is where the previous tests were not
+  looking.
+- Committed (recorded before its landing): `SID-G7-D`, the byte-exact path seam. Every path
+  that crosses the Qt boundary is now the percent key of
+  [ADR 0008](../../../docs/decisions/0008-byte-exact-paths-across-the-qt-seam.md),
+  published beside its own lossy display text; every invokable decodes that key
+  and refuses a malformed one with a typed error instead of rebuilding a
+  `PathBuf` from the `QString`; and QML no longer composes paths — the
+  breadcrumbs, the save picker's typed name, the quick look's `file://` URL and
+  the sidebar's derived names all come from the adapter. The persisted
+  bookmarks, favourites, icons, folder views and tab session migrate to keys on
+  load. The `file://`, portal and Trash encodings that face other processes are
+  untouched. This closes audit finding `SID-A2` in the checkout; `FLU-M1`, the
+  same defect in Fluorita, is untouched. Compiled, unit-tested, QML Test 47/47
+  and an offscreen smoke — no production run, no version transition, and nothing
+  tried by hand on a real session: that is `VAL-SID-06`. The two limits it
+  recorded in its
+  [evidence](../../docs/evidence/2026-08-06-byte-exact-path-seam.md) are closed by
+  `SID-G7-E` below and are no longer open: a non-UTF-8 name used to get a
+  generic glyph instead of a thumbnail, because the C++ provider
+  addressed files through `QString`; and the system clipboard used to exchange
+  paths with the rest of the desktop, so copying such a name *to another
+  application* was lossy.
+- Committed (recorded before its landing): `SID-G7-E`, the two remaining Qt seams that still
+  decoded a byte-exact key into a `QString`. The thumbnail provider now carries
+  the decoded path as `QByteArray`, finds the file with `::stat` on those bytes,
+  reads it through a descriptor opened on them, derives the extension from them,
+  and computes the freedesktop cache key over them in the exact spelling
+  `celestina_core::percent::encode_qt_path` owns — a test asserts the C++ and the
+  Rust agree byte for byte, and another decodes a real 2x2 PNG named with
+  `b"na\xffme.png"` out of a temporary directory. The system clipboard stops
+  exchanging paths with the rest of the desktop and exchanges the
+  percent-encoded `file://` URIs it actually speaks, written and read by
+  `dbus::path_to_uri` and `dbus::uri_to_path`, so a non-UTF-8 name survives a
+  copy to another application and back; `holds_exactly` still compares real
+  `PathBuf`s. Compiled, `cargo fmt`/Clippy clean, 93 unit tests, both repository
+  guards and `qmllint` unchanged — no production run, no version transition, no
+  inventory and nothing tried by hand: that is still `VAL-SID-06`. What remains
+  is in the
+  [evidence](../../docs/evidence/2026-08-06-thumbnail-and-clipboard-bytes.md).
+- Committed (recorded before its landing): `SID-G7-C`, the corrective unit from the suite
+  audit. Pasting an entry into its own folder now duplicates instead of trashing
+  the original to make room for it; the portal answers `writable` only when it
+  was asked for and confirms an overwrite before returning a save destination;
+  trash takes the running-operation guard paste already had; a vanished entry no
+  longer fails a listing and a quiet refresh stays quiet; a symlink to a
+  directory is navigable; trash entries are purged by info path rather than list
+  position; dropped URIs are decoded by bytes in Rust; and the four remaining
+  configuration files are written atomically. Compiled and unit-tested, with no
+  inventory, no version transition and no production run — the author asked for
+  the corrections, not the delivery. Nothing here has been seen by a real portal
+  requester: that is `VAL-SID-05`.
