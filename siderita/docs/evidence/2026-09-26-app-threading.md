@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-28
 - **Scope:** `SID-H1-C` (program unit P-15) of the
-  [SID-H1 plan](../plans/active/2026-09-26-hardening.md): SID-5, SID-6,
+  [SID-H1 plan](../plans/archive/2026-09-26-hardening.md): SID-5, SID-6,
   SID-7, SID-8, SID-9, SID-10, SID-11, SID-12, SID-13, SID-19, SID-24,
   SID-25, SID-26, SID-27, SID-28 and SID-30 from the
   [Siderita audit](../../../docs/evidence/2026-09-26-monorepo-audit-siderita.md),

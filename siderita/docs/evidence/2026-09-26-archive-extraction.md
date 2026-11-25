@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-26
 - **Scope:** unit `SID-H1-A` (program row P-4) of the
-  [hardening plan](../plans/active/2026-09-26-hardening.md); closes SID-1 and
+  [hardening plan](../plans/archive/2026-09-26-hardening.md); closes SID-1 and
   SID-17 of the
   [Siderita audit](../../../docs/evidence/2026-09-26-monorepo-audit-siderita.md)
   and the SID-29 tests that belong to them. Code:

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-29
 - **Scope:** `SID-H1-E` of the
-  [SID-H1 plan](../plans/active/2026-09-26-hardening.md): a defect of the
+  [SID-H1 plan](../plans/archive/2026-09-26-hardening.md): a defect of the
   transient chrome `SID-B1` delivered in `1.6.0`, found by the author on
   `1.7.5` and taken into the active plan the way `SID-H1-C` took the dialog
   and motion fixes. It closes no audit finding.

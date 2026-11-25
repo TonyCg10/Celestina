@@ -1,15 +1,16 @@
 # Siderita implementation roadmap
 
-- **Status:** active
-- **Active implementation checkpoint:** SID-H1
+- **Status:** idle
+- **Active implementation checkpoint:** none
 - **Related author validation:** `VAL-SID-G7`, `VAL-SID-04`, `VAL-SID-07`,
   `VAL-SID-11`, `VAL-SID-15`, `VAL-SID-17` and `VAL-SID-U1` in [VALIDATION.md](VALIDATION.md);
   none of them blocks implementation
 
 `SID-M1` remains the next settled checkpoint after `SID-G7` and `SID-A1`, and
-has no active execution plan; `SID-H1` comes first.
+has no active execution plan; the roadmap is idle until a checkpoint is
+opened.
 
-## SID-H1 — Hardening after the monorepo audit
+## SID-H1 — Hardening after the monorepo audit (closed 2026-11-25)
 
 The falsifiable problem, reproduced by the audit: a crafted archive whose
 symlinks chain outward writes outside the folder the person chose; a copy
@@ -25,11 +26,15 @@ threading. The tangible outcome is the same verbs, with every reproduced
 failure pinned by a regression test and no blocking work left on the Qt
 thread.
 
-The plan is
-[Hardening after the monorepo audit](docs/plans/active/2026-09-26-hardening.md):
+The checkpoint closed on 2026-11-25; the next one is not opened. The plan is
+[Hardening after the monorepo audit](docs/plans/archive/2026-09-26-hardening.md):
 `SID-H1-A` (archive containment), `SID-H1-B` (loss-free verbs), `SID-H1-C`
 (lifecycle, threading, the shared owners, documentation and accessibility)
-and `SID-H1-D` (local Trash dates, waiting on a shared local-time owner).
+and `SID-H1-D` (local Trash dates, waiting on a shared local-time owner),
+which was never started and moved to the status's planned implementation
+debt when the plan closed; the later rows, `SID-H1-E` to `SID-H1-U`, are the
+corrections the landings and the author's reports found, the status trim
+and this archive.
 The findings are in
 [the Siderita audit record](../docs/evidence/2026-09-26-monorepo-audit-siderita.md).
 

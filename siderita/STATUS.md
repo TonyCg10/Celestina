@@ -3,10 +3,11 @@
 - **Updated:** 2026-11-25
 - **Implementation:** the registered product version and CP0-CP7 behaviour are
   present; `SID-A4`, `SID-B1`, `SID-U1`, `SID-U1-B` and `SID-U1-C` are closed and archived;
-  `SID-H1`, the hardening that follows the 2026-09-26 monorepo audit, is the
-  active checkpoint: every row of its
-  [plan](docs/plans/active/2026-09-26-hardening.md) is done but `SID-H1-D`,
-  the portal parenting, which remains planned
+  `SID-H1`, the hardening that follows the 2026-09-26 monorepo audit, was
+  closed on 2026-11-25; its
+  [plan](docs/plans/archive/2026-09-26-hardening.md) is archived, and its one
+  unstarted row, `SID-H1-D`, is now planned debt (below). No checkpoint is
+  active
 - **Author validation:** mixed; current manual queue is in
   [VALIDATION.md](VALIDATION.md)
 
@@ -88,6 +89,18 @@
 
 ## Planned implementation debt
 
+- `SID-H1-D` (SID-20, ruling R-A17; moved here from the archived SID-H1 plan
+  on 2026-11-25, waiting on a `celestina-core` local-time owner): Write
+  `DeletionDate` in local time, as the spec, GIO and KIO do, through a
+  local-time facility owned by `celestina-core` (with `siderita-archive`'s
+  `Zone` moved onto it), and order the Trash listing by instant rather than by
+  a string that mixes zones. Depends on that `celestina-core` owner; a
+  cross-prefix change, so it may land as a `suite:` unit. (SID-20; ruling
+  R-A17) Its exit: `cargo test -p siderita-ops --offline`: a record written at
+  a known instant and zone reads back local; mixed UTC and local records sort
+  by instant. Files: `celestina-rs/crates/siderita-ops/src/trash.rs`;
+  `celestina-rs/crates/siderita-ops/src/trashinfo.rs`; the `trash` consumers
+  in Siderita, Fluorita and Hematita.
 - Add the narrowest automated lifecycle/handle tests around the portal request
   and its parenting (`SID-M1`). The parenting itself is in the checkout; what
   is missing is coverage that a withdrawn request drops its stored handle and

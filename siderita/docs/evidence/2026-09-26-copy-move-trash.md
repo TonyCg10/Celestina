@@ -2,7 +2,7 @@
 
 - **Date:** 2026-09-26
 - **Scope:** `SID-H1-B` (program unit P-8) of the
-  [SID-H1 plan](../plans/active/2026-09-26-hardening.md): SID-2, SID-3,
+  [SID-H1 plan](../plans/archive/2026-09-26-hardening.md): SID-2, SID-3,
   SID-4, SID-14, SID-15, SID-16 and SID-31 from the
   [Siderita audit](../../../docs/evidence/2026-09-26-monorepo-audit-siderita.md),
   with the matching share of SID-29 (the missing tests) and the two

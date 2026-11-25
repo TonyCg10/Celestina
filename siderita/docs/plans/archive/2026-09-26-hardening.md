@@ -2,7 +2,9 @@
 
 - **Opened:** 2026-09-26
 - **Plan ID:** hardening
-- **Status:** active
+- **Closed:** 2026-11-25
+- **Successor:** none; the author named no next Siderita checkpoint. `SID-H1-D`, never started, moved to the planned implementation debt in [the status](../../../STATUS.md)
+- **Status:** done
 - **Authorization:** after the 2026-09-26 monorepo audit the author asked
   for its whole program to be done; the findings and rulings are in
   [the audit evidence](../../../../docs/evidence/2026-09-26-monorepo-audit.md)
@@ -41,7 +43,10 @@ reproduced has a regression test.
   dialog and motion fixes.
 - `SID-H1-D` — SID-20, split out of `SID-H1-B` (ruling R-A17): the Trash's
   `DeletionDate` in local time, once `celestina-core` owns a local-time
-  facility every `trash` consumer can pass.
+  facility every `trash` consumer can pass. Never started; on 2026-11-25
+  `SID-H1-U` moved it, with its ledger text, to the planned implementation
+  debt in [the status](../../../STATUS.md), so that this plan could close.
+- `SID-H1-U` — moves this plan to the archive and marks the roadmap idle.
 
 ## Exclusions
 
@@ -59,7 +64,9 @@ reproduced has a regression test.
    suite plan (P-2).
 3. `SID-H1-C`, stacked on `SID-H1-B`, after `RS-H1-A` (P-6) and `FLU-H1-B`
    (P-14) landed; if `FLU-H1-B` slips, land the two-line port of FLU-12 first.
-4. `SID-H1-D` after a `celestina-core` local-time owner exists.
+4. `SID-H1-D` after a `celestina-core` local-time owner exists: moved out
+   of this plan by `SID-H1-U`.
+5. `SID-H1-U`, once every other row is done.
 
 ## Implementation exit
 
@@ -77,7 +84,6 @@ program id and the audit findings it closes.
 | SID-H1-A | `siderita:` | done | [inventory](../../inventories/2026-09-26-hardening/SID-H1-A.numstat.tsv) | 18 files, +3699/-295 | Never write through a symlinked ancestor. Create links last. Resolve tool-path links canonically. Feed the 7z and unrar password on stdin. Bound tool output. (P-4: SID-1, SID-17) | [evidence](../../evidence/2026-09-26-archive-extraction.md) | `VAL-SID-16` |
 | SID-H1-B | `siderita:` | done | [inventory](../../inventories/2026-09-26-hardening/SID-H1-B.numstat.tsv) | 25 files, +2957/-280 | Roll back only what this call created. fsync files and directories before removing a source, then remove only the copied entries. Use `rename_without_replacing` for trash and restore. Resolve relative `Path=` and keep a volume's records on that volume. Harden the `.Trash-$uid` choice and get the uid safely. Refuse to trash a mount point. Make Replace place-then-trash. Delete the dead `unwritable`. SID-20 moved to `SID-H1-D` (R-A17). (P-8: SID-2, SID-3, SID-4, SID-14, SID-15, SID-16, SID-31) | [evidence](../../evidence/2026-09-26-copy-move-trash.md) | `VAL-SID-17` in [VALIDATION.md](../../../VALIDATION.md): «Reemplazar»; a cut to a USB stick while a file is added to the source; a restore from a Nautilus-written volume Trash |
 | SID-H1-C | `siderita:` | done | [inventory](../../inventories/2026-09-26-hardening/SID-H1-C.numstat.tsv) | 54 files, +3551/-1018 | Keep and join worker handles, asking or cancelling on quit. End jobs from the worker. Replay suppressed folder changes. Refresh must not cancel navigation. Add generations to search, Trash and Recientes. Run undo and the Trash verbs as jobs. Keep one process-wide device model on a worker. Move the remaining syscalls off-thread. Bound the PE reader. Use a bounded, cancellable thumbnail pool. Make the scan executor fallible. Port FLU-12's close order and generation guard into Siderita's handshake copy (ruling R-A23; adopting the P-14 handshake and deleting the copy is a follow-up). Adopt `file_uri` and `desktop_entry::scan` (`open_with` and `ownicon` off-thread). Portal filter escaping. Dialog roles. Reduced motion. `CelestinaSlider` in `SizeRow`. Docs. (P-15: SID-5, SID-6, SID-7, SID-8, SID-9, SID-10, SID-11, SID-12, SID-13, SID-19, SID-24, SID-25, SID-26, SID-27, SID-28, SID-30; FLU-12; SID-18/RS-1, RS-4 (adoption); STY-4) | [evidence](../../evidence/2026-09-26-app-threading.md) | None |
-| SID-H1-D | `siderita:` | planned | `celestina-rs/crates/siderita-ops/src/trash.rs`; `celestina-rs/crates/siderita-ops/src/trashinfo.rs`; the `trash` consumers in Siderita, Fluorita and Hematita | — | Write `DeletionDate` in local time, as the spec, GIO and KIO do, through a local-time facility owned by `celestina-core` (with `siderita-archive`'s `Zone` moved onto it), and order the Trash listing by instant rather than by a string that mixes zones. Depends on that `celestina-core` owner; a cross-prefix change, so it may land as a `suite:` unit. (SID-20; ruling R-A17) | `cargo test -p siderita-ops --offline`: a record written at a known instant and zone reads back local; mixed UTC and local records sort by instant | None |
 | SID-H1-H | `siderita:` | done | [inventory](../../inventories/2026-09-26-hardening/SID-H1-H.numstat.tsv) | 9 files, +73/-5 | Paint the floating pills (bottom controls, operations dock) with the style's `pillFill`, the Haze tint, now that `controlFill` is the neutral control plate again (STYLE-G7-S); no other fill changes. | [evidence](../../evidence/2026-10-06-pill-fill.md) | None |
 | SID-H1-I | `siderita:` | done | [inventory](../../inventories/2026-09-26-hardening/SID-H1-I.numstat.tsv) | 8 files, +177/-39 | Make a burst of wheel notches one continuous motion for the heading and the listing: both glides become a `Behavior` with a `SmoothedAnimation` (`Immediate` reversing) that re-aims and keeps its speed on every notch, instead of a 200 ms eased tween restarted per notch, which jumped and braked once per notch and left the heading's state changes out of step with the rows on a fast scroll. Author video of the 2026-10-06 session; no audit finding. | [evidence](../../evidence/2026-10-06-wheel-glide.md) | None |
 | SID-H1-J | `siderita:` | done | [inventory](../../inventories/2026-09-26-hardening/SID-H1-J.numstat.tsv) | 8 files, +89/-21 | Make the wheel glide answer the wheel: both `SmoothedAnimation`s run on a fixed time (`wheelGlide`, `motionNormal`) instead of a fixed velocity, so whatever is left to cover is covered in that time and a burst of notches moves faster the more are pending; the fixed velocity of SID-H1-I made every burst crawl at one speed, like a belt. Author video of the 2026-10-06 session; no audit finding. | [evidence](../../evidence/2026-10-06-wheel-glide-time.md) | None |
@@ -94,5 +100,6 @@ program id and the audit findings it closes.
 | SID-H1-F | `siderita:` | done | [inventory](../../inventories/2026-09-26-hardening/SID-H1-F.numstat.tsv) | 9 files, +89/-8 | Give the window a transparent canvas so the compositor's blur and `CelestinaBackdrop`'s Haze material show through (STYLE-G7-Q), keep the floating pills glass at rest as the bar is, and make the folder-usage crumbs pointer-only so opening the properties dialog never lights a focus ring on them. Author feedback on the 2026-10-05 spike; no audit finding. | [evidence](../../evidence/2026-10-05-glass-canvas.md) | None |
 | SID-H1-E | `siderita:` | done | [inventory](../../inventories/2026-09-26-hardening/SID-H1-E.numstat.tsv) | 10 files, +213/-3 | Give the operations dock's outside catcher the item it must cover instead of its parent: inside the transient column that parent is a positioner, an anchored child makes Qt refuse to lay it out ("Column will not function"), and so the rings moved on the first press, the error pill sat under them and a press over the folder did not close the callout. A defect of the 1.6 chrome the author found on 1.7.5, taken here as SID-H1-C took the dialog and motion fixes; no audit finding. | [evidence](../../evidence/2026-09-29-the-catcher-in-the-column.md) | None |
 | SID-H1-T | `siderita:` | done | [inventory](../../inventories/2026-09-26-hardening/SID-H1-T.numstat.tsv) | 5 files, +392/-331 | Move the per-unit records of delivered work out of the status into its history | [evidence](../../evidence/2026-11-25-status-trim.md) | None |
+| SID-H1-U | `siderita:` | done | [inventory](../../inventories/2026-09-26-hardening/SID-H1-U.numstat.tsv) | 11 files, +200/-117 | Archive the hardening plan, moving the unstarted SID-H1-D to the planned debt | [evidence](../../evidence/2026-11-25-hardening-archive.md) | None |
 
 This plan records intent; it grants no authority.

@@ -1,0 +1,29 @@
+# SID-H1-U exact change inventory
+
+Base revision	de9bf3da1fefddcd61a3b07cac1e265b3e504b3b
+Pathspec	siderita/ROADMAP.md
+Pathspec	siderita/STATUS.md
+Pathspec	siderita/docs/evidence/2026-09-26-app-threading.md
+Pathspec	siderita/docs/evidence/2026-09-26-archive-extraction.md
+Pathspec	siderita/docs/evidence/2026-09-26-copy-move-trash.md
+Pathspec	siderita/docs/evidence/2026-09-29-the-catcher-in-the-column.md
+Pathspec	siderita/docs/evidence/2026-11-25-hardening-archive.md
+Pathspec	siderita/docs/inventories/2026-09-26-hardening/SID-H1-U.numstat.tsv
+Pathspec	siderita/docs/plans/active/2026-09-26-hardening.md
+Pathspec	siderita/docs/plans/active/README.md
+Pathspec	siderita/docs/plans/archive/2026-09-26-hardening.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+12	7	9361240f5b5c2cc5eed249dc71ed9cb7a439bbaa21eba9052492827aa1f75828	siderita/ROADMAP.md
+17	4	f0f1a62952bdd6c21b0c32bdf5130937cd5f952143f1211e6462b9ee798f4c0c	siderita/STATUS.md
+1	1	f85cf1b5f0a1f40bbbb007b4bfa9ed08930fd750fe7a3061fdcedab0bc60b359	siderita/docs/evidence/2026-09-26-app-threading.md
+1	1	da9b9645b55e2deee86513d1e3cce129d790f04c2255f4dba12bb17e259be0e9	siderita/docs/evidence/2026-09-26-archive-extraction.md
+1	1	fba3166043b2630227f36d80462571857b153c64dad983362a9634c84783a203	siderita/docs/evidence/2026-09-26-copy-move-trash.md
+1	1	8b65d6739233e458f371b5f0f0db086c23cf7a3055080487c13e923354d67400	siderita/docs/evidence/2026-09-29-the-catcher-in-the-column.md
+31	0	d4cdc55af195d3167ec8606d8685554e66c0eb9ef3c8b0006b9e4f3526494975	siderita/docs/evidence/2026-11-25-hardening-archive.md
+29	0	self	siderita/docs/inventories/2026-09-26-hardening/SID-H1-U.numstat.tsv
+0	98	deleted	siderita/docs/plans/active/2026-09-26-hardening.md
+2	4	60f1232afe187325a28addf7b351a6410698c708b9f1bc1de6a65a3b02f93a64	siderita/docs/plans/active/README.md
+105	0	8a70d29fc0d75b64717d9f2edaf9c2548be591710e158da8a6d94911069cc8bc	siderita/docs/plans/archive/2026-09-26-hardening.md
