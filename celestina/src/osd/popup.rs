@@ -2043,7 +2043,7 @@ mod tests {
             &release(track.x + track.w - 1.0, track.y + track.h / 2.0),
             now,
         );
-        // A click on a stream's name flips its mute, and only its.
+        // A click on a stream's mute button flips its mute, and only its.
         click(&mut rig, mute_key(Control::Stream(20)));
         assert_eq!(
             rig.sent.borrow().last(),

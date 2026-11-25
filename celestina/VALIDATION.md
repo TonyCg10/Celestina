@@ -1365,7 +1365,7 @@ None has been run and none is closed by an agent.
   mark moves; click the first one again. (2) With sound playing in Firefox or a
   game and in a second application, drag the slider of the first one down and
   check that only that application gets quieter and the main volume slider does
-  not move. (3) Press the mute switch of one application and check that only
+  not move. (3) Press the speaker button of one application and check that only
   that one goes silent, then press it again. (4) Do steps 1 to 3 once with the
   popup open and watch the screen edge where the OSD appears: no OSD may flash
   while you do it. Close the popup with Escape or a click outside, and check
@@ -1428,3 +1428,21 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-001](docs/evidence/2026-11-25-cel-d-001-tab-icons.md)
+
+## VAL-CEL-D-006 — The speaker button that mutes one application
+
+- **Status:** pending
+- **Related implementation:** CEL-D-006 (the applications section of the
+  volume popup)
+- **Requires:** the deployed shell after the landing of CEL-D-006, the
+  `volume` piece in the bar, and an application playing sound
+- **Procedure:** open the volume popup and unfold Aplicaciones. Press the
+  speaker button at the right of the playing application, then press it again.
+  Repeat with Tab to reach the button and Enter to press it
+- **Pass condition:** the button shows a speaker while the application sounds
+  and a struck-through speaker while it is muted; muting silences only that
+  application and dims its name; the button lines up with the mute switches
+  above it
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-006](docs/evidence/2026-11-25-cel-d-006-app-mute-button.md)

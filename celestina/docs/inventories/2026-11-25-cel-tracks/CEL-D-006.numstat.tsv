@@ -1,0 +1,23 @@
+# CEL-D-006 exact change inventory
+
+Base revision	63ab8e710d88dcb108e7b1e24ae992965593e210
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-006-app-mute-button.md
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-006-app-mute-button/apps-full.png
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-006-app-mute-button/apps.png
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-006.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/osd/audio_rows.rs
+Pathspec	celestina/src/osd/popup.rs
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+19	1	013c1c83d0f96811b0922b4a8a9c39dd8ee2d65adf98ff76ee9948d1597beb3a	celestina/VALIDATION.md
+40	0	7a7d3589ee7bcb84cd8c5e6e2c5170472808504705c40ab21b7af544c16f344e	celestina/docs/evidence/2026-11-25-cel-d-006-app-mute-button.md
+-	-	b475ecf38db0e342ae7eb8d6b36eebce565b4412a01fbc30ab477327e4317895	celestina/docs/evidence/2026-11-25-cel-d-006-app-mute-button/apps-full.png
+-	-	5e6e9d56f470bb58618584be5cb7c1d9c0e00dee30810a8e04cbdedb89585900	celestina/docs/evidence/2026-11-25-cel-d-006-app-mute-button/apps.png
+23	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-006.numstat.tsv
+1	0	e8e51b878122c582f5e7f8aaab482faab45cc679b818ae70f365c9fb08b22c61	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+125	17	db8dedd5ff9c6a3021e790e7af15f57981c71e3a614d07490d0cee728098a97d	celestina/src/osd/audio_rows.rs
+1	1	e84357f81f1bd9cc16b5546c8ca595022fbb57e41708ae4bf4ab91fd9c8a995b	celestina/src/osd/popup.rs

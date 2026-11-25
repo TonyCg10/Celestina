@@ -93,6 +93,7 @@ row closes on its own landing with its inventory and evidence.
 | CEL-D-004 | `celestina:` | planned | `src/island/`, `src/pieces/` | pending | Merge clock and date into one centre capsule that is the Island (design §6.4) | pending | VAL-CEL-D-004 |
 | CEL-D-005 | `celestina:` | planned | `src/pieces/`, `src/overview/` | pending | Open a small workspaces panel with each workspace's app icons; the wheel still switches (design §6.5) | pending | VAL-CEL-D-005 |
 | CEL-I-003 | `celestina:` | planned | `src/providers/brightness.rs`, `src/osd/` | pending | Show every monitor's brightness in the brightness panel (design §6.6) | pending | VAL-CEL-I-003 |
+| CEL-D-006 | `celestina:` | done | [inventory](../../inventories/2026-11-25-cel-tracks/CEL-D-006.numstat.tsv) | 8 files, +209/-19 | Mute each application of the volume popup with a speaker button, struck through while muted, instead of an unlabelled switch, and dim the muted application's name (preview approved 2026-11-25, variant A) | [evidence](../../evidence/2026-11-25-cel-d-006-app-mute-button.md) | VAL-CEL-D-006 |
 
 ## Backlog
 

@@ -21,7 +21,7 @@ use celestina_ui::{view, Key, View};
 use super::popup::{level_slider, mute_key, slider_h, slider_key, Control, Kind, AUDIO_W, ICON};
 use crate::{
     copy,
-    island::view::{centred, switch, text_style, SWITCH_TRACK},
+    island::view::{centred, text_style, SWITCH_TRACK},
 };
 
 /// The width of an application's slider, logical px.
@@ -237,7 +237,7 @@ pub(super) fn device_name_w(theme: &Theme) -> f32 {
 }
 
 /// The width of an application's name column: what is left of the row beside
-/// the slider and the mute switch, with a gap between each.
+/// the slider and the mute button's column, with a gap between each.
 pub(super) fn stream_name_w(theme: &Theme) -> f32 {
     AUDIO_W - 2.0 * theme.spacing.md - 4.0 * theme.spacing.sm - STREAM_SLIDER_W - SWITCH_TRACK.0
 }
@@ -389,31 +389,49 @@ pub(super) fn device_list(
 
 /// One application's row in fixed columns, the same on every row: its name,
 /// its slider and, at the right edge where the popup's other mute switches
-/// are, its mute switch (the row's one mute control). An application the
-/// worker no longer lists, or has no level for, is greyed out and takes no
-/// input.
+/// are, its mute button: a speaker, struck through while muted, with the name
+/// dimmed. An application the worker no longer lists, or has no level for, is
+/// greyed out and takes no input.
 fn stream_row(theme: &Theme, name: &str, id: u32, live: Option<&GraphStream>) -> View {
     let level: Option<AudioLevel> = live.and_then(|s| s.level);
     let enabled = level.is_some();
-    let role = if enabled {
+    let muted = level.is_some_and(|l| l.muted);
+    let role = if enabled && !muted {
         Role::TextHi
     } else {
         Role::TextFaint
     };
     let control = Control::Stream(id);
-    let mute = centred(view::row(mute_key(control)))
-        .size(SWITCH_TRACK.0, compact_h(theme))
-        .radius(theme.radius_sm)
-        .child(switch(
-            Key::named("level-mute-switch"),
-            level.is_some_and(|l| l.muted),
-            enabled,
-        ));
-    let mute = if enabled {
-        mute.interactive().focusable()
+    let side = compact_h(theme);
+    let (fill, ink, glyph) = if muted {
+        (Role::ControlPressed, Role::TextHi, "media-volume-muted")
     } else {
-        mute
+        (Role::ControlFill, Role::TextLo, "media-volume")
     };
+    let button = centred(view::row(mute_key(control)))
+        .size(side, side)
+        .radius(side / 2.0)
+        .fill(fill)
+        .child(
+            view::icon(
+                Key::named("level-stream-mute-glyph"),
+                glyph,
+                ICON.min(side - 2.0 * theme.spacing.xs),
+            )
+            .tint(if enabled { ink } else { Role::TextFaint }),
+        );
+    let mut button = if enabled {
+        button.interactive().focusable()
+    } else {
+        button
+    };
+    button.style.justify_content = taffy::JustifyContent::CENTER;
+    // The button sits at the right edge of the column the popup's other mute
+    // switches use, so every row's control lines up.
+    let mut mute = view::row(Key::indexed("level-stream-mute-slot", u64::from(id)))
+        .size(SWITCH_TRACK.0, side)
+        .child(button);
+    mute.style.justify_content = taffy::JustifyContent::FLEX_END;
     centred(view::row(Key::indexed("level-stream-row", u64::from(id))))
         .height(compact_h(theme))
         .padding_xy(theme.spacing.sm, 0.0)
@@ -769,6 +787,96 @@ mod tests {
                 playing: true,
             }],
         }
+    }
+
+    /// Every view under `v`, depth first.
+    fn all(v: &View) -> Vec<&View> {
+        let mut out = vec![v];
+        for child in &v.children {
+            out.extend(all(child));
+        }
+        out
+    }
+
+    fn icons_under(v: &View) -> Vec<&'static str> {
+        all(v)
+            .into_iter()
+            .filter_map(|n| match n.kind {
+                celestina_ui::view::ViewKind::Icon {
+                    key: celestina_paint::IconKey::Semantic(name),
+                    ..
+                } => Some(name),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn stream(muted: bool) -> GraphStream {
+        GraphStream {
+            id: 20,
+            name: "Firefox".to_owned(),
+            level: Some(AudioLevel { percent: 60, muted }),
+            playing: true,
+        }
+    }
+
+    #[test]
+    fn a_stream_mutes_with_a_speaker_button_not_a_switch() {
+        let theme = Theme::dark();
+        for (muted, glyph) in [(false, "media-volume"), (true, "media-volume-muted")] {
+            let live = stream(muted);
+            let row = stream_row(&theme, "Firefox", 20, Some(&live));
+            let button = all(&row)
+                .into_iter()
+                .find(|n| n.key == mute_key(Control::Stream(20)))
+                .expect("the stream's mute control");
+            assert!(button.interactive, "muted={muted}: the button takes clicks");
+            assert_eq!(icons_under(button), vec![glyph], "muted={muted}");
+            assert!(
+                all(&row)
+                    .iter()
+                    .all(|n| n.key != Key::named("level-mute-switch")),
+                "no switch is left in the row"
+            );
+        }
+    }
+
+    #[test]
+    fn a_stream_without_a_level_has_a_faint_button_that_takes_no_input() {
+        let theme = Theme::dark();
+        let live = GraphStream {
+            level: None,
+            ..stream(false)
+        };
+        let row = stream_row(&theme, "Firefox", 20, Some(&live));
+        let button = all(&row)
+            .into_iter()
+            .find(|n| n.key == mute_key(Control::Stream(20)))
+            .expect("the stream's mute control");
+        assert!(!button.interactive && !button.focusable);
+        let tint = all(button).into_iter().find_map(|n| match n.kind {
+            celestina_ui::view::ViewKind::Icon { tint, .. } => Some(tint),
+            _ => None,
+        });
+        assert_eq!(tint, Some(Some(Role::TextFaint)));
+    }
+
+    #[test]
+    fn a_muted_stream_dims_its_name() {
+        let theme = Theme::dark();
+        let role_of_name = |muted| {
+            let live = stream(muted);
+            let row = stream_row(&theme, "Firefox", 20, Some(&live));
+            all(&row)
+                .into_iter()
+                .find(|n| n.key == Key::named("level-stream-name"))
+                .and_then(|n| match &n.kind {
+                    celestina_ui::view::ViewKind::Text { style, .. } => Some(style.role),
+                    _ => None,
+                })
+        };
+        assert_eq!(role_of_name(false), Some(Role::TextHi));
+        assert_eq!(role_of_name(true), Some(Role::TextFaint));
     }
 
     fn default_of(mirror: &GraphMirror) -> Vec<u32> {
