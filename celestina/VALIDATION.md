@@ -1414,6 +1414,37 @@ None has been run and none is closed by an agent.
 - **Evidence:** none; the unit's automated evidence is
   [2026-11-25-cel-i-006-session-menu.md](docs/evidence/2026-11-25-cel-i-006-session-menu.md)
 
+## VAL-CEL-I-003 — The brightness of every monitor
+
+- **Status:** pending
+- **Related implementation:** CEL-I-003 (the brightness popup's monitor list
+  and the DDC worker's round-robin of writes)
+- **Requires:** the deployed shell after the landing of CEL-I-003, started by
+  hand in the author's niri session with the `osd` duty on, the `brightness`
+  piece placed, DDC allowed (`CELESTINA_DDC` unset) and at least two monitors
+  on DDC (the author's three); `ddcutil` installed
+- **Procedure:** open the brightness popup from the bar of each output in turn
+  (a click on the piece). (1) Check that the card shows the All heading with
+  a percent, a slider, a divider and one row for each monitor: its model (or
+  its connector when it has none), a slider and a percent, the name of this
+  bar's own monitor first and in bold. (2) Drag one row's slider and check
+  that only that monitor changes and the All heading's mean follows. (3) Drag
+  the All slider slowly from one end to the other and check that all three
+  monitors follow during the drag, one after another, and end level at the
+  same value after the release. (4) If one monitor has no DDC, check that its
+  row is grey with no percent and takes no input. (5) Close the popup and
+  check that no brightness OSD appears while it is open or for six seconds
+  after it closes. (6) While dragging All, run `pgrep -c ddcutil` in a
+  terminal now and then and check that it never reads more than 1
+- **Pass condition:** the list and the order are as described on each bar;
+  one row changes one monitor; All moves every monitor with a reading and
+  they end level; a monitor without DDC is greyed and inert; no OSD appears
+  during the popup or its six-second settle; `ddcutil` never runs twice at
+  once
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [2026-11-25-cel-i-003-brightness.md](docs/evidence/2026-11-25-cel-i-003-brightness.md)
+
 ## VAL-CEL-D-001 — Icons in the Island's tab row
 
 - **Status:** pending

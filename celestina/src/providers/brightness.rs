@@ -86,7 +86,10 @@ use super::Worker;
 use crate::message::Message;
 
 /// Commands that may wait for a worker; beyond it the handle refuses.
-pub const COMMAND_QUEUE: usize = 8;
+pub const COMMAND_QUEUE: usize = 16;
+// A drag over every monitor sends one change per monitor at each send, and a
+// popup lists at most this many monitors: two sends fit the queue.
+const _: () = assert!(COMMAND_QUEUE >= 2 * crate::osd::readings::MAX_MONITORS);
 /// The bound of one `ddcutil` operation: a cold first read takes about ten
 /// seconds on the author's hardware, a warm one about one.
 pub const DDC_TIMEOUT: Duration = Duration::from_secs(20);
@@ -724,6 +727,9 @@ struct Ddc<E: DdcEnvironment> {
     last_outputs_change: Option<Instant>,
     /// The lease kept while an abandoned child may be alive.
     held: Option<E::Lease>,
+    /// The connector whose write ran last: the next one is the first pending
+    /// after it, so a drag over every monitor serves each in turn.
+    last_applied: Option<String>,
 }
 
 /// Folds every waiting command into `plan`; returns whether the queue is
@@ -815,7 +821,24 @@ impl<E: DdcEnvironment> Ddc<E> {
             last_detect: None,
             last_outputs_change: None,
             held: None,
+            last_applied: None,
         }
+    }
+
+    /// The pending write to run next: the first connector after the one
+    /// written last, or the first of all. With the first connector always
+    /// pending again (a drag), `pop_first` would starve the others.
+    fn next_pending(&mut self) -> Option<(String, Target)> {
+        let pending = &mut self.plan.pending;
+        let after = self.last_applied.as_deref();
+        let key = pending
+            .keys()
+            .find(|key| after.is_none_or(|last| key.as_str() > last))
+            .or_else(|| pending.keys().next())?
+            .clone();
+        let target = pending.remove(&key)?;
+        self.last_applied = Some(key.clone());
+        Some((key, target))
     }
 
     /// Runs at most one unit of work: a detection, one monitor's write and
@@ -833,7 +856,7 @@ impl<E: DdcEnvironment> Ddc<E> {
         if !self.plan.detected || self.redetect_due() {
             return self.detect(queue, shutdown);
         }
-        if let Some((monitor, target)) = self.plan.pending.pop_first() {
+        if let Some((monitor, target)) = self.next_pending() {
             return self.apply(&monitor, target, queue, shutdown);
         }
         if self.plan.read_all {
@@ -2705,6 +2728,32 @@ mod tests {
         bus.advance(OUTPUTS_REDETECT_FLOOR);
         assert_eq!(worker.run(), [ddc("DP-1", None), ddc("DP-2", None)]);
         assert_eq!(bus.count("getvcp"), 3, "nothing to read");
+    }
+
+    #[test]
+    fn a_drag_over_every_monitor_writes_each_in_turn() {
+        let bus = Bus::new();
+        let mut worker = ByHand::new(&bus);
+        worker.tell(BrightnessCommand::Show);
+        assert_eq!(worker.run().len(), 4);
+        // Both owe a write; the first connector owes another after its own,
+        // as it does at each tick of a drag over every monitor. It must not
+        // take every turn: the others would starve until the release.
+        worker.tell(change("DP-1", Change::Set(80)));
+        worker.tell(change("DP-2", Change::Set(70)));
+        assert!(worker.once().is_some());
+        worker.tell(change("DP-1", Change::Set(90)));
+        assert!(worker.once().is_some());
+        assert!(worker.once().is_some());
+        let displays: Vec<String> = bus
+            .writes()
+            .iter()
+            .filter_map(|args| {
+                let at = args.iter().position(|arg| arg == "--display")?;
+                args.get(at + 1).cloned()
+            })
+            .collect();
+        assert_eq!(displays, ["1", "2", "1"]);
     }
 
     #[test]

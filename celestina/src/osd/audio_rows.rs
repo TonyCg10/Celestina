@@ -248,7 +248,7 @@ fn named(list: &[GraphDevice]) -> Vec<(u32, String)> {
 }
 
 /// A node that keeps its width whatever its row holds.
-fn fixed(mut view: View) -> View {
+pub(super) fn fixed(mut view: View) -> View {
     view.style.flex_shrink = 0.0;
     view
 }

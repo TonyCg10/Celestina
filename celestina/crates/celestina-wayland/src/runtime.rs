@@ -393,6 +393,13 @@ impl RuntimeCtl<'_> {
         self.ops.surfaces()
     }
 
+    /// The model the compositor announced for the output (`wl_output`), when
+    /// it announced one; `None` for an output that is gone. It may be empty
+    /// or `Unknown`: the caller decides what that is worth.
+    pub fn output_model(&self, id: OutputId) -> Option<String> {
+        self.ops.output_model(id)
+    }
+
     /// Stops the loop; `run` returns after the shutdown.
     pub fn stop(&mut self) {
         self.ops.stop();
@@ -406,6 +413,7 @@ trait RuntimeOps {
     fn surface_ctl(&mut self, id: SurfaceId) -> Option<SurfaceCtl<'_>>;
     fn popup_surface(&self, id: PopupId) -> Option<SurfaceId>;
     fn surfaces(&self) -> Vec<SurfaceId>;
+    fn output_model(&self, id: OutputId) -> Option<String>;
     fn stop(&mut self);
 }
 
@@ -1016,6 +1024,11 @@ impl<S: Shell> RuntimeOps for Core<S> {
             .iter()
             .find(|p| p.id == id)
             .map(|p| p.surface.id)
+    }
+
+    fn output_model(&self, id: OutputId) -> Option<String> {
+        let output = self.wl_output(id)?;
+        self.output_state.info(&output).map(|info| info.model)
     }
 
     fn surfaces(&self) -> Vec<SurfaceId> {

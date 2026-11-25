@@ -44,6 +44,9 @@ use celestina_wayland::{
 use super::audio_rows::{
     apps_list, device_list, list_h, section_of, Audio, GraphMirror, Lists, Section, Shape,
 };
+use super::monitor_rows::{
+    monitors_card, monitors_size, MonitorFeed, MonitorMirror, SharedMonitors,
+};
 use super::readings::Target;
 use crate::island::menu::SharedPainter;
 use crate::{
@@ -88,6 +91,10 @@ pub enum Control {
     Brightness,
     /// The playback stream of this node id.
     Stream(u32),
+    /// The monitor listed at this row of a popup of several.
+    Monitor(u8),
+    /// Every monitor with a reading, from the "All" slider.
+    AllMonitors,
 }
 
 /// What the popup asks the app to do.
@@ -108,14 +115,30 @@ pub enum Command {
     Brightness(BrightnessCommand),
 }
 
-/// The commands a request is. `target` is the monitor the brightness slider
-/// drives (the popup's output); a brightness request without one is nothing.
+/// The commands a request is. `targets` are the monitors the brightness
+/// sliders drive, in the order of the popup's rows (the popup's own output
+/// first); a brightness request without its monitor is nothing, and so is the
+/// "All" slider's, which the popup splits into one request per monitor.
 #[must_use]
-pub fn commands(request: Request, target: Option<&Target>) -> Vec<Command> {
+pub fn commands(request: Request, targets: &[Target]) -> Vec<Command> {
     let device = |control| match control {
         Control::Output => Some(Device::Output),
         Control::Input => Some(Device::Input),
-        Control::Brightness | Control::Stream(_) => None,
+        Control::Brightness | Control::Stream(_) | Control::Monitor(_) | Control::AllMonitors => {
+            None
+        }
+    };
+    let change = |target: Option<&Target>, percent| {
+        target
+            .map(|target| {
+                Command::Brightness(BrightnessCommand::Change {
+                    source: target.source,
+                    monitor: target.monitor.clone(),
+                    change: Change::Set(percent),
+                })
+            })
+            .into_iter()
+            .collect()
     };
     match request {
         Request::SetDefault(id) => vec![Command::Audio(AudioCommand::SetDefault { id })],
@@ -128,16 +151,10 @@ pub fn commands(request: Request, target: Option<&Target>) -> Vec<Command> {
         Request::ToggleMute(Control::Stream(id)) => {
             vec![Command::Audio(AudioCommand::ToggleStreamMute { id })]
         }
-        Request::Set(Control::Brightness, percent) => target
-            .map(|target| {
-                Command::Brightness(BrightnessCommand::Change {
-                    source: target.source,
-                    monitor: target.monitor.clone(),
-                    change: Change::Set(percent),
-                })
-            })
-            .into_iter()
-            .collect(),
+        Request::Set(Control::Brightness, percent) => change(targets.first(), percent),
+        Request::Set(Control::Monitor(at), percent) => {
+            change(targets.get(usize::from(at)), percent)
+        }
         Request::Set(control, percent) => device(control)
             .map(|device| Command::Audio(AudioCommand::SetVolume { device, percent }))
             .into_iter()
@@ -162,7 +179,7 @@ pub type SharedLevels = Rc<Cell<Levels>>;
 /// and streams of the audio worker's last graph.
 pub type SharedGraph = Rc<RefCell<AudioGraph>>;
 
-fn card_key() -> Key {
+pub(super) fn card_key() -> Key {
     Key::named("level-card")
 }
 
@@ -174,6 +191,8 @@ pub fn slider_key(control: Control) -> Key {
         Control::Input => Key::named("level-input"),
         Control::Brightness => Key::named("level-brightness"),
         Control::Stream(id) => Key::indexed("level-stream", u64::from(id)),
+        Control::Monitor(at) => Key::indexed("level-monitor", u64::from(at)),
+        Control::AllMonitors => Key::named("level-monitors-all"),
     }
 }
 
@@ -185,15 +204,19 @@ pub fn mute_key(control: Control) -> Key {
         Control::Input => Key::named("level-mute-input"),
         Control::Brightness => Key::named("level-mute-brightness"),
         Control::Stream(id) => Key::indexed("level-stream-mute", u64::from(id)),
+        Control::Monitor(at) => Key::indexed("level-monitor-mute", u64::from(at)),
+        Control::AllMonitors => Key::named("level-monitors-all-mute"),
     }
 }
 
-/// The slider control of `key`: the popup's own or a listed stream's.
-fn control_of_slider(key: Key, mirror: &GraphMirror) -> Option<Control> {
+/// The slider control of `key`: the popup's own, a listed stream's or a
+/// listed monitor's.
+fn control_of_slider(key: Key, mirror: &GraphMirror, monitors: &MonitorMirror) -> Option<Control> {
     [Control::Output, Control::Input, Control::Brightness]
         .into_iter()
         .find(|c| slider_key(*c) == key)
         .or_else(|| mirror.stream_slider(key))
+        .or_else(|| monitors.control_of(key))
 }
 
 /// The mute control of `key`: the popup's own or a listed stream's.
@@ -205,7 +228,7 @@ fn control_of_mute(key: Key, mirror: &GraphMirror) -> Option<Control> {
 }
 
 /// A heading row's height, a mute row's height and the slider's.
-fn heading_h(theme: &Theme) -> f32 {
+pub(super) fn heading_h(theme: &Theme) -> f32 {
     theme.row_height
 }
 
@@ -274,7 +297,13 @@ pub fn placement(theme: &Theme, anchor: Rect) -> Placement {
     }
 }
 
-fn heading(theme: &Theme, key: &'static str, icon: &'static str, label: &str, percent: u8) -> View {
+pub(super) fn heading(
+    theme: &Theme,
+    key: &'static str,
+    icon: &'static str,
+    label: &str,
+    percent: u8,
+) -> View {
     let role = Role::TextHi;
     centred(view::row(Key::named(key)))
         .height(heading_h(theme))
@@ -535,6 +564,11 @@ pub struct LevelCore {
     sink: Sink,
     cell: SharedLevels,
     graph: SharedGraph,
+    /// The monitors a brightness popup lists, when it lists several.
+    monitors: MonitorMirror,
+    monitor_cell: SharedMonitors,
+    /// The theme the monitors' names were last cut for.
+    cut_for: Option<Theme>,
 }
 
 impl std::fmt::Debug for LevelCore {
@@ -557,6 +591,7 @@ impl LevelCore {
         kind: Kind,
         cell: SharedLevels,
         graph: SharedGraph,
+        monitors: MonitorFeed,
         sink: Sink,
         reduced: bool,
         now: Instant,
@@ -568,22 +603,35 @@ impl LevelCore {
             Kind::Volume => GraphMirror::open(&graph.borrow(), theme, &mut fit),
             Kind::Brightness => GraphMirror::default(),
         };
+        let monitor_cell = Rc::clone(&monitors.levels);
+        let monitors = match kind {
+            Kind::Brightness => MonitorMirror::open(&monitors),
+            Kind::Volume => MonitorMirror::default(),
+        };
         let mut tree = Tree::new(reduced, theme);
         tree.apply(
-            card(
-                theme,
-                kind,
-                microphone,
-                shown,
-                mirror.audio(),
-                mirror.shape(),
-            ),
+            if monitors.is_multi() {
+                monitors_card(theme, &monitors)
+            } else {
+                card(
+                    theme,
+                    kind,
+                    microphone,
+                    shown,
+                    mirror.audio(),
+                    mirror.shape(),
+                )
+            },
             now,
         );
         LevelCore {
             kind,
             microphone,
-            asked: popup_size(theme, kind, microphone, mirror.shape()),
+            asked: if monitors.is_multi() {
+                monitors_size(theme, monitors.row_count())
+            } else {
+                popup_size(theme, kind, microphone, mirror.shape())
+            },
             mirror,
             fit: Box::new(fit),
             theme: theme.clone(),
@@ -595,6 +643,9 @@ impl LevelCore {
             sink,
             cell,
             graph,
+            monitors,
+            monitor_cell,
+            cut_for: None,
         }
     }
 
@@ -613,7 +664,11 @@ impl LevelCore {
     /// The size the card has now, logical px.
     #[must_use]
     pub fn size(&self) -> (f32, f32) {
-        popup_size(&self.theme, self.kind, self.microphone, self.shape())
+        if self.monitors.is_multi() {
+            monitors_size(&self.theme, self.monitors.row_count())
+        } else {
+            popup_size(&self.theme, self.kind, self.microphone, self.shape())
+        }
     }
 
     /// The size to ask the compositor for, when the card is no longer the size
@@ -646,7 +701,9 @@ impl LevelCore {
     }
 
     fn rebuild(&mut self, now: Instant) {
-        self.tree.apply(
+        let view = if self.monitors.is_multi() {
+            monitors_card(&self.theme, &self.monitors)
+        } else {
             card(
                 &self.theme,
                 self.kind,
@@ -654,9 +711,28 @@ impl LevelCore {
                 self.shown,
                 self.mirror.audio(),
                 self.shape(),
-            ),
-            now,
-        );
+            )
+        };
+        self.tree.apply(view, now);
+    }
+
+    /// Cuts the monitors' names to their column, at the weight each row draws
+    /// it in, when the popup has not yet (its first frame) or the theme
+    /// changed. `fit` is the measure the caller has in hand: the frame's own
+    /// painter, which is borrowed there, so no closure that borrows it again
+    /// may be used.
+    pub fn cut_monitors(
+        &mut self,
+        theme: &Theme,
+        now: Instant,
+        fit: impl FnMut(&str, f32, Weight) -> String,
+    ) {
+        if !self.monitors.is_multi() || self.cut_for.as_ref() == Some(theme) {
+            return;
+        }
+        self.cut_for = Some(theme.clone());
+        self.monitors.cut(fit);
+        self.rebuild(now);
     }
 
     /// Takes in a new theme and the app's newest reading; whether the look
@@ -685,6 +761,9 @@ impl LevelCore {
             self.shown = external;
             changed = true;
         }
+        if !self.held() && self.monitors.adopt(&self.monitor_cell) {
+            changed = true;
+        }
         if self.kind == Kind::Volume && !self.held() && self.mirror.sync(&self.graph.borrow(), now)
         {
             self.mirror.cut_defaults(&self.theme, &mut fit);
@@ -702,9 +781,13 @@ impl LevelCore {
             // The worker's graph, not the shown one: while a drag holds the
             // shown one, a stream that ended is already gone here.
             let live = self.graph.borrow();
+            let rows = self.monitors.row_count();
             self.throttle.due(now, force, |control| match control {
                 Control::Stream(id) => live.has_stream(id),
-                Control::Output | Control::Input | Control::Brightness => true,
+                Control::Monitor(at) => usize::from(at) < rows,
+                Control::Output | Control::Input | Control::Brightness | Control::AllMonitors => {
+                    true
+                }
             })
         };
         for request in due {
@@ -719,6 +802,8 @@ impl LevelCore {
             Control::Input => self.shown.audio.input.as_mut().map(|l| &mut l.percent),
             Control::Brightness => self.shown.brightness.as_mut(),
             Control::Stream(id) => return self.mirror.set_level(id, percent),
+            Control::Monitor(at) => return self.monitors.set_level(usize::from(at), percent),
+            Control::AllMonitors => return,
         };
         if let Some(slot) = slot {
             *slot = percent;
@@ -729,7 +814,7 @@ impl LevelCore {
         let level = match control {
             Control::Output => self.shown.audio.output.as_mut(),
             Control::Input => self.shown.audio.input.as_mut(),
-            Control::Brightness => None,
+            Control::Brightness | Control::Monitor(_) | Control::AllMonitors => None,
             Control::Stream(id) => return self.mirror.flip_mute(id),
         };
         if let Some(level) = level {
@@ -752,10 +837,24 @@ impl LevelCore {
             match event {
                 UiEvent::Escape => return Outcome::Close,
                 UiEvent::SliderChanged(key, percent) => {
-                    if let Some(control) = control_of_slider(*key, &self.mirror) {
-                        self.set_shown(control, *percent);
-                        self.throttle.push(control, *percent);
-                        moved = true;
+                    match control_of_slider(*key, &self.mirror, &self.monitors) {
+                        Some(Control::AllMonitors) => {
+                            // Every monitor with a reading takes the level,
+                            // each as a request of its own: the newest value
+                            // of each is the one that is sent.
+                            for at in self.monitors.known() {
+                                let control = Control::Monitor(u8::try_from(at).unwrap_or(u8::MAX));
+                                self.set_shown(control, *percent);
+                                self.throttle.push(control, *percent);
+                            }
+                            moved = true;
+                        }
+                        Some(control) => {
+                            self.set_shown(control, *percent);
+                            self.throttle.push(control, *percent);
+                            moved = true;
+                        }
+                        None => {}
                     }
                 }
                 UiEvent::Click(key) | UiEvent::Activate(key) => {
@@ -814,6 +913,7 @@ impl LevelPopup {
         kind: Kind,
         cell: SharedLevels,
         graph: SharedGraph,
+        monitors: MonitorFeed,
         sink: Sink,
         reduced: bool,
     ) -> LevelPopup {
@@ -827,7 +927,17 @@ impl LevelPopup {
             Err(_) => name.to_owned(),
         };
         LevelPopup {
-            core: LevelCore::new(theme, kind, cell, graph, sink, reduced, Instant::now(), fit),
+            core: LevelCore::new(
+                theme,
+                kind,
+                cell,
+                graph,
+                monitors,
+                sink,
+                reduced,
+                Instant::now(),
+                fit,
+            ),
             painter,
         }
     }
@@ -844,6 +954,12 @@ impl LevelPopup {
     pub fn has_microphone(&self) -> bool {
         self.core.has_microphone()
     }
+
+    /// The size the card is opened at, logical px.
+    #[must_use]
+    pub fn size(&self) -> (f32, f32) {
+        self.core.size()
+    }
 }
 
 impl PopupShell for LevelPopup {
@@ -858,6 +974,14 @@ impl PopupShell for LevelPopup {
         let style = text_style(theme.type_scale.body, Weight::Regular, false, Role::TextHi);
         // The painter is borrowed here, so the names are cut with it, not
         // with the cutter that borrows it again.
+        // The monitors' names are cut at the weight of their row; the same
+        // frame's measure, for the same reason.
+        self.core.cut_monitors(&theme, now, |name, width, weight| {
+            let style = text_style(theme.type_scale.body, weight, false, Role::TextHi);
+            fit_middle(name, width, |text| {
+                painter.text().measure(text, &style, None, 1.0).0
+            })
+        });
         self.core.sync(&theme, now, |name, width| {
             fit_middle(name, width, |text| {
                 painter.text().measure(text, &style, None, 1.0).0
@@ -935,6 +1059,7 @@ mod tests {
     use crate::osd::audio_rows::{
         self, compact_h, device_key, device_mark_key, header_h, section_key, Folds,
     };
+    use crate::osd::monitor_rows::MonitorRow;
     use crate::pieces::{AudioLevels, Level};
     use crate::providers::brightness::BrightnessSource;
 
@@ -1007,6 +1132,7 @@ mod tests {
         sent: Rc<std::cell::RefCell<Vec<Request>>>,
         cell: SharedLevels,
         graph: SharedGraph,
+        monitor_cell: SharedMonitors,
     }
 
     fn rig(kind: Kind, levels: Levels) -> Rig {
@@ -1035,6 +1161,16 @@ mod tests {
         graph: AudioGraph,
         fit: impl FnMut(&str, f32) -> String + 'static,
     ) -> Rig {
+        rig_full(kind, levels, graph, MonitorFeed::default(), fit)
+    }
+
+    fn rig_full(
+        kind: Kind,
+        levels: Levels,
+        graph: AudioGraph,
+        monitors: MonitorFeed,
+        fit: impl FnMut(&str, f32) -> String + 'static,
+    ) -> Rig {
         let theme = Theme::dark();
         let sent = Rc::new(std::cell::RefCell::new(Vec::new()));
         let sink: Sink = {
@@ -1043,11 +1179,13 @@ mod tests {
         };
         let cell: SharedLevels = Rc::new(Cell::new(levels));
         let graph: SharedGraph = Rc::new(RefCell::new(graph));
+        let monitor_cell = Rc::clone(&monitors.levels);
         let mut core = LevelCore::new(
             &theme,
             kind,
             Rc::clone(&cell),
             Rc::clone(&graph),
+            monitors,
             sink,
             false,
             Instant::now(),
@@ -1060,6 +1198,7 @@ mod tests {
             sent,
             cell,
             graph,
+            monitor_cell,
         }
     }
 
@@ -1142,27 +1281,30 @@ mod tests {
             monitor: "DP-1".to_owned(),
         };
         assert_eq!(
-            commands(Request::Set(Control::Output, 40), None),
+            commands(Request::Set(Control::Output, 40), &[]),
             [Command::Audio(AudioCommand::SetVolume {
                 device: Device::Output,
                 percent: 40
             })]
         );
         assert_eq!(
-            commands(Request::Set(Control::Input, 10), Some(&ddc)),
+            commands(Request::Set(Control::Input, 10), std::slice::from_ref(&ddc)),
             [Command::Audio(AudioCommand::SetVolume {
                 device: Device::Input,
                 percent: 10
             })]
         );
         assert_eq!(
-            commands(Request::ToggleMute(Control::Input), None),
+            commands(Request::ToggleMute(Control::Input), &[]),
             [Command::Audio(AudioCommand::ToggleMute {
                 device: Device::Input
             })]
         );
         assert_eq!(
-            commands(Request::Set(Control::Brightness, 70), Some(&ddc)),
+            commands(
+                Request::Set(Control::Brightness, 70),
+                std::slice::from_ref(&ddc)
+            ),
             [Command::Brightness(BrightnessCommand::Change {
                 source: BrightnessSource::Ddc,
                 monitor: "DP-1".to_owned(),
@@ -1170,23 +1312,53 @@ mod tests {
             })]
         );
         assert_eq!(
-            commands(Request::SetDefault(42), None),
+            commands(Request::SetDefault(42), &[]),
             [Command::Audio(AudioCommand::SetDefault { id: 42 })]
         );
         assert_eq!(
-            commands(Request::Set(Control::Stream(7), 55), Some(&ddc)),
+            commands(
+                Request::Set(Control::Stream(7), 55),
+                std::slice::from_ref(&ddc)
+            ),
             [Command::Audio(AudioCommand::SetStreamVolume {
                 id: 7,
                 percent: 55
             })]
         );
         assert_eq!(
-            commands(Request::ToggleMute(Control::Stream(7)), None),
+            commands(Request::ToggleMute(Control::Stream(7)), &[]),
             [Command::Audio(AudioCommand::ToggleStreamMute { id: 7 })]
         );
+        // A list of monitors: each row addresses its own, the first is the
+        // popup's output; the All slider and a mute address none.
+        let hdmi = Target {
+            source: BrightnessSource::Backlight,
+            monitor: "intel_backlight".to_owned(),
+        };
+        let both = [ddc.clone(), hdmi.clone()];
+        assert_eq!(
+            commands(Request::Set(Control::Brightness, 5), &both),
+            commands(Request::Set(Control::Monitor(0), 5), &both)
+        );
+        assert_eq!(
+            commands(Request::Set(Control::Monitor(1), 20), &both),
+            [Command::Brightness(BrightnessCommand::Change {
+                source: BrightnessSource::Backlight,
+                monitor: "intel_backlight".to_owned(),
+                change: Change::Set(20)
+            })]
+        );
+        assert!(commands(Request::Set(Control::Monitor(2), 20), &both).is_empty());
+        assert!(commands(Request::Set(Control::AllMonitors, 20), &both).is_empty());
+        assert!(commands(Request::ToggleMute(Control::Monitor(0)), &both).is_empty());
+        assert!(commands(Request::ToggleMute(Control::AllMonitors), &both).is_empty());
         // No monitor, no brightness; brightness has no mute.
-        assert!(commands(Request::Set(Control::Brightness, 70), None).is_empty());
-        assert!(commands(Request::ToggleMute(Control::Brightness), Some(&ddc)).is_empty());
+        assert!(commands(Request::Set(Control::Brightness, 70), &[]).is_empty());
+        assert!(commands(
+            Request::ToggleMute(Control::Brightness),
+            std::slice::from_ref(&ddc)
+        )
+        .is_empty());
     }
 
     #[test]
@@ -2387,5 +2559,299 @@ mod tests {
             x(slider_key(Control::Stream(20))),
             x(slider_key(Control::Stream(21)))
         );
+    }
+
+    /// Whether the laid-out tree holds a node keyed `key`.
+    fn in_tree(rig: &Rig, key: Key) -> bool {
+        rig.core.tree.node_by_key(key).is_some()
+    }
+
+    fn feed(rows: &[(&str, bool, Option<u8>)]) -> MonitorFeed {
+        MonitorFeed {
+            rows: rows
+                .iter()
+                .map(|(name, primary, _)| MonitorRow {
+                    name: (*name).to_owned(),
+                    primary: *primary,
+                })
+                .collect(),
+            levels: Rc::new(RefCell::new(rows.iter().map(|(_, _, l)| *l).collect())),
+        }
+    }
+
+    fn rig_monitors(rows: &[(&str, bool, Option<u8>)]) -> Rig {
+        rig_full(
+            Kind::Brightness,
+            brightness(rows.first().and_then(|r| r.2)),
+            AudioGraph::default(),
+            feed(rows),
+            cut,
+        )
+    }
+
+    fn three() -> [(&'static str, bool, Option<u8>); 3] {
+        [
+            ("LG ULTRAGEAR+", true, Some(30)),
+            ("DELL U2720Q", false, Some(60)),
+            ("DP-3", false, None),
+        ]
+    }
+
+    fn monitor_slider(at: u8) -> Key {
+        slider_key(Control::Monitor(at))
+    }
+
+    #[test]
+    fn one_monitor_keeps_the_single_slider_popup() {
+        let rig = rig_monitors(&[("LG ULTRAGEAR+", true, Some(30))]);
+        let theme = Theme::dark();
+        assert_eq!(
+            rig.core.size(),
+            popup_size(&theme, Kind::Brightness, false, Shape::default())
+        );
+        assert_eq!(rig.core.size().0, POPUP_W);
+        assert!(!in_tree(&rig, slider_key(Control::AllMonitors)));
+        assert!(!in_tree(&rig, monitor_slider(0)));
+        assert!(in_tree(&rig, slider_key(Control::Brightness)));
+    }
+
+    #[test]
+    fn several_monitors_open_the_list_at_the_audio_width() {
+        let rig = rig_monitors(&three());
+        let theme = Theme::dark();
+        let size = monitors_size(&theme, 3);
+        assert_eq!(rig.core.size(), size);
+        assert_eq!(size.0, AUDIO_W);
+        let card = rect_of(&rig.core, card_key());
+        assert_eq!((card.x, card.y, card.w, card.h), (0.0, 0.0, size.0, size.1));
+        // All, the divider, then the rows in order, each inside the card.
+        let ys = [
+            y_of(&rig.core, Key::named("level-heading-all")),
+            y_of(&rig.core, slider_key(Control::AllMonitors)),
+            y_of(&rig.core, Key::named("level-monitors-divider")),
+            y_of(&rig.core, Key::indexed("level-monitor-row", 0)),
+            y_of(&rig.core, Key::indexed("level-monitor-row", 1)),
+            y_of(&rig.core, Key::indexed("level-monitor-row", 2)),
+        ];
+        assert!(ys.windows(2).all(|w| w[0] < w[1]), "{ys:?}");
+        let divider = rect_of(&rig.core, Key::named("level-monitors-divider"));
+        assert_eq!(divider.h, crate::osd::monitor_rows::DIVIDER_H);
+        for at in 0..3u8 {
+            let row = rect_of(&rig.core, Key::indexed("level-monitor-row", u64::from(at)));
+            assert!(
+                row.y + row.h <= size.1 && row.x + row.w <= size.0,
+                "{row:?}"
+            );
+            let name = rect_of(&rig.core, Key::indexed("level-monitor-name", u64::from(at)));
+            let slider = rect_of(&rig.core, monitor_slider(at));
+            assert_eq!(name.w, crate::osd::monitor_rows::MONITOR_NAME_W);
+            assert!(slider.x >= name.x + name.w, "the slider follows the name");
+            assert!(slider.w > 60.0, "the slider grows: {slider:?}");
+        }
+        // The columns line up whatever the name.
+        let x0 = x_of(&rig.core, monitor_slider(0));
+        assert_eq!(x0, x_of(&rig.core, monitor_slider(1)));
+        // The mean of the known levels heads the card.
+        assert_eq!(
+            rig.core
+                .tree
+                .slider(slider_key(Control::AllMonitors))
+                .map(Slider::value),
+            Some(45)
+        );
+        // A monitor with no reading shows no percent.
+        assert!(in_tree(&rig, Key::indexed("level-monitor-percent", 1)));
+        assert!(!in_tree(&rig, Key::indexed("level-monitor-percent", 2)));
+    }
+
+    #[test]
+    fn a_todos_drag_sets_every_known_monitor_and_sends_one_request_each() {
+        let mut rig = rig_monitors(&three());
+        let track = rect_of(&rig.core, slider_key(Control::AllMonitors));
+        let now = Instant::now();
+        rig.core.input(
+            &press(track.x + track.w - 1.0, track.y + track.h / 2.0),
+            now,
+        );
+        assert_eq!(
+            *rig.sent.borrow(),
+            [
+                Request::Set(Control::Monitor(0), 100),
+                Request::Set(Control::Monitor(1), 100)
+            ]
+        );
+        // The rows follow at once; the one with no reading stays as it is.
+        assert_eq!(rig.core.monitors.known(), [0, 1]);
+        assert_eq!(
+            rig.core.tree.slider(monitor_slider(1)).map(Slider::value),
+            Some(100)
+        );
+        assert_eq!(
+            rig.core.tree.slider(monitor_slider(2)).map(Slider::value),
+            Some(0)
+        );
+        assert_eq!(rig.core.monitors.mean(), Some(100));
+    }
+
+    #[test]
+    fn a_monitor_without_reading_is_greyed_and_takes_no_input() {
+        let mut rig = rig_monitors(&three());
+        let slider = rect_of(&rig.core, monitor_slider(2));
+        let (x, y) = (slider.x + slider.w - 1.0, slider.y + slider.h / 2.0);
+        let now = Instant::now();
+        rig.core.input(&press(x, y), now);
+        rig.core.input(&release(x, y), now);
+        assert!(rig.sent.borrow().is_empty());
+        assert_eq!(rig.core.monitors.known(), [0, 1]);
+        assert!(!rig
+            .core
+            .tree
+            .slider(monitor_slider(2))
+            .is_some_and(|s| s.enabled()));
+        assert!(rig
+            .core
+            .tree
+            .slider(monitor_slider(0))
+            .is_some_and(|s| s.enabled()));
+    }
+
+    #[test]
+    fn todos_then_a_row_sends_each_monitors_last_value() {
+        let mut rig = rig_monitors(&three());
+        let all = rect_of(&rig.core, slider_key(Control::AllMonitors));
+        let t0 = Instant::now();
+        rig.core
+            .input(&press(all.x + 20.0, all.y + all.h / 2.0), t0);
+        rig.core
+            .input(&release(all.x + 20.0, all.y + all.h / 2.0), t0);
+        rig.sent.borrow_mut().clear();
+        // Then the second row alone.
+        let row = rect_of(&rig.core, monitor_slider(1));
+        let (x, y) = (row.x + row.w - 1.0, row.y + row.h / 2.0);
+        rig.core.input(&press(x, y), t0);
+        rig.core.input(&release(x, y), t0);
+        assert_eq!(*rig.sent.borrow(), [Request::Set(Control::Monitor(1), 100)]);
+        // Mixed within one interval: each monitor's newest value is sent
+        // once, at the release.
+        rig.sent.borrow_mut().clear();
+        let t1 = t0 + SEND_INTERVAL * 2;
+        let all = rect_of(&rig.core, slider_key(Control::AllMonitors));
+        let ay = all.y + all.h / 2.0;
+        rig.core.input(&press(all.x + 30.0, ay), t1);
+        rig.sent.borrow_mut().clear();
+        rig.core.input(&motion(all.x + 90.0, ay), t1);
+        rig.core.input(&motion(all.x + 150.0, ay), t1);
+        rig.core.input(&release(all.x + 150.0, ay), t1);
+        let sent = rig.sent.borrow().clone();
+        assert_eq!(sent.len(), 2, "{sent:?}");
+        let (Request::Set(Control::Monitor(0), a), Request::Set(Control::Monitor(1), b)) =
+            (sent[0], sent[1])
+        else {
+            panic!("{sent:?}");
+        };
+        assert_eq!(a, b);
+        assert_eq!(Some(a), rig.core.monitors.mean());
+    }
+
+    #[test]
+    fn readings_update_rows_in_place_and_the_size_stays() {
+        let mut rig = rig_monitors(&three());
+        let size = rig.core.size();
+        let card = rect_of(&rig.core, card_key());
+        let row = rect_of(&rig.core, monitor_slider(1));
+        *rig.monitor_cell.borrow_mut() = vec![Some(10), Some(80), Some(55)];
+        assert!(rig.core.sync(&Theme::dark(), Instant::now(), cut));
+        relayout(&mut rig);
+        assert_eq!(rig.core.size(), size);
+        assert_eq!(rig.core.resize_wanted(), None);
+        assert_eq!(rect_of(&rig.core, card_key()), card);
+        assert_eq!(rect_of(&rig.core, monitor_slider(1)), row);
+        assert_eq!(
+            rig.core.tree.slider(monitor_slider(1)).map(Slider::value),
+            Some(80)
+        );
+        // The monitor that had no reading has one, and takes input now.
+        assert!(rig
+            .core
+            .tree
+            .slider(monitor_slider(2))
+            .is_some_and(|s| s.enabled()));
+        assert_eq!(
+            rig.core
+                .tree
+                .slider(slider_key(Control::AllMonitors))
+                .map(Slider::value),
+            Some(48)
+        );
+        // The same reading again changes nothing.
+        assert!(!rig.core.sync(&Theme::dark(), Instant::now(), cut));
+        // A reading does not move a row under the pointer.
+        let track = rect_of(&rig.core, monitor_slider(0));
+        let y = track.y + track.h / 2.0;
+        rig.core.input(&press(track.x + 20.0, y), Instant::now());
+        *rig.monitor_cell.borrow_mut() = vec![Some(99), Some(80), Some(55)];
+        let shown = rig.core.monitors.known();
+        assert!(!rig.core.sync(&Theme::dark(), Instant::now(), cut));
+        assert_eq!(shown, [0, 1, 2]);
+        assert_ne!(
+            rig.core.tree.slider(monitor_slider(0)).map(Slider::value),
+            Some(99)
+        );
+    }
+
+    #[test]
+    fn the_names_are_cut_at_their_rows_weight_once_per_theme() {
+        let mut rig = rig_monitors(&[
+            ("A very long monitor model name", true, Some(30)),
+            ("Another very long model name", false, Some(60)),
+        ]);
+        let theme = Theme::dark();
+        let mut seen = Vec::new();
+        rig.core
+            .cut_monitors(&theme, Instant::now(), |name, width, weight| {
+                seen.push((name.to_owned(), width, weight));
+                name.chars().take(5).collect()
+            });
+        assert_eq!(
+            seen.iter()
+                .map(|(_, w, weight)| (*w, *weight))
+                .collect::<Vec<_>>(),
+            [
+                (crate::osd::monitor_rows::MONITOR_NAME_W, Weight::Semibold),
+                (crate::osd::monitor_rows::MONITOR_NAME_W, Weight::Regular)
+            ]
+        );
+        // Again with the same theme: nothing is measured.
+        rig.core
+            .cut_monitors(&theme, Instant::now(), |_, _, _| panic!("cut twice"));
+        // A popup of one monitor cuts nothing.
+        let mut single = rig_monitors(&[("Only", true, Some(1))]);
+        single
+            .core
+            .cut_monitors(&theme, Instant::now(), |_, _, _| panic!("no list"));
+    }
+
+    #[test]
+    fn a_late_reading_of_one_row_does_not_move_another() {
+        let mut rig = rig_monitors(&[
+            ("LG ULTRAGEAR+", true, Some(30)),
+            ("DELL U2720Q", false, Some(60)),
+        ]);
+        // A drag of All sets both rows; the worker has read neither yet.
+        let all = rect_of(&rig.core, slider_key(Control::AllMonitors));
+        let (x, y) = (all.x + all.w - 1.0, all.y + all.h / 2.0);
+        let now = Instant::now();
+        rig.core.input(&press(x, y), now);
+        rig.core.input(&release(x, y), now);
+        let value = |rig: &Rig, at| rig.core.tree.slider(monitor_slider(at)).map(Slider::value);
+        assert_eq!((value(&rig, 0), value(&rig, 1)), (Some(100), Some(100)));
+        // The second monitor's read-back arrives first: only its row moves,
+        // the first keeps what the popup set until its own reading comes.
+        *rig.monitor_cell.borrow_mut() = vec![Some(30), Some(70)];
+        assert!(rig.core.sync(&Theme::dark(), now, cut));
+        assert_eq!((value(&rig, 0), value(&rig, 1)), (Some(100), Some(70)));
+        *rig.monitor_cell.borrow_mut() = vec![Some(95), Some(70)];
+        assert!(rig.core.sync(&Theme::dark(), now, cut));
+        assert_eq!((value(&rig, 0), value(&rig, 1)), (Some(95), Some(70)));
     }
 }

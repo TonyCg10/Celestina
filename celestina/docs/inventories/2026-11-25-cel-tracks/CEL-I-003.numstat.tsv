@@ -1,0 +1,43 @@
+# CEL-I-003 exact change inventory
+
+Base revision	6bbefc1db9fe98e2ed10da4731fe899a92ee3d87
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-wayland/src/runtime.rs
+Pathspec	celestina/docs/evidence/2026-11-25-cel-i-003-brightness.md
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-003.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/osd/audio_rows.rs
+Pathspec	celestina/src/osd/control.rs
+Pathspec	celestina/src/osd/mod.rs
+Pathspec	celestina/src/osd/monitor_rows.rs
+Pathspec	celestina/src/osd/popup.rs
+Pathspec	celestina/src/osd/readings.rs
+Pathspec	celestina/src/osd/surface.rs
+Pathspec	celestina/src/providers/brightness.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	dc79dfe8bc69392172f363d3c25a6d57b1126d9bce6986bea639b9fedf6b7988	celestina/Cargo.lock
+1	1	7acb9a21218ba72596c2ece463bd45e878600c3d5e6e5180113526aff53c65f0	celestina/Cargo.toml
+31	0	6f0bb29320c28e020bd0f7b7eb1abcc2137766e271f1c956d53a401e520a7cf3	celestina/VALIDATION.md
+13	0	b4b4c382f27f47ff90c822f8f95df52de3878ac34d657c24a7e853745f51e549	celestina/crates/celestina-wayland/src/runtime.rs
+134	0	95f5c4da70fb6ad6aa7b16df036f343087a28d988a2a05d7141a723287bde6e7	celestina/docs/evidence/2026-11-25-cel-i-003-brightness.md
+43	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-003.numstat.tsv
+1	1	0f19ebe427bcd9dcbf6e666389912c39f668f8adbe12d87d783ee3714d7e1fd1	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+10	2	59e227d57803565878824c1b3277aba2a82d753d608e1e060e0ed9edc9ab2f94	celestina/src/app.rs
+10	0	de49f7704ad233d93be7bdd09040823fee517edabb59bb9f03c88abf06ae6430	celestina/src/copy.rs
+1	1	ed7aeae969ef7f5f6a3b76c6fa5eb5f310523d403ed3605332c6614fb0d3c423	celestina/src/osd/audio_rows.rs
+169	3	cbfeb0d609c5626a3540f24955e37609c9e813a2968f98cdfe663221653b5afe	celestina/src/osd/control.rs
+6	1	0dfcb0d7a24d72fd68e67693b4d8f08fa9b55dc37a339a516af59660b9d1f2fc	celestina/src/osd/mod.rs
+277	0	d7a13eac9a5fa3ff1540bf6e993378645a9a9e07aa36357e3926d624219b3506	celestina/src/osd/monitor_rows.rs
+515	49	59c8e44de6f526171609b847a9b894b74a852b7e0f8994cbaf70eaf69b5280f4	celestina/src/osd/popup.rs
+219	0	1fc7a9946f2ffe90c7f513d2c8fb5c4fe75234db4b7720774b70fc1af36f043f	celestina/src/osd/readings.rs
+44	2	ffd8f2530759cda74f7a7f920ac618269ed84e83221effb05b2853eeff60a788	celestina/src/osd/surface.rs
+51	2	ee3baa449bd628938089d8496bc73707a236f4346b7f144f8f8b198de98c118a	celestina/src/providers/brightness.rs
+1	0	6575feb93c0f980acfbaeacf755f52a6aa1bb2f211af729b5c9aa586da720304	docs/version-history.tsv

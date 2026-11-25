@@ -884,6 +884,16 @@ pub const PIECE_VOLUME: &str = "Volumen";
 /// ("Brightness").
 pub const PIECE_BRIGHTNESS: &str = "Brillo";
 
+/// The brightness popup's heading for every monitor at once ("All").
+pub const BRIGHTNESS_ALL: &str = "Todos";
+
+/// The name of a monitor that shares its model with another, with its
+/// connector to tell them apart ("LG ULTRAGEAR+ (DP-1)").
+#[must_use]
+pub fn monitor_with_connector(name: &str, connector: &str) -> String {
+    format!("{name} ({connector})")
+}
+
 /// The popup's heading for the microphone's row ("Microphone").
 pub const MICROPHONE: &str = "Micrófono";
 

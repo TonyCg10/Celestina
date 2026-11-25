@@ -2651,7 +2651,11 @@ impl Shell for App {
                 self.outputs.retain(|o| o.id != info.id);
                 self.outputs.push(info.clone());
                 self.osds.output_added(&info);
-                if self.controls.readings.output_added(info.id, &info.name) {
+                let named = self.controls.readings.output_added(info.id, &info.name);
+                self.controls
+                    .readings
+                    .set_model(info.id, ctl.output_model(info.id).as_deref());
+                if named {
                     self.levels_changed(ctl);
                 }
                 self.output_added(&info, ctl);
@@ -2667,7 +2671,11 @@ impl Shell for App {
                 if let Some(known) = self.outputs.iter_mut().find(|o| o.id == info.id) {
                     *known = info.clone();
                 }
-                if self.controls.readings.output_added(info.id, &info.name) {
+                let named = self.controls.readings.output_added(info.id, &info.name);
+                self.controls
+                    .readings
+                    .set_model(info.id, ctl.output_model(info.id).as_deref());
+                if named {
                     self.levels_changed(ctl);
                 }
                 tracing::debug!(output = %info.name, "output changed; the Island keeps its surface");

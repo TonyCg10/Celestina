@@ -18,6 +18,7 @@
 
 pub mod audio_rows;
 pub mod control;
+pub mod monitor_rows;
 pub mod popup;
 pub mod readings;
 pub mod surface;
@@ -67,10 +68,14 @@ pub enum Suppression {
     /// A popup driving these kinds opened.
     Open(&'static [Kind]),
     /// It closed; `asked` is the last level it asked of each kind (`None`
-    /// for a mute toggle), so their read-backs are not announced.
+    /// for a mute toggle), so their read-backs are not announced. `written`
+    /// is how many distinct monitors of a brightness list it asked a level
+    /// of: the DDC worker writes and reads them one at a time, so the quiet
+    /// after the close lasts one settle for each.
     Closed {
         kinds: &'static [Kind],
         asked: Vec<(Kind, Option<u8>)>,
+        written: usize,
     },
 }
 

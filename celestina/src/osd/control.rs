@@ -39,6 +39,7 @@ use celestina_shell::osd::Kind as OsdKind;
 use celestina_shell::settings::{BarLayout, Duty, Settings};
 use celestina_wayland::{PopupId, SurfaceCtl, SurfaceId};
 
+use super::monitor_rows::{MonitorFeed, MonitorRow, SharedMonitors};
 use super::popup::{
     self, Command, Control, Kind, LevelPopup, Request, SharedGraph, SharedLevels, Sink,
 };
@@ -104,6 +105,16 @@ pub fn kinds_of(kind: Kind) -> &'static [OsdKind] {
 /// toggle), in the order first asked.
 type Asked = Rc<RefCell<Vec<(OsdKind, Option<u8>)>>>;
 
+/// The rows of a monitor list the popup asked a level of.
+type Written = Rc<RefCell<std::collections::BTreeSet<u8>>>;
+
+/// Notes the row `request` addresses, if it is a monitor's.
+fn note_written(written: &Written, request: Request) {
+    if let Request::Set(Control::Monitor(row), _) = request {
+        written.borrow_mut().insert(row);
+    }
+}
+
 /// Records `request` as the last thing asked of its kind. A stream is not a
 /// kind of the display, so its requests are not recorded. A new default
 /// device is a change of whichever direction it is in `graph`: the display
@@ -121,6 +132,10 @@ fn record(asked: &Asked, request: Request, graph: &AudioGraph) {
             };
             (kind, None)
         }
+        // A monitor of the list keeps the display quiet for the whole settle
+        // after the close, as a mute does: the popup has no one level to
+        // name, and none of the readings that follow is news.
+        Request::Set(Control::Monitor(_) | Control::AllMonitors, _) => (OsdKind::Brightness, None),
         Request::Set(control, percent) => (kind_of(control), Some(percent)),
         Request::ToggleMute(control) => (kind_of(control), None),
     };
@@ -136,7 +151,7 @@ fn kind_of(control: Control) -> OsdKind {
     match control {
         Control::Output | Control::Stream(_) => OsdKind::Volume,
         Control::Input => OsdKind::Microphone,
-        Control::Brightness => OsdKind::Brightness,
+        Control::Brightness | Control::Monitor(_) | Control::AllMonitors => OsdKind::Brightness,
     }
 }
 
@@ -214,6 +229,13 @@ struct Open {
     cell: SharedLevels,
     graph: SharedGraph,
     asked: Asked,
+    /// The monitors a brightness popup lists, in the order of its rows; the
+    /// popup's own output first. Empty for a volume popup.
+    targets: Vec<Target>,
+    written: Written,
+    /// What each of `targets` last read, shared with the popup; used only
+    /// when the popup lists several.
+    monitors: SharedMonitors,
 }
 
 /// The readings and the slider popup.
@@ -293,17 +315,48 @@ impl Controls {
             tracing::debug!(%output, "no monitor for this output; no brightness popup");
             return false;
         }
+        // Several monitors make a list; one keeps the single slider. The
+        // list is fixed now: a monitor that appears later is listed the next
+        // time the popup opens.
+        let listed = match kind {
+            Kind::Brightness => self.readings.monitors_for(&output),
+            Kind::Volume => Vec::new(),
+        };
+        let feed = if listed.len() >= 2 {
+            MonitorFeed {
+                rows: listed
+                    .iter()
+                    .map(|m| MonitorRow {
+                        name: m.name.clone(),
+                        primary: m.primary,
+                    })
+                    .collect(),
+                levels: Rc::new(RefCell::new(listed.iter().map(|m| m.percent).collect())),
+            }
+        } else {
+            MonitorFeed::default()
+        };
+        let targets: Vec<Target> = if feed.rows.is_empty() {
+            target.into_iter().collect()
+        } else {
+            listed.into_iter().map(|m| m.target).collect()
+        };
+        let monitors = Rc::clone(&feed.levels);
         let cell: SharedLevels = Rc::new(Cell::new(self.levels_for(&output)));
         let graph: SharedGraph = Rc::new(RefCell::new(self.readings.graph().clone()));
         let asked = Asked::default();
+        let written = Written::default();
         let sink: Sink = {
             let runtime = Rc::clone(runtime);
             let asked = Rc::clone(&asked);
             let graph = Rc::clone(&graph);
+            let targets = targets.clone();
+            let written = Rc::clone(&written);
             Rc::new(move |request: Request| {
                 record(&asked, request, &graph.borrow());
+                note_written(&written, request);
                 if let Some(runtime) = runtime.get() {
-                    deliver(runtime, popup::commands(request, target.as_ref()));
+                    deliver(runtime, popup::commands(request, &targets));
                 }
             })
         };
@@ -313,10 +366,11 @@ impl Controls {
             kind,
             Rc::clone(&cell),
             Rc::clone(&graph),
+            feed,
             sink,
             reduced,
         );
-        let size = popup::popup_size(&theme, kind, shell.has_microphone(), shell.shape());
+        let size = shell.size();
         let Some(popup) = island.open_level_popup(anchor, size, Box::new(shell), ctl) else {
             return false;
         };
@@ -328,6 +382,9 @@ impl Controls {
             cell,
             graph,
             asked,
+            targets,
+            written,
+            monitors,
         });
         // A fresh reading for what the popup shows; the DDC worker reads one
         // monitor at a time and never on a timer.
@@ -364,6 +421,18 @@ impl Controls {
             open.cell.set(levels);
             changed = true;
         }
+        // A popup that lists several monitors shows each one's reading.
+        if open.monitors.borrow().len() >= 2 {
+            let levels: Vec<Option<u8>> = open
+                .targets
+                .iter()
+                .map(|target| self.readings.level_of(target))
+                .collect();
+            if *open.monitors.borrow() != levels {
+                open.monitors.replace(levels);
+                changed = true;
+            }
+        }
         // Only a volume popup lists the graph.
         if open.kind == Kind::Volume && *open.graph.borrow() != *self.readings.graph() {
             open.graph.replace(self.readings.graph().clone());
@@ -383,9 +452,11 @@ impl Controls {
     pub fn closed(&mut self) -> Option<Suppression> {
         let open = self.open.take()?;
         let asked = open.asked.borrow().clone();
+        let written = open.written.borrow().len();
         Some(Suppression::Closed {
             kinds: kinds_of(open.kind),
             asked,
+            written,
         })
     }
 
@@ -527,6 +598,9 @@ mod tests {
             cell: Rc::new(Cell::new(Levels::default())),
             graph: Rc::new(RefCell::new(AudioGraph::default())),
             asked: Rc::clone(&asked),
+            targets: Vec::new(),
+            written: Written::default(),
+            monitors: SharedMonitors::default(),
         });
         asked
     }
@@ -548,6 +622,7 @@ mod tests {
             Some(Suppression::Closed {
                 kinds: &[OsdKind::Volume, OsdKind::Microphone],
                 asked: vec![(OsdKind::Volume, Some(45)), (OsdKind::Microphone, None)],
+                written: 0,
             })
         );
         assert!(controls.closed().is_none(), "released once");
@@ -656,6 +731,7 @@ mod tests {
             Some(Suppression::Closed {
                 kinds: &[OsdKind::Volume, OsdKind::Microphone],
                 asked: Vec::new(),
+                written: 0,
             })
         );
     }
@@ -682,6 +758,7 @@ mod tests {
             Some(Suppression::Closed {
                 kinds: &[OsdKind::Brightness],
                 asked: Vec::new(),
+                written: 0,
             })
         );
         assert!(!controls.is_open_on(SurfaceId(3)));
@@ -698,5 +775,94 @@ mod tests {
             "late messages after the off"
         );
         assert!(!readings_accepted(&off, false));
+    }
+
+    fn two_monitors() -> Controls {
+        use crate::providers::brightness::BrightnessEvent;
+        use celestina_wayland::OutputId;
+        let mut controls = Controls::new();
+        controls.readings.output_added(OutputId(1), "DP-1");
+        controls.readings.output_added(OutputId(2), "DP-2");
+        for (monitor, percent) in [("DP-1", 20), ("DP-2", 70)] {
+            controls.readings.brightness_event(&BrightnessEvent {
+                monitor: monitor.to_owned(),
+                percent: Some(percent),
+                source: BrightnessSource::Ddc,
+            });
+        }
+        controls
+    }
+
+    #[test]
+    fn a_multi_monitor_popup_quiets_brightness_for_the_whole_settle() {
+        let mut controls = two_monitors();
+        let asked = opened(&mut controls, Kind::Brightness, SurfaceId(3));
+        let written = controls.open.as_ref().map(|o| Rc::clone(&o.written));
+        for request in [
+            Request::Set(popup::Control::Monitor(1), 40),
+            Request::Set(popup::Control::Monitor(0), 55),
+            Request::Set(popup::Control::Monitor(2), 55),
+            Request::Set(popup::Control::Monitor(1), 60),
+        ] {
+            record(&asked, request, &AudioGraph::default());
+            note_written(&written.clone().expect("open"), request);
+        }
+        // None is the mute's: the display stays quiet until the settle ends,
+        // whatever level the monitors read back.
+        assert_eq!(
+            controls.closed(),
+            Some(Suppression::Closed {
+                kinds: &[OsdKind::Brightness],
+                asked: vec![(OsdKind::Brightness, None)],
+                written: 3,
+            })
+        );
+        assert_eq!(kind_of(popup::Control::Monitor(2)), OsdKind::Brightness);
+        assert_eq!(kind_of(popup::Control::AllMonitors), OsdKind::Brightness);
+        // The single slider still names its level.
+        let single = Asked::default();
+        record(
+            &single,
+            Request::Set(popup::Control::Brightness, 30),
+            &AudioGraph::default(),
+        );
+        assert_eq!(*single.borrow(), [(OsdKind::Brightness, Some(30))]);
+    }
+
+    #[test]
+    fn refresh_brings_every_listed_monitor_up_to_date() {
+        use crate::providers::brightness::BrightnessEvent;
+        let mut controls = two_monitors();
+        let targets: Vec<Target> = controls
+            .readings
+            .monitors_for("DP-1")
+            .into_iter()
+            .map(|m| m.target)
+            .collect();
+        let levels: SharedMonitors = Rc::new(RefCell::new(vec![Some(20), Some(70)]));
+        opened(&mut controls, Kind::Brightness, SurfaceId(3));
+        let current = controls.levels_for("DP-1");
+        if let Some(open) = controls.open.as_mut() {
+            open.cell.set(current);
+            open.targets = targets;
+            open.monitors = Rc::clone(&levels);
+        }
+        assert!(controls.refresh().is_none(), "nothing moved");
+        controls.readings.brightness_event(&BrightnessEvent {
+            monitor: "DP-2".to_owned(),
+            percent: Some(45),
+            source: BrightnessSource::Ddc,
+        });
+        // Only the second monitor moved, and it is not the bar's own.
+        assert_eq!(controls.refresh(), Some((SurfaceId(3), PopupId(7))));
+        assert_eq!(*levels.borrow(), [Some(20), Some(45)]);
+        assert!(controls.refresh().is_none());
+        controls.readings.brightness_event(&BrightnessEvent {
+            monitor: "DP-1".to_owned(),
+            percent: None,
+            source: BrightnessSource::Ddc,
+        });
+        assert_eq!(controls.refresh(), Some((SurfaceId(3), PopupId(7))));
+        assert_eq!(*levels.borrow(), [None, Some(45)]);
     }
 }

@@ -18,8 +18,10 @@
 use std::collections::BTreeMap;
 
 use celestina_shell::audio::AudioGraph;
+use celestina_shell::bounded::{bounded, MAX_TEXT_UNITS};
 use celestina_wayland::OutputId;
 
+use crate::copy;
 use crate::pieces::{AudioLevels, Level};
 use crate::providers::audio::{AudioEvent, Device};
 use crate::providers::brightness::{BrightnessEvent, BrightnessSource};
@@ -39,6 +41,21 @@ pub struct Target {
     pub monitor: String,
 }
 
+/// The most monitors the brightness popup lists.
+pub const MAX_MONITORS: usize = 8;
+
+/// A monitor as the brightness popup lists it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MonitorLevel {
+    pub target: Target,
+    /// The model, or else the connector (both when two share a model).
+    pub name: String,
+    /// The monitor of the bar the popup hangs from.
+    pub primary: bool,
+    /// `None` is unknown.
+    pub percent: Option<u8>,
+}
+
 /// The shell's picture of the audio devices and the monitors.
 #[derive(Debug, Default)]
 pub struct Readings {
@@ -48,6 +65,8 @@ pub struct Readings {
     graph: AudioGraph,
     /// The outputs, in announcement order: id and connector name.
     outputs: Vec<(OutputId, String)>,
+    /// The model each output announced, when it announced a usable one.
+    models: BTreeMap<OutputId, String>,
     /// The last known level of each monitor; `None` is unknown.
     monitors: BTreeMap<(BrightnessSource, String), Option<u8>>,
     /// The level of the monitor of each output, derived from the above.
@@ -116,7 +135,23 @@ impl Readings {
     /// An output is gone.
     pub fn output_removed(&mut self, id: OutputId) -> bool {
         self.outputs.retain(|(known, _)| *known != id);
+        self.models.remove(&id);
         self.derive()
+    }
+
+    /// The model the compositor announced for an output: kept bounded and
+    /// trimmed. An empty one, or `Unknown`, is no model at all, and the
+    /// monitor is then named by its connector.
+    pub fn set_model(&mut self, id: OutputId, model: Option<&str>) {
+        let model = model.map(|m| bounded(m.trim(), MAX_TEXT_UNITS).trim().to_owned());
+        match model {
+            Some(model) if !model.is_empty() && model != "Unknown" => {
+                self.models.insert(id, model);
+            }
+            _ => {
+                self.models.remove(&id);
+            }
+        }
     }
 
     /// The duty is off: every reading is forgotten (the outputs stay).
@@ -162,6 +197,74 @@ impl Readings {
             source: BrightnessSource::Ddc,
             monitor: output.to_owned(),
         })
+    }
+
+    /// The last known level of the monitor `target`; `None` when unknown or
+    /// never reported.
+    #[must_use]
+    pub fn level_of(&self, target: &Target) -> Option<u8> {
+        self.monitors
+            .get(&(target.source, target.monitor.clone()))
+            .copied()
+            .flatten()
+    }
+
+    /// The monitors the popup of `output`'s bar lists: that bar's own first
+    /// (even with no reading yet), then each other output's whose monitor
+    /// the worker has reported, by connector; at most [`MAX_MONITORS`].
+    /// Empty when `output` does not exist.
+    #[must_use]
+    pub fn monitors_for(&self, output: &str) -> Vec<MonitorLevel> {
+        let Some(first) = self.target(output) else {
+            return Vec::new();
+        };
+        let mut listed = vec![(output.to_owned(), first)];
+        let mut others: Vec<&(OutputId, String)> = self
+            .outputs
+            .iter()
+            .filter(|(_, name)| name != output)
+            .collect();
+        others.sort_by(|a, b| a.1.cmp(&b.1));
+        for (_, name) in others {
+            let Some(target) = self.target(name) else {
+                continue;
+            };
+            let reported = self
+                .monitors
+                .contains_key(&(target.source, target.monitor.clone()));
+            if reported && !listed.iter().any(|(_, known)| *known == target) {
+                listed.push((name.clone(), target));
+            }
+        }
+        listed.truncate(MAX_MONITORS);
+        let names: Vec<String> = listed
+            .iter()
+            .map(|(connector, _)| {
+                self.outputs
+                    .iter()
+                    .find(|(_, name)| name == connector)
+                    .and_then(|(id, _)| self.models.get(id))
+                    .cloned()
+                    .unwrap_or_else(|| connector.clone())
+            })
+            .collect();
+        listed
+            .into_iter()
+            .enumerate()
+            .map(|(at, (connector, target))| {
+                let shared = names.iter().filter(|name| **name == names[at]).count() > 1;
+                MonitorLevel {
+                    name: if shared {
+                        copy::monitor_with_connector(&names[at], &connector)
+                    } else {
+                        names[at].clone()
+                    },
+                    primary: at == 0,
+                    percent: self.level_of(&target),
+                    target,
+                }
+            })
+            .collect()
     }
 
     /// Rebuilds `by_output`; whether it changed.
@@ -366,5 +469,121 @@ mod tests {
         // The monitors were forgotten: a later output pairs with nothing.
         r.output_added(OutputId(2), "HDMI-A-1");
         assert!(r.by_output().is_empty());
+    }
+
+    fn model_event(r: &mut Readings, id: u32, model: &str) {
+        r.set_model(OutputId(id), Some(model));
+    }
+
+    fn names(list: &[MonitorLevel]) -> Vec<&str> {
+        list.iter().map(|m| m.name.as_str()).collect()
+    }
+
+    #[test]
+    fn monitors_list_the_bars_output_first_then_the_others_by_connector() {
+        let mut r = with_outputs(&["HDMI-A-1", "DP-2", "DP-1"]);
+        r.brightness_event(&ddc("DP-1", Some(10)));
+        r.brightness_event(&ddc("DP-2", Some(20)));
+        r.brightness_event(&ddc("HDMI-A-1", None));
+        let list = r.monitors_for("HDMI-A-1");
+        assert_eq!(names(&list), ["HDMI-A-1", "DP-1", "DP-2"]);
+        assert_eq!(
+            list.iter().map(|m| m.primary).collect::<Vec<_>>(),
+            [true, false, false]
+        );
+        assert_eq!(
+            list.iter().map(|m| m.percent).collect::<Vec<_>>(),
+            [None, Some(10), Some(20)]
+        );
+        // The bar's own comes first even with no reading at all.
+        let mut bare = with_outputs(&["DP-1"]);
+        assert_eq!(names(&bare.monitors_for("DP-1")), ["DP-1"]);
+        assert_eq!(bare.monitors_for("DP-1")[0].percent, None);
+        assert!(bare.monitors_for("nowhere").is_empty());
+        bare.brightness_event(&ddc("DP-1", Some(5)));
+        assert_eq!(bare.monitors_for("DP-1")[0].percent, Some(5));
+    }
+
+    #[test]
+    fn a_monitor_is_named_by_its_model_or_else_its_connector() {
+        let mut r = with_outputs(&["DP-1", "DP-2", "DP-3", "DP-4"]);
+        for name in ["DP-1", "DP-2", "DP-3", "DP-4"] {
+            r.brightness_event(&ddc(name, Some(50)));
+        }
+        model_event(&mut r, 1, " LG ULTRAGEAR+ ");
+        model_event(&mut r, 2, "");
+        model_event(&mut r, 3, "Unknown");
+        r.set_model(OutputId(4), None);
+        assert_eq!(
+            names(&r.monitors_for("DP-1")),
+            ["LG ULTRAGEAR+", "DP-2", "DP-3", "DP-4"]
+        );
+        // Two of one model say which is which.
+        model_event(&mut r, 2, "LG ULTRAGEAR+");
+        assert_eq!(
+            names(&r.monitors_for("DP-1")),
+            [
+                "LG ULTRAGEAR+ (DP-1)",
+                "LG ULTRAGEAR+ (DP-2)",
+                "DP-3",
+                "DP-4"
+            ]
+        );
+        // A model that is then empty is forgotten.
+        model_event(&mut r, 2, "");
+        assert_eq!(names(&r.monitors_for("DP-1"))[0], "LG ULTRAGEAR+");
+        // A model is bounded, and an output going takes its model along.
+        model_event(&mut r, 3, &"M".repeat(5000));
+        assert!(r.monitors_for("DP-1")[2].name.len() < 5000);
+        r.output_removed(OutputId(1));
+        r.output_added(OutputId(1), "DP-1");
+        assert_eq!(names(&r.monitors_for("DP-1"))[0], "DP-1");
+        // Clearing the readings keeps what the outputs announced.
+        model_event(&mut r, 4, "Dell");
+        r.clear();
+        r.brightness_event(&ddc("DP-4", Some(1)));
+        assert_eq!(names(&r.monitors_for("DP-1")), ["DP-1", "Dell"]);
+    }
+
+    #[test]
+    fn only_reported_monitors_are_listed_besides_the_bars_own() {
+        let mut r = with_outputs(&["DP-1", "DP-2", "DP-3"]);
+        r.brightness_event(&ddc("DP-2", None));
+        // DP-3 was never reported: it is not a monitor the worker knows.
+        assert_eq!(names(&r.monitors_for("DP-1")), ["DP-1", "DP-2"]);
+        assert_eq!(names(&r.monitors_for("DP-3")), ["DP-3", "DP-2"]);
+    }
+
+    #[test]
+    fn the_backlight_is_listed_as_the_internal_panel() {
+        let mut r = with_outputs(&["eDP-1", "DP-1"]);
+        r.brightness_event(&backlight("intel_backlight", Some(30)));
+        r.brightness_event(&ddc("DP-1", Some(60)));
+        let list = r.monitors_for("DP-1");
+        assert_eq!(names(&list), ["DP-1", "eDP-1"]);
+        assert_eq!(list[1].target.source, BrightnessSource::Backlight);
+        assert_eq!(list[1].percent, Some(30));
+        assert_eq!(r.level_of(&list[1].target), Some(30));
+        let list = r.monitors_for("eDP-1");
+        assert_eq!(names(&list), ["eDP-1", "DP-1"]);
+        assert!(list[0].primary);
+        // Without a backlight reading the panel has nothing to list.
+        let mut desk = with_outputs(&["eDP-1", "DP-1"]);
+        desk.brightness_event(&ddc("DP-1", Some(60)));
+        assert_eq!(names(&desk.monitors_for("DP-1")), ["DP-1"]);
+    }
+
+    #[test]
+    fn the_list_stops_at_max_monitors() {
+        let connectors: Vec<String> = (1..=12).map(|n| format!("DP-{n:02}")).collect();
+        let refs: Vec<&str> = connectors.iter().map(String::as_str).collect();
+        let mut r = with_outputs(&refs);
+        for name in &refs {
+            r.brightness_event(&ddc(name, Some(50)));
+        }
+        let list = r.monitors_for("DP-12");
+        assert_eq!(list.len(), MAX_MONITORS);
+        assert_eq!(list[0].name, "DP-12", "the bar's own is never cut");
+        assert_eq!(list[1].name, "DP-01");
     }
 }

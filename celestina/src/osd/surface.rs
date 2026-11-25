@@ -36,7 +36,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use celestina_paint::Theme;
-use celestina_shell::osd::{Effect, Kind, Osd, Reading, Shown};
+use celestina_shell::osd::{Effect, Kind, Osd, Reading, Shown, BRIGHTNESS_SETTLE};
 use celestina_shell::settings::{Duty, OsdPosition, Settings};
 use celestina_wayland::{
     Anchoring, FrameCx, KeyboardInteractivity, Layer, LayerSpec, OutputId, OutputInfo, RuntimeCtl,
@@ -311,7 +311,17 @@ impl Osds {
                 let effect = self.machine.suppress(kinds);
                 self.effect(effect, None, now, host);
             }
-            Suppression::Closed { kinds, asked } => self.machine.release(kinds, &asked, now),
+            Suppression::Closed {
+                kinds,
+                asked,
+                written,
+            } => {
+                // A DDC write and its read-back take a settle of their own
+                // for each monitor the popup wrote, one after another.
+                let more = u32::try_from(written.saturating_sub(1)).unwrap_or(u32::MAX);
+                let now = now.saturating_add(BRIGHTNESS_SETTLE.saturating_mul(more));
+                self.machine.release(kinds, &asked, now);
+            }
         }
     }
 
@@ -742,6 +752,7 @@ mod tests {
         Suppression::Closed {
             kinds,
             asked: asked.to_vec(),
+            written: 0,
         }
     }
 
@@ -775,6 +786,37 @@ mod tests {
         // A key press afterwards is shown.
         osds.brightness_read(bright("DP-1", Some(15)), None, T, &mut host);
         assert_eq!(host.created.len(), 1);
+    }
+
+    #[test]
+    fn the_quiet_after_closing_lasts_a_settle_for_each_monitor_written() {
+        let settle = BRIGHTNESS_SETTLE;
+        for (written, quiet_until) in [(1, settle), (3, settle * 3)] {
+            let mut osds = osds(true);
+            let mut host = Fake::default();
+            osds.brightness_read(bright("DP-1", Some(50)), None, T, &mut host);
+            osds.suppress(Suppression::Open(BRIGHTNESS), T, &mut host);
+            osds.suppress(
+                Suppression::Closed {
+                    kinds: BRIGHTNESS,
+                    asked: vec![(Kind::Brightness, None)],
+                    written,
+                },
+                T,
+                &mut host,
+            );
+            // The last monitor's read-back comes late: still quiet.
+            let late = T + quiet_until - Duration::from_secs(1);
+            osds.brightness_read(bright("DP-1", Some(30)), None, late, &mut host);
+            assert!(
+                host.created.is_empty(),
+                "{written} written, quiet at {late:?}"
+            );
+            // Past the bound a change shows again.
+            let past = T + quiet_until + Duration::from_secs(1);
+            osds.brightness_read(bright("DP-1", Some(35)), None, past, &mut host);
+            assert_eq!(host.created.len(), 1, "{written} written");
+        }
     }
 
     #[test]
