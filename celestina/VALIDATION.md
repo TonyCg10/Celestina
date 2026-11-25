@@ -1492,3 +1492,20 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-I-007](docs/evidence/2026-11-25-cel-i-007-brightness-hold.md)
+
+## VAL-CEL-I-008 — The wheel on the popups' sliders
+
+- **Status:** pending
+- **Related implementation:** CEL-I-008 (the volume and brightness popups)
+- **Requires:** the deployed shell after the landing of CEL-I-008
+- **Procedure:** open the volume popup and turn the wheel one notch at a time
+  over the output slider, the microphone slider and one application's slider;
+  then open the brightness popup and do the same over All and over one
+  monitor's row
+- **Pass condition:** each notch moves the slider under the pointer by one
+  percent (up raises, down lowers), the sound or the monitor follows, All
+  moves every monitor together, and the wheel over the bar's own pieces still
+  steps as before
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-I-008](docs/evidence/2026-11-25-cel-i-008-slider-wheel.md)

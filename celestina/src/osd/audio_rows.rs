@@ -686,6 +686,17 @@ impl GraphMirror {
         self.shown.has_device(id)
     }
 
+    /// The level the stream `id`'s slider shows, if it has one.
+    #[must_use]
+    pub fn stream_level(&self, id: u32) -> Option<u8> {
+        self.shown
+            .streams
+            .iter()
+            .find(|s| s.id == id)
+            .and_then(|s| s.level)
+            .map(|l| l.percent)
+    }
+
     fn stream_level_mut(&mut self, id: u32) -> Option<&mut AudioLevel> {
         self.shown
             .streams

@@ -60,7 +60,12 @@ use crate::{
         audio::{AudioCommand, Device},
         brightness::{BrightnessCommand, Change},
     },
+    tray::model::scroll_steps,
 };
+
+/// How long after a wheel notch the next one on the same slider steps from
+/// the level the wheel set rather than from what is shown.
+const WHEEL_BURST: Duration = Duration::from_millis(1500);
 
 /// The card's width, logical px.
 pub const POPUP_W: f32 = 280.0;
@@ -561,6 +566,13 @@ pub struct LevelCore {
     /// the popup's own changes the cell has not caught up with yet.
     seen: Levels,
     throttle: Throttle,
+    /// The slider the wheel last turned and the pixels short of a whole
+    /// notch, so a smooth wheel steps once per notch.
+    wheel_rest: (Option<Key>, i32),
+    /// The control the wheel last set, the level it set and when: the next
+    /// notch within [`WHEEL_BURST`] steps from that level, not from what is
+    /// shown, so a late read-back of an earlier notch cannot lose a step.
+    wheel_last: Option<(Control, u8, Instant)>,
     sink: Sink,
     cell: SharedLevels,
     graph: SharedGraph,
@@ -640,6 +652,8 @@ impl LevelCore {
             shown,
             seen: shown,
             throttle: Throttle::default(),
+            wheel_rest: (None, 0),
+            wheel_last: None,
             sink,
             cell,
             graph,
@@ -814,6 +828,69 @@ impl LevelCore {
         }
     }
 
+    /// The popup asks `percent` of `control`: shown at once and sent through
+    /// the throttle. All gives every monitor with a reading the level, each
+    /// as a request of its own.
+    fn ask_level(&mut self, control: Control, percent: u8, now: Instant) {
+        if control == Control::AllMonitors {
+            for at in self.monitors.known() {
+                let row = Control::Monitor(u8::try_from(at).unwrap_or(u8::MAX));
+                self.set_shown(row, percent, now);
+                self.throttle.push(row, percent);
+            }
+        } else {
+            self.set_shown(control, percent, now);
+            self.throttle.push(control, percent);
+        }
+    }
+
+    /// The level `control`'s slider shows, if it has one.
+    fn shown_level(&self, control: Control) -> Option<u8> {
+        match control {
+            Control::Output => self.shown.audio.output.map(|l| l.percent),
+            Control::Input => self.shown.audio.input.map(|l| l.percent),
+            Control::Brightness => self.shown.brightness,
+            Control::Stream(id) => self.mirror.stream_level(id),
+            Control::Monitor(at) => self.monitors.level(usize::from(at)),
+            Control::AllMonitors => self.monitors.mean(),
+        }
+    }
+
+    /// A wheel turn of `vertical` px over `control`'s slider (`key`): one
+    /// percent per notch, up raises; a slider with no level takes none.
+    /// Whether the level moved.
+    fn wheel(&mut self, key: Key, control: Control, vertical: f32, now: Instant) -> bool {
+        if self.held() {
+            return false;
+        }
+        if self.wheel_rest.0 != Some(key) {
+            self.wheel_rest = (Some(key), 0);
+        }
+        let px = if vertical.is_finite() {
+            vertical.round() as i32
+        } else {
+            0
+        };
+        let notches = scroll_steps(px, &mut self.wheel_rest.1);
+        let shown = self.shown_level(control).filter(|_| notches != 0);
+        let Some(level) = shown.map(|shown| match self.wheel_last {
+            Some((last, level, at)) if last == control && now.duration_since(at) < WHEEL_BURST => {
+                level
+            }
+            _ => shown,
+        }) else {
+            return false;
+        };
+        let percent = (i32::from(level) - notches).clamp(0, 100);
+        let percent = u8::try_from(percent).unwrap_or(level);
+        if percent == level {
+            return false;
+        }
+        self.wheel_last = Some((control, percent, now));
+        self.ask_level(control, percent, now);
+        true
+    }
+
     fn flip_shown(&mut self, control: Control) {
         let level = match control {
             Control::Output => self.shown.audio.output.as_mut(),
@@ -841,24 +918,14 @@ impl LevelCore {
             match event {
                 UiEvent::Escape => return Outcome::Close,
                 UiEvent::SliderChanged(key, percent) => {
-                    match control_of_slider(*key, &self.mirror, &self.monitors) {
-                        Some(Control::AllMonitors) => {
-                            // Every monitor with a reading takes the level,
-                            // each as a request of its own: the newest value
-                            // of each is the one that is sent.
-                            for at in self.monitors.known() {
-                                let control = Control::Monitor(u8::try_from(at).unwrap_or(u8::MAX));
-                                self.set_shown(control, *percent, now);
-                                self.throttle.push(control, *percent);
-                            }
-                            moved = true;
-                        }
-                        Some(control) => {
-                            self.set_shown(control, *percent, now);
-                            self.throttle.push(control, *percent);
-                            moved = true;
-                        }
-                        None => {}
+                    if let Some(control) = control_of_slider(*key, &self.mirror, &self.monitors) {
+                        self.ask_level(control, *percent, now);
+                        moved = true;
+                    }
+                }
+                UiEvent::Scroll(key, _, vertical) => {
+                    if let Some(control) = control_of_slider(*key, &self.mirror, &self.monitors) {
+                        moved |= self.wheel(*key, control, *vertical, now);
                     }
                 }
                 UiEvent::Click(key) | UiEvent::Activate(key) => {
@@ -878,7 +945,7 @@ impl LevelCore {
                         }
                     }
                 }
-                UiEvent::HoverChanged(..) | UiEvent::Scroll(..) | UiEvent::FieldChanged(_) => {}
+                UiEvent::HoverChanged(..) | UiEvent::FieldChanged(_) => {}
             }
         }
         if moved {
@@ -2666,6 +2733,114 @@ mod tests {
         // A monitor with no reading shows no percent.
         assert!(in_tree(&rig, Key::indexed("level-monitor-percent", 1)));
         assert!(!in_tree(&rig, Key::indexed("level-monitor-percent", 2)));
+    }
+
+    /// A wheel turn of `vertical` px at the centre of `key`'s node.
+    fn wheel_over(rig: &mut Rig, key: Key, vertical: f32, now: Instant) {
+        let r = rect_of(&rig.core, key);
+        rig.core.input(
+            &InputEvent::Axis {
+                x: r.x + r.w / 2.0,
+                y: r.y + r.h / 2.0,
+                horizontal: 0.0,
+                vertical,
+            },
+            now,
+        );
+    }
+
+    #[test]
+    fn the_wheel_moves_a_monitor_row_one_percent_per_notch() {
+        let mut rig = rig_monitors(&three());
+        let now = Instant::now();
+        // One notch down lowers the row by one; two notches up raise it by two.
+        wheel_over(&mut rig, monitor_slider(0), 15.0, now);
+        assert_eq!(rig.core.monitors.level(0), Some(29));
+        wheel_over(
+            &mut rig,
+            monitor_slider(0),
+            -30.0,
+            now + Duration::from_secs(1),
+        );
+        assert_eq!(rig.core.monitors.level(0), Some(31));
+        assert_eq!(rig.core.monitors.level(1), Some(60), "the other row stays");
+        rig.core.flush(now + Duration::from_secs(2), true);
+        assert_eq!(
+            rig.sent.borrow().last(),
+            Some(&Request::Set(Control::Monitor(0), 31))
+        );
+        // Half a notch moves nothing until the rest of it comes.
+        wheel_over(&mut rig, monitor_slider(1), 7.0, now);
+        assert_eq!(rig.core.monitors.level(1), Some(60));
+        wheel_over(&mut rig, monitor_slider(1), 8.0, now);
+        assert_eq!(rig.core.monitors.level(1), Some(59));
+    }
+
+    #[test]
+    fn the_wheel_on_all_moves_every_monitor_with_a_reading() {
+        let mut rig = rig_monitors(&three());
+        let now = Instant::now();
+        // The mean of 30 and 60 is 45: one notch down sets both to 44.
+        wheel_over(&mut rig, slider_key(Control::AllMonitors), 15.0, now);
+        assert_eq!(rig.core.monitors.level(0), Some(44));
+        assert_eq!(rig.core.monitors.level(1), Some(44));
+        assert_eq!(rig.core.monitors.level(2), None, "no reading, no level");
+    }
+
+    #[test]
+    fn the_wheel_moves_the_output_one_percent_and_stops_at_the_ends() {
+        let mut rig = rig(Kind::Volume, audio(Some((99, false)), None));
+        let now = Instant::now();
+        wheel_over(&mut rig, slider_key(Control::Output), -15.0, now);
+        assert_eq!(rig.core.shown_level(Control::Output), Some(100));
+        wheel_over(&mut rig, slider_key(Control::Output), -15.0, now);
+        assert_eq!(rig.core.shown_level(Control::Output), Some(100), "capped");
+        rig.core.flush(now + Duration::from_secs(1), true);
+        assert_eq!(
+            *rig.sent.borrow(),
+            [Request::Set(Control::Output, 100)],
+            "the capped notch sends nothing more"
+        );
+    }
+
+    #[test]
+    fn a_late_read_back_does_not_lose_a_wheel_notch() {
+        let mut rig = rig(Kind::Brightness, brightness(Some(50)));
+        let now = Instant::now();
+        wheel_over(&mut rig, slider_key(Control::Brightness), -15.0, now);
+        assert_eq!(rig.core.shown_level(Control::Brightness), Some(51));
+        // The monitor still reports the level before the notch.
+        rig.cell.set(brightness(Some(50)));
+        rig.core.sync(&Theme::dark(), now, cut);
+        // The next notch of the burst steps from what the wheel set.
+        wheel_over(
+            &mut rig,
+            slider_key(Control::Brightness),
+            -15.0,
+            now + Duration::from_millis(300),
+        );
+        assert_eq!(rig.core.shown_level(Control::Brightness), Some(52));
+    }
+
+    #[test]
+    fn the_wheel_does_nothing_while_a_slider_is_dragged() {
+        let mut rig = rig_monitors(&three());
+        let track = rect_of(&rig.core, monitor_slider(1));
+        let now = Instant::now();
+        rig.core
+            .input(&press(track.x + 1.0, track.y + track.h / 2.0), now);
+        let dragged = rig.core.monitors.level(1);
+        wheel_over(&mut rig, monitor_slider(0), 15.0, now);
+        assert_eq!(rig.core.monitors.level(0), Some(30));
+        assert_eq!(rig.core.monitors.level(1), dragged);
+    }
+
+    #[test]
+    fn the_wheel_does_nothing_on_a_slider_with_no_reading() {
+        let mut rig = rig_monitors(&three());
+        wheel_over(&mut rig, monitor_slider(2), 15.0, Instant::now());
+        assert_eq!(rig.core.monitors.level(2), None);
+        assert!(rig.sent.borrow().is_empty());
     }
 
     #[test]

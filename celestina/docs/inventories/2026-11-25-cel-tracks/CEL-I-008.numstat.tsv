@@ -1,0 +1,27 @@
+# CEL-I-008 exact change inventory
+
+Base revision	88829f21516b1511e8541278f8b03422d46910e5
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-11-25-cel-i-008-slider-wheel.md
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-008.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/osd/audio_rows.rs
+Pathspec	celestina/src/osd/monitor_rows.rs
+Pathspec	celestina/src/osd/popup.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	6fc4abc3bd65a90fdefb95dc50af59e12915e22e101c2efa88bc1f4f86bff115	celestina/Cargo.lock
+1	1	ed4eda203e54410e97ac19e10c81a5176e58eda0779526c69582fe3bdba48b57	celestina/Cargo.toml
+17	0	0428d1a77994d5829354872bc44ee53276529cef67c837ecabc798bfb8244391	celestina/VALIDATION.md
+52	0	dfdacd68ba0f3dd227ade9474d52019f4066f44db4edb59d1ab93472e8d222b2	celestina/docs/evidence/2026-11-25-cel-i-008-slider-wheel.md
+27	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-008.numstat.tsv
+1	0	a949a283ee85642ace97364d13ff73204457ec49111fcfadc75f76b9d3a8e347	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+11	0	c0605d70d3e97ad0e83c9252123eda9306237780b2792ea18cf83f4f5d7e4ee4	celestina/src/osd/audio_rows.rs
+6	0	e27ee3240f2fc486423606827ef565d23d38ed9ef74ecbfa00b87fe4eb8da905	celestina/src/osd/monitor_rows.rs
+194	19	20dd53ec3d5d68649a2344d614e7bd2192a708278a14b7fa6845195afc72dbef	celestina/src/osd/popup.rs
+1	0	4a4dd8edcb99800ed2c5ece88d1ce4e047d49d5b1074e2b6472e73a3c8ded233	docs/version-history.tsv

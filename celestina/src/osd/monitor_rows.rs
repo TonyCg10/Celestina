@@ -222,6 +222,12 @@ impl MonitorMirror {
             .collect()
     }
 
+    /// The level row `at` shows, if it has a reading.
+    #[must_use]
+    pub fn level(&self, at: usize) -> Option<u8> {
+        self.shown.get(at).copied().flatten()
+    }
+
     /// The mean shown, for the All heading.
     #[must_use]
     pub fn mean(&self) -> Option<u8> {
