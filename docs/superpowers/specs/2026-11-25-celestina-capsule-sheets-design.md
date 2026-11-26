@@ -1,7 +1,8 @@
 # Celestina capsule sheets: menus that grow out of the bar
 
 - **Date:** 2026-11-25
-- **Status:** approved by the author on 2026-11-25
+- **Status:** approved by the author on 2026-11-25; §4.2 to §4.4 amended
+  after the author's live tests (CEL-D-007 on 2026-11-26, CEL-D-008 on 2026-11-26)
 - **Project:** `celestina` (1.19.x on `main` at `c0052728`)
 - **Entries:** `CEL-D-002` to `CEL-D-005` of the standing tracks
 - **Supersedes:** §6.2, §6.2.1, §6.3, §6.4 and §6.5 of
@@ -101,17 +102,16 @@ cannot animate).
   rectangle, radius 20: its top 40 px keep the capsule's row of pieces, the
   rest is the menu body. Glass is the Haze of the capsules (one silhouette;
   the blur region follows it in 2 px bands as today).
-- **Width and position.** Let `W` be the menu's width, `[L, R]` the
-  capsule's extent and `c` the centre of the clicked piece.
-  - `W ≥ R − L` (the menu is at least as wide as the capsule): the sheet
-    grows to `W` and must contain the whole capsule:
-    `x = clamp(c − W/2, R − W, L)`. The row stays exactly where it is.
-  - `W < R − L` (narrower): the sheet shrinks to `W` inside the capsule:
-    `x = clamp(c − W/2, L, R − W)`. The row does **not** move: the sheet is
-    a window over it. Pieces outside the window are not drawn; pieces cut by
-    a window edge are drawn with the progressive blur of §4.3 and stay
-    clickable while visible.
+- **Width and position (CEL-D-008).** The sheet is never narrower than its
+  capsule: every other piece of the row stays visible and clickable. Let `W`
+  be the menu's width, `[L, R]` the capsule's extent (without the open
+  piece, §4.3) and `c` the centre of the open piece's slot.
+  - `W ≥ R − L`: the sheet is `W` wide and contains the whole capsule:
+    `x = clamp(c − W/2, R − W, L)`.
+  - `W < R − L`: the sheet is the capsule's width, `x = L`; the body box
+    (`W` wide) sits under the row at `clamp(c − W/2, L, R − W)`.
   - Finally `x` is clamped to 16 px from the surface's sides.
+  - The row stays where it is, except for the open piece's slot (§4.3).
 - **Height.** `40 + body`, capped by the surface's room (560 − 8 − 8 = 544).
   The open spring may overshoot that cap for a moment; the painted sheet and
   its regions are clipped to the surface.
@@ -131,45 +131,65 @@ cannot animate).
 - **Page-backed sheets.** A piece that opens an Island page today
   (network, Bluetooth, notifications, clipboard, energy, system, media,
   phone, clock) opens a sheet whose body is that page's `PageView` body, under
-  a header row of 32: the page title (17, semibold) and its overflow button (`copy::MORE`) when
-  the page has a menu (that menu stays an `xdg_popup`). No clock, no
+  the subtitle of §4.3, with the page's overflow button (`copy::MORE`) at its
+  right when the page has a menu (that menu stays an `xdg_popup`). No clock, no
   close button and no tab row in the sheet. These sheets add no tabs and no
   `island open` words; the Island keeps its pages for `celestina island open`,
   the tab row and notifications.
 - **Tray.** Unchanged: primary activates, middle is the secondary activate,
   right click opens the application's menu (`xdg_popup`). It opens no sheet.
 
-### 4.3 The cut edge: progressive blur
+### 4.3 The open piece becomes the menu's subtitle (`CEL-D-008`)
 
-- On each side where the sheet's window cuts the row (never at a capsule's
-  own end), a band of `min(96, W × 2/5)` px blurs the row progressively:
-  four levels (σ 0, 1.5, 3 and 6 logical px) cross-faded by distance to the
-  edge with triangular weights at t = 0, 1/3, 2/3 and 1 (t = 1 at the edge),
-  and the band's alpha falls linearly to 40 % at the edge.
-- This is the WWDC25 "variable blur with a soft gradient" of macOS 26's soft
-  scroll edge, measured against the alternatives in the preview (macOS 27's
-  plain fade, and its uniform blurred veil); the author chose it.
-- **Feasibility (spike, 2026-11-25).** In femtovg 0.27: the row is rendered
-  into an offscreen image, blurred with `filter_image(GaussianBlur)` at the
-  three sigmas, each level masked by its weight gradient (`DestinationIn`),
-  the levels summed (`Lighter`) and drawn under the window's rounded clip.
-  Cost in the nest: about +0.19 ms of GPU per frame (median) on a moving
-  window, no seams, banding or halo. The row image must extend past the
-  window so the blur has pixels at a cut (the spike dimmed slightly where
-  the window met the image's edge). It only runs while a window cuts the row:
-  at rest nothing changes.
+- **Subtitle.** Every sheet body starts with a subtitle row, height 40,
+  padding x 4, gap 10: the open piece's icon at 22 px, then its text at
+  rowTitle 15 semibold `TextHi`, growing. A piece without text shows the
+  menu's name instead, with the page's icon when the piece has none
+  (`copy::PIECE_SESSION`, the page's title; Claude's call for the workspaces list, whose
+  piece is a row of dots: Lucide `layout-grid` and `copy::WORKSPACES_FALLBACK`).
+  A page-backed sheet keeps its overflow button at the
+  subtitle's right. The subtitle replaces the level menus' heading row and
+  the page sheets' 32 px header, and shows the same live value as the piece
+  (the volume's percent, the system load). While its sheet is open the
+  subtitle takes the piece's gestures: the wheel and the secondary and
+  middle presses do what they do on the piece, and a primary press closes
+  the sheet (the author's choice on 2026-11-26, after the final review).
+- **Slot.** When a sheet opens on a piece, that piece leaves its capsule: its
+  slot closes with the open spring (350 ms, OutBack 1.15), the pieces beside
+  it slide together, and the capsule, with the sheet over it, takes its new
+  width in the same motion. No gap stays behind. When the sheet switches to
+  another piece or closes, the piece that comes back reopens its slot with
+  the same spring.
+- **Flight.** The piece's icon and text fly between its slot and the
+  subtitle: down with the open spring when it opens, up with the exit curve
+  when it leaves (150 ms on a switch; on close the slot reopens first and the
+  flight starts 60 ms later and takes 200 ms). The icon grows from its bar
+  size to 22 px and the text from body 13 to rowTitle 15; the text's weight
+  goes from regular to semibold by cross-fading the two weights (femtovg
+  cannot interpolate a font's weight axis; the HTML preview did). The
+  subtitle's own icon and text, and the piece in the bar, are not painted
+  while they fly. Reduced motion: no flight, the slot jumps.
+- No indicator pill: the open piece is no longer in the row, so the
+  subtitle is what says which menu is open. The other pieces keep their
+  normal opacity and their hover and press (O1 of CEL-D-007).
+- **History.** The first version of this design let a narrower menu shrink
+  to a window over the row and blurred the pieces its edges cut (the
+  progressive blur E1, shipped by CEL-D-002). Living with it, the author found
+  that the narrowed capsule hid the other buttons, and approved on
+  2026-11-26 the capsule that never narrows, with the piece flying down as
+  the subtitle and the bar closing its slot without a gap (preview
+  of the whole bar, version 4). CEL-D-008 delivers it; the sheet no
+  longer cuts the row, and the painter keeps the progressive blur for
+  later use (the author's call on 2026-11-26).
 
 ### 4.4 Which menu is open
 
-- While a sheet is open, the open piece keeps today's grey pill
-  (`controlHover`, radius 12), which slides with the open spring when the
-  sheet switches pieces, and every other piece of that capsule's row is
-  painted at 40 % opacity: the approved "focus" indicator (I5 of the preview).
-  The dim comes in over 200 ms (One UI curve) and goes over 150 ms (exit
-  curve) on close; a switch keeps it. Reduced motion: it jumps.
-- Correction of 2026-11-25: this section first described a white spotlight
-  under the open piece, from a misreading of the author's choice; CEL-D-002
-  shipped it and CEL-D-003 (Task B5) replaced it with the focus indicator.
+- The subtitle names the open menu (§4.3). History: this section first
+  described a white spotlight under the open piece (a misreading, shipped by
+  CEL-D-002 and replaced by CEL-D-003 Task B5 with the other pieces dimmed to
+  40 %); after trying 1.23.0 the author asked for full opacity and a single
+  travelling pill (CEL-D-007, variants O1 and P1 approved on 2026-11-26).
+  CEL-D-008 removes that pill with the piece itself.
 
 ### 4.5 One centre capsule (`CEL-D-004`)
 
@@ -197,13 +217,16 @@ cannot animate).
   (TextFaint) when it has none. The current workspace's row has the
   `accentSoft` fill with a 1 px `accentSoftBorder`. Hover and press as today.
 - A click on a row focuses that workspace and closes the sheet. The wheel
-  over the piece steps to the previous or next workspace, open or not.
+  over the piece steps to the previous or next workspace, open or not
+  (while the list is open, the wheel over its subtitle, §4.3).
 - Copy: the overview's existing empty-workspace word, renamed
   `copy::WORKSPACE_EMPTY` and shared by both.
 
 ## 5. Delivery
 
-Four entries, one landing each, in order; each needs its predecessor.
+Four entries, one landing each, in order; each needs its predecessor. The
+two amendments after the live tests follow them, `CEL-D-008` stacked on
+`CEL-D-007`.
 
 | Entry | Delivers |
 |---|---|
@@ -211,6 +234,8 @@ Four entries, one landing each, in order; each needs its predecessor.
 | `CEL-D-003` | Brightness, the session menu and every page-backed piece move into sheets; the level and session `xdg_popup` paths are removed |
 | `CEL-D-004` | The centre capsule with time, date and weather; the default layout's centre empties |
 | `CEL-D-005` | The workspaces list sheet and the wheel on the workspaces piece |
+| `CEL-D-007` | Full opacity around an open sheet and one travelling pill (amendment of 2026-11-26) |
+| `CEL-D-008` | The capsule that never narrows, the slot that closes, the piece that flies down as the subtitle; the sheet stops cutting the row, and the painter keeps its progressive blur for later (amendment of 2026-11-26; [plan](../plans/2026-11-26-celestina-cel-d-008-plan.md)) |
 
 Nothing else is in flight in `osd/popup.rs` or `session_menu` (the
 coordinating session dropped `CEL-I-010` and `CEL-I-011`), so `CEL-D-002`
@@ -241,7 +266,8 @@ spike's diff.
   `SessionCore` lose their own card (a variant without `.haze`/size, or a
   wrapper).
 - The scroll container's API in `celestina-ui`.
-- How the spotlight is painted (gradients, box gradient, or one blurred
-  image), as long as it matches §4.4.
-- Caching of the blurred row while the window moves.
+- How the open piece leaves its capsule (a node out of the view or one
+  that keeps a zero-width slot), as long as no gap stays and the sheet's
+  anchor keeps the slot's centre.
+- Where a piece declares what its subtitle shows (its icon and text).
 - Whether the Island page and a page-backed sheet share one container.

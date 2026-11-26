@@ -12,7 +12,7 @@
   2026-11-25; on 2026-11-25 too, the previews of the session menu,
   the icon tabs and the per-app mute button (variant A of each); on
   2026-11-25 as well, the capsule sheets preview (version 7) and design for
-  CEL-D-002 to CEL-D-005
+  CEL-D-002 to CEL-D-005; on 2026-11-26, the preview of CEL-D-007 (O1 and P1)
 - **Scope:** suite
 - **Implementation checkpoint:** TRK-1
 - **Author-validation checkpoint:** none
@@ -61,5 +61,6 @@ tracks.
 | CEL-TRACKS-DOCS-2 | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-2.numstat.tsv) | 6 files, +223/-3 | Record the audio entry's revisions (collapsible sections, the speaker mute button) in its design and add the session menu's task plan | [evidence](../../evidence/2026-11-25-cel-tracks-docs-2.md) | None |
 | CEL-TRACKS-DOCS-3 | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-3.numstat.tsv) | 6 files, +1151/-2 | Add the capsule sheets design and its task plan for CEL-D-002 to CEL-D-005, which supersede §6.2 to §6.5 of the standing-tracks design | [evidence](../../evidence/2026-11-25-cel-tracks-docs-3.md) | None |
 | CEL-TRACKS-DOCS-4 | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-4.numstat.tsv) | 5 files, +68/-8 | Replace the spotlight of the capsule sheets design with the focus indicator the author approved, and add Task B5 to its plan | [evidence](../../evidence/2026-11-25-cel-tracks-docs-4.md) | None |
+| CEL-TRACKS-DOCS-5 | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-5.numstat.tsv) | 5 files, +214/-47 | Update the capsule sheets design to the author's two requests of 2026-11-26 (full opacity around the open sheet, CEL-D-007; the capsule that never narrows, with the open piece flying down as the menu's subtitle, CEL-D-008) and add the CEL-D-008 plan | [evidence](../../evidence/2026-11-26-cel-tracks-docs-5.md) | None |
 
 This plan records intent; it grants no authority.
