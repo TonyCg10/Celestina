@@ -1,11 +1,12 @@
 //! The clocks of a capsule menu window: the rect's flights (grow from the
-//! pill, fold into it, a resize at rest), its corner radius and the body's
-//! opacity. Pure: every method takes the instant, nothing reads a clock.
+//! pill, a resize at rest, the close that blurs it out towards its piece),
+//! its corner radius, the opacities of its glass and body and the close's
+//! blur. Pure: every method takes the instant, nothing reads a clock.
 
 use std::time::{Duration, Instant};
 
 use celestina_paint::{MotionMs, Rect, Theme};
-use celestina_ui::{Easing, Motion, EXIT, ONE_UI};
+use celestina_ui::{Easing, Motion, LINEAR, ONE_UI};
 
 /// Which flight the rect is on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,7 +15,17 @@ enum Kind {
     Close,
 }
 
-/// The window's rect, radius and body opacity over time.
+/// The close's duration.
+const CLOSE_MS: u64 = 260;
+/// The blur a close reaches, in logical px.
+const CLOSE_BLUR_PX: f32 = 12.0;
+/// How much of the way to the slot's pill the rect and radius go.
+const CLOSE_SHRINK: f32 = 0.7;
+/// A closing window's glass below this opacity leaves the compositor's blur
+/// region (the backdrop blur cannot fade).
+pub const BLUR_REGION_MIN_GLASS: f32 = 0.35;
+
+/// The window's rect, radius and opacities over time.
 #[derive(Clone, Debug)]
 pub struct SheetMotion {
     kind: Kind,
@@ -81,16 +92,19 @@ impl SheetMotion {
         overshoot: f32,
         reduced: bool,
     ) -> SheetMotion {
-        let (step, easing) = match kind {
-            Kind::Close => (Motion::Exit, Easing::Bezier(EXIT)),
-            Kind::Open => (Motion::Slow, Easing::OutBack(overshoot)),
+        let (duration, easing) = match kind {
+            Kind::Close => (
+                Duration::from_millis(CLOSE_MS.min(u64::from(ladder.ceiling))),
+                Easing::Bezier(LINEAR),
+            ),
+            Kind::Open => (Motion::Slow.duration(&ladder), Easing::OutBack(overshoot)),
         };
         SheetMotion {
             kind,
             from,
             radius,
             start: now,
-            duration: step.duration(&ladder),
+            duration,
             easing,
             resize: None,
             ladder,
@@ -123,8 +137,8 @@ impl SheetMotion {
         self.resize = Some((shown, now));
     }
 
-    /// The window folds into `pill` (its piece's live slot; only its height
-    /// counts here, for the end radius), from `shown`.
+    /// The window closes towards `pill` (its piece's live slot; only its
+    /// height counts here, for the end radius), from `shown`.
     pub fn close(&mut self, shown: Rect, pill: Rect, now: Instant) {
         if self.kind == Kind::Close {
             return;
@@ -168,11 +182,18 @@ impl SheetMotion {
     /// target while it grows, the piece's pill while it folds. The OutBack
     /// overshoot is cut to `surface`.
     pub fn rect(&self, now: Instant, to: Rect, surface: (f32, f32)) -> Rect {
-        let rect = if self.reduced {
+        let rect = if self.kind == Kind::Close {
+            let k = if self.reduced {
+                0.0
+            } else {
+                self.close_factor(now)
+            };
+            lerp_rect(self.from, to, k)
+        } else if self.reduced {
             to
         } else if self.flying(now) {
             lerp_rect(self.from, to, self.easing.eval(self.fraction(now)))
-        } else if let Some((from, start)) = self.resize.filter(|_| self.kind != Kind::Close) {
+        } else if let Some((from, start)) = self.resize {
             match self.resize_fraction(start, now) {
                 Some(x) => lerp_rect(from, to, ONE_UI.eval(x)),
                 None => to,
@@ -188,7 +209,13 @@ impl SheetMotion {
     /// OutBack overshoot never takes it past either end.
     pub fn radius(&self, now: Instant) -> f32 {
         let (from, to) = self.radius;
-        let k = if self.reduced || !self.flying(now) {
+        let k = if self.kind == Kind::Close {
+            if self.reduced {
+                0.0
+            } else {
+                self.close_factor(now)
+            }
+        } else if self.reduced || !self.flying(now) {
             1.0
         } else {
             self.easing.eval(self.fraction(now))
@@ -197,26 +224,61 @@ impl SheetMotion {
         r.clamp(from.min(to), from.max(to))
     }
 
-    /// The body's opacity: fades in over the last 65 % of an open, out over
-    /// the first 60 % of a close (the window being left in a switch folds, so
-    /// it fades this way too).
+    /// The close's way towards the slot's pill, 0..=0.7: the rect and the
+    /// radius go this far.
+    fn close_factor(&self, now: Instant) -> f32 {
+        let t = self.fraction(now);
+        CLOSE_SHRINK * (1.0 - (1.0 - t) * (1.0 - t))
+    }
+
+    /// The body's opacity: fades in over the last 65 % of an open, and out
+    /// as `1 - (t / 0.8)^1.4` over a close (the window being left in a
+    /// switch closes the same way).
     pub fn body_opacity(&self, now: Instant) -> f32 {
         let t = self.fraction(now);
         match self.kind {
             Kind::Open => ((t - 0.35) / 0.65).clamp(0.0, 1.0),
-            Kind::Close => (1.0 - t / 0.6).clamp(0.0, 1.0),
+            Kind::Close => (1.0 - (t / 0.8).min(1.0).powf(1.4)).clamp(0.0, 1.0),
         }
     }
 
     /// The glass's opacity: whole while the window grows or stays, and
-    /// fading over the last 15 % of a fold, so the pill it folds into gives
-    /// way to the piece that comes back to the slot.
+    /// `1 - t^1.6` over a close.
     pub fn glass_opacity(&self, now: Instant) -> f32 {
         match self.kind {
             Kind::Open => 1.0,
-            Kind::Close if self.reduced => 0.0,
-            Kind::Close => ((1.0 - self.fraction(now)) / 0.15).clamp(0.0, 1.0),
+            Kind::Close => (1.0 - self.fraction(now).powf(1.6)).clamp(0.0, 1.0),
         }
+    }
+
+    /// The blur over glass and content together, in logical px: none while
+    /// the window is open or at rest, `12 * min(1, t / 0.6)^0.7` over a
+    /// close, none under reduced motion.
+    #[must_use]
+    pub fn blur_px(&self, now: Instant) -> f32 {
+        if self.kind != Kind::Close || self.reduced {
+            return 0.0;
+        }
+        CLOSE_BLUR_PX * (self.fraction(now) / 0.6).min(1.0).powf(0.7)
+    }
+
+    /// Whether the compositor's blur still covers the window: always but
+    /// for a close whose glass has faded below [`BLUR_REGION_MIN_GLASS`].
+    #[must_use]
+    pub fn blur_region(&self, now: Instant) -> bool {
+        self.kind != Kind::Close || self.glass_opacity(now) >= BLUR_REGION_MIN_GLASS
+    }
+
+    /// Where the flight started: the window as it was shown, for a close.
+    #[must_use]
+    pub fn start_rect(&self) -> Rect {
+        self.from
+    }
+
+    /// The corner radius the flight started from: the window's, for a close.
+    #[must_use]
+    pub fn start_radius(&self) -> f32 {
+        self.radius.0
     }
 
     /// The duration ladder the flights run on.
@@ -241,9 +303,9 @@ impl SheetMotion {
         self.kind == Kind::Close
     }
 
-    /// The close flight has ended (at once under reduced motion).
+    /// The close flight has ended.
     pub fn closed(&self, now: Instant) -> bool {
-        self.kind == Kind::Close && (self.reduced || !self.flying(now))
+        self.kind == Kind::Close && !self.flying(now)
     }
 
     /// Whether a clock is still running and the surface needs a frame.
@@ -261,33 +323,6 @@ impl SheetMotion {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn the_glass_fades_over_the_last_15_percent_of_a_fold() {
-        let theme = Theme::dark();
-        let t0 = Instant::now();
-        let pill = Rect {
-            x: 100.0,
-            y: 14.0,
-            w: 28.0,
-            h: 28.0,
-        };
-        let mut m = SheetMotion::open(pill, &theme, t0, false);
-        assert_eq!(m.glass_opacity(t0), 1.0);
-        let shown = Rect {
-            x: 60.0,
-            y: 56.0,
-            w: 300.0,
-            h: 200.0,
-        };
-        m.close(shown, pill, t0);
-        let exit = Motion::Exit.duration(&theme.motion);
-        let at = |f: f32| t0 + exit.mul_f32(f);
-        assert_eq!(m.glass_opacity(at(0.5)), 1.0);
-        assert_eq!(m.glass_opacity(at(0.85)), 1.0);
-        assert!((m.glass_opacity(at(0.925)) - 0.5).abs() < 0.02);
-        assert_eq!(m.glass_opacity(at(1.0)), 0.0);
-    }
 
     const SURFACE: (f32, f32) = (1920.0, 560.0);
 
@@ -374,30 +409,102 @@ mod tests {
         assert!(near(m.body_opacity(ms(t0, 350.0)), 1.0));
     }
 
-    #[test]
-    fn closing_folds_into_the_live_slot_in_150_ms() {
-        let t0 = Instant::now();
+    fn closing(t0: Instant) -> (SheetMotion, Rect, Instant) {
         let mut m = opened(t0);
         let done = ms(t0, 400.0);
         let slot = r(1000.0, 14.0, 28.0, 28.0);
         m.close(target(), slot, done);
+        (m, slot, done)
+    }
+
+    #[test]
+    fn closing_blurs_fades_and_shrinks_towards_the_slot() {
+        let t0 = Instant::now();
+        let (m, slot, done) = closing(t0);
         assert!(m.is_closing());
-        assert!(!m.closed(ms(done, 149.0)));
-        assert!(m.closed(ms(done, 150.0)));
-        assert_eq!(m.rect(done, slot, SURFACE), target());
-        assert_eq!(m.rect(ms(done, 150.0), slot, SURFACE), slot);
-        // The end is live: a slot that moved is where it lands.
+        assert!(!m.closed(ms(done, 259.0)));
+        assert!(m.closed(ms(done, 260.0)));
+        let large = Theme::dark().radius_lg;
+        for f in [0.0f32, 0.3, 0.6, 1.0] {
+            let at = ms(done, 260.0 * f);
+            let k = 0.7 * (1.0 - (1.0 - f) * (1.0 - f));
+            let blur = 12.0 * (f / 0.6).min(1.0).powf(0.7);
+            let body = (1.0 - (f / 0.8).min(1.0).powf(1.4)).max(0.0);
+            let glass = 1.0 - f.powf(1.6);
+            assert!(near(m.blur_px(at), blur), "blur at {f}");
+            assert!(near(m.body_opacity(at), body), "body at {f}");
+            assert!(near(m.glass_opacity(at), glass), "glass at {f}");
+            assert!(
+                near_rect(m.rect(at, slot, SURFACE), lerp_rect(target(), slot, k)),
+                "rect at {f}"
+            );
+            assert!(near(m.radius(at), lerp(large, 14.0, k)), "radius at {f}");
+        }
+        // Whole at the first frame, gone at the last.
+        assert!(near(m.blur_px(done), 0.0));
+        assert!(near(m.body_opacity(done), 1.0) && near(m.glass_opacity(done), 1.0));
+        assert!(near(m.blur_px(ms(done, 156.0)), 12.0));
+        assert!(near(m.blur_px(ms(done, 260.0)), 12.0));
+        assert!(near(m.body_opacity(ms(done, 260.0)), 0.0));
+        assert!(near(m.glass_opacity(ms(done, 260.0)), 0.0));
+        // The end is live: a slot that moved is where it heads.
         let moved = r(1010.0, 14.0, 40.0, 28.0);
-        assert_eq!(m.rect(ms(done, 150.0), moved, SURFACE), moved);
-        assert!(m.wants_frame(ms(done, 100.0)));
-        assert!(!m.wants_frame(ms(done, 150.0)));
-        // The radius folds from the window's to the pill's.
-        assert!(near(m.radius(done), Theme::dark().radius_lg));
-        assert!(near(m.radius(ms(done, 150.0)), 14.0));
-        // The body fades out over the first 60 %.
-        assert!(near(m.body_opacity(done), 1.0));
-        assert!(near(m.body_opacity(ms(done, 45.0)), 0.5));
-        assert!(near(m.body_opacity(ms(done, 90.0)), 0.0));
+        let k = 0.7 * (1.0 - 0.5 * 0.5);
+        assert!(near_rect(
+            m.rect(ms(done, 130.0), moved, SURFACE),
+            lerp_rect(target(), moved, k)
+        ));
+    }
+
+    #[test]
+    fn a_switch_closes_the_old_window_the_same_way() {
+        // The window being left is closed by `Sheets::open` with the very
+        // same call; its clocks are the close's.
+        let t0 = Instant::now();
+        let (m, slot, done) = closing(t0);
+        let mut left = opened(t0);
+        left.close(target(), slot, done);
+        for n in [0.0, 78.0, 156.0, 208.0, 260.0] {
+            let at = ms(done, n);
+            assert_eq!(left.blur_px(at), m.blur_px(at));
+            assert_eq!(left.glass_opacity(at), m.glass_opacity(at));
+            assert_eq!(left.body_opacity(at), m.body_opacity(at));
+            assert_eq!(left.rect(at, slot, SURFACE), m.rect(at, slot, SURFACE));
+        }
+    }
+
+    #[test]
+    fn the_blur_region_leaves_below_35_percent_glass() {
+        let t0 = Instant::now();
+        let (m, _, done) = closing(t0);
+        // 1 - t^1.6 = 0.35 at t = 0.65^(1/1.6), about 0.764.
+        assert!(m.blur_region(done));
+        assert!(m.blur_region(ms(done, 260.0 * 0.76)));
+        assert!(!m.blur_region(ms(done, 260.0 * 0.77)));
+        assert!(!m.blur_region(ms(done, 260.0)));
+        // An open window keeps it.
+        assert!(opened(t0).blur_region(t0));
+    }
+
+    #[test]
+    fn closing_in_mid_open_starts_from_the_shown_rect() {
+        let t0 = Instant::now();
+        let mut m = opened(t0);
+        let mid = ms(t0, 100.0);
+        let shown = m.rect(mid, target(), SURFACE);
+        m.close(shown, pill(), mid);
+        assert_eq!(m.rect(mid, pill(), SURFACE), shown);
+        assert_eq!(m.start_rect(), shown);
+    }
+
+    #[test]
+    fn no_frame_is_asked_after_a_close() {
+        let t0 = Instant::now();
+        let (m, slot, done) = closing(t0);
+        assert!(m.wants_frame(ms(done, 259.0)));
+        assert!(!m.wants_frame(ms(done, 260.0)));
+        let end = lerp_rect(target(), slot, 0.7);
+        assert!(near_rect(m.rect(ms(done, 900.0), slot, SURFACE), end));
     }
 
     #[test]
@@ -456,10 +563,33 @@ mod tests {
         assert_eq!(m.rect(done, taller, SURFACE), taller);
         let slot = r(1000.0, 14.0, 28.0, 28.0);
         m.close(taller, slot, done);
-        assert_eq!(m.rect(done, slot, SURFACE), slot);
-        assert!(near(m.radius(done), 14.0));
-        assert!(m.closed(done));
-        assert!(near(m.body_opacity(ms(done, 45.0)), 0.5), "it still fades");
+        assert!(m.closed(ms(done, 260.0)));
+        assert!(!m.closed(ms(done, 100.0)), "the opacities still fade");
+    }
+
+    #[test]
+    fn reduced_motion_closes_by_fading_only() {
+        let t0 = Instant::now();
+        let mut m = SheetMotion::open(pill(), &Theme::dark(), t0, true);
+        let done = ms(t0, 400.0);
+        let slot = r(1000.0, 14.0, 28.0, 28.0);
+        m.close(target(), slot, done);
+        for n in [0.0, 78.0, 156.0, 260.0] {
+            let at = ms(done, n);
+            assert_eq!(m.blur_px(at), 0.0, "no blur");
+            assert_eq!(m.rect(at, slot, SURFACE), target(), "no shrink");
+            assert!(near(m.radius(at), Theme::dark().radius_lg));
+        }
+        assert!(near(
+            m.glass_opacity(ms(done, 130.0)),
+            1.0 - 0.5f32.powf(1.6)
+        ));
+        assert!(near(
+            m.body_opacity(ms(done, 104.0)),
+            1.0 - 0.5f32.powf(1.4)
+        ));
+        assert!(m.wants_frame(ms(done, 130.0)));
+        assert!(!m.wants_frame(ms(done, 260.0)));
     }
 
     #[test]

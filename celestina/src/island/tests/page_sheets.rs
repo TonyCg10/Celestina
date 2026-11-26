@@ -818,11 +818,16 @@ fn a_polkit_prompt_holds_the_keyboard_from_the_island() {
     );
 }
 
-/// The bar's node under the pointer, and the pieces nobody paints in the row.
-fn hovered_and_hidden(island: &Island, now: Instant) -> (Option<Key>, Vec<Key>) {
+/// The bar's node under the pointer, and the pieces out of the row.
+fn hovered_and_hidden(island: &Island) -> (Option<Key>, Vec<Key>) {
     (
         island.bar.as_ref().and_then(|b| b.hovered_key()),
-        island.sheets.hidden_pieces(now),
+        island
+            .bar
+            .as_ref()
+            .and_then(|b| b.lifted())
+            .into_iter()
+            .collect(),
     )
 }
 
@@ -847,7 +852,7 @@ fn network_open() -> (Island, Instant, Key, Key) {
 #[test]
 fn the_open_piece_is_out_of_the_row_and_the_others_keep_their_hover() {
     let (mut island, t, network, bluetooth) = network_open();
-    assert_eq!(island.sheets.hidden_pieces(t), vec![network]);
+    assert_eq!(island.sheets.piece(), Some(network));
     assert_eq!(
         island.bar.as_ref().and_then(|b| b.lifted()),
         Some(network),
@@ -861,7 +866,7 @@ fn the_open_piece_is_out_of_the_row_and_the_others_keep_their_hover() {
         InputEvent::PointerMotion { x: at.0, y: at.1 },
         t,
     );
-    let (hovered, hidden) = hovered_and_hidden(&island, t);
+    let (hovered, hidden) = hovered_and_hidden(&island);
     assert_eq!(hovered, Some(bluetooth));
     assert!(hovered.is_some_and(|h| !hidden.contains(&h)));
 }
@@ -878,8 +883,8 @@ fn switching_lands_the_old_piece_and_lifts_the_new_one() {
     feed(&mut island, press(at.0, at.1, BTN_LEFT), t);
     feed(&mut island, release(at.0, at.1, BTN_LEFT), t);
     assert_eq!(island.sheets.page(), Some(PageId::BLUETOOTH));
-    // At once the new piece is the one nobody paints.
-    assert!(island.sheets.hidden_pieces(t).contains(&bluetooth));
+    // At once the new piece is the one the sheet is open on.
+    assert_eq!(island.sheets.piece(), Some(bluetooth));
     let later = t + ms(400);
     step(&mut island, later);
     let bar = island.bar.as_ref();
@@ -895,8 +900,13 @@ fn after_close_the_piece_lands_and_shows_its_hover_again() {
     let (mut island, t, network, _bluetooth) = network_open();
     island.close_sheet(t);
     assert!(!island.sheets.is_open());
-    // On its way out the sheet still hides the piece; the slot is open.
-    assert!(island.sheets.hidden_pieces(t + ms(10)).contains(&network));
+    // On its way out the piece is already coming back, and its slot opens.
+    step(&mut island, t + ms(10));
+    let back = island
+        .bar
+        .as_ref()
+        .and_then(|b| b.fade_of(network, t + ms(10)));
+    assert!(back.is_some_and(|(k, ..)| k < 1.0));
     let t = t + ms(400);
     step(&mut island, t);
     assert_eq!(island.bar.as_ref().and_then(|b| b.lifted()), None);
@@ -907,7 +917,7 @@ fn after_close_the_piece_lands_and_shows_its_hover_again() {
         t,
     );
     // Gone: nothing is hidden and the pointer's hover paints as ever.
-    assert_eq!(hovered_and_hidden(&island, t), (Some(network), Vec::new()));
+    assert_eq!(hovered_and_hidden(&island), (Some(network), Vec::new()));
 }
 
 /// The sheet's content box, as the body shows it.

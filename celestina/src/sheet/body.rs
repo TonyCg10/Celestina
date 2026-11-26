@@ -322,14 +322,13 @@ impl SheetBody {
         }
     }
 
-    /// Paints the body at its own coordinates (the caller translates), but
-    /// for the nodes `hidden` (the subtitle's icon and text while they fly).
-    pub fn paint(&mut self, painter: &mut Painter, now: Instant, hidden: &[Key]) {
+    /// Paints the body at its own coordinates (the caller translates).
+    pub fn paint(&mut self, painter: &mut Painter, now: Instant) {
         match self {
-            SheetBody::Level(core) => core.paint(painter, now, hidden),
-            SheetBody::Session(core) => core.paint(painter, now, hidden),
-            SheetBody::Page(body) => body.tree.paint_hiding(painter, now, hidden),
-            SheetBody::Workspaces(body) => body.tree.paint_hiding(painter, now, hidden),
+            SheetBody::Level(core) => core.paint(painter, now),
+            SheetBody::Session(core) => core.paint(painter, now),
+            SheetBody::Page(body) => body.tree.paint(painter, now),
+            SheetBody::Workspaces(body) => body.tree.paint(painter, now),
         }
     }
 

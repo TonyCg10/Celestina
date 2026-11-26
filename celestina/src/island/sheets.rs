@@ -1,7 +1,7 @@
 //! The Island's side of the capsule menus (CEL-D-002, CEL-D-009): the
 //! open-window owner [`Sheets`] wired to the bar, the page and the input. At
 //! most one of three things is shown: nothing, the Island's page, or one
-//! capsule window (and, for 150 ms of a switch, the one it folds away); a
+//! capsule window (and, for 260 ms of a switch, the one it closes towards its piece); a
 //! closing one still counts as shown, so a request that comes while another
 //! thing is shown closes it and waits for it to go (`Sheets::queue`).
 
@@ -99,30 +99,10 @@ impl Island {
         } else {
             // A page sheet switched away from takes its state with it.
             self.page_sheet_ends();
-            let piece = request.piece;
             self.sheets
                 .open(request, &anchor, &self.theme, now, self.reduced);
-            self.start_flight(piece, now);
         }
         true
-    }
-
-    /// The icon and text of `piece` start to fly from the bar to the
-    /// subtitle of the sheet that just opened on it (none under reduced
-    /// motion; a piece with no icon in the bar flies nothing).
-    fn start_flight(&mut self, piece: Key, now: Instant) {
-        if self.reduced {
-            return;
-        }
-        let text = self.sheets.subtitle_text();
-        let Some((keys, from)) = self
-            .bar
-            .as_ref()
-            .and_then(|bar| bar.flyers_of(piece, text.as_deref(), now))
-        else {
-            return;
-        };
-        self.sheets.fly_down(keys, from, now);
     }
 
     /// Whether a level sheet is open or waits to open.
@@ -199,7 +179,7 @@ impl Island {
 
     /// The anchor of the window held: its capsule and the piece's pill as the
     /// bar has them, else the last it knew (a piece that vanished: the window
-    /// folds into the last pill it had).
+    /// closes towards the last pill it had).
     pub(super) fn sheet_anchor(&self, now: Instant) -> Option<Anchor> {
         let (zone, piece) = self.sheets.anchor_ids()?;
         self.live_anchor(zone, piece, now)
@@ -348,7 +328,7 @@ impl Island {
     }
 
     /// The frame's first part for the sheets: opens what was waiting for the
-    /// close to end, and syncs the body (readings, a new theme, a fold) with
+    /// close to end, and syncs the body (readings, a new theme, a resize) with
     /// the frame's own `measure`.
     pub(super) fn sheets_before_layout(&mut self, now: Instant, measure: &mut Measure<'_>) {
         self.open_what_waited(now);
@@ -383,15 +363,13 @@ impl Island {
         if matches!(request.kind, SheetKind::Page(_) | SheetKind::Workspaces) {
             self.stale = true;
         }
-        let piece = request.piece;
         self.sheets
             .open(request, &anchor, &self.theme, now, self.reduced);
-        self.start_flight(piece, now);
     }
 
     /// The frame's part after the layout: the window follows its capsule and
     /// piece, and closes on its exit motion when either is gone; the window
-    /// being left folds into its piece's pill as the bar has it.
+    /// being left closes towards its piece's pill as the bar has it.
     pub(super) fn sheets_after_layout(&mut self, now: Instant) {
         for piece in self.sheets.leaving_pieces(now) {
             if let Some(pill) = self.bar.as_ref().and_then(|bar| bar.pill_of(piece, now)) {
@@ -427,26 +405,6 @@ impl Island {
             return;
         };
         self.sheets.paint(painter, &anchor, now);
-    }
-
-    /// Paints the flyers (the icons and texts of the pieces on their way
-    /// between the bar and a sheet's subtitle) over everything.
-    pub(super) fn paint_flights(&mut self, painter: &mut Painter, now: Instant) {
-        if !self.sheets.is_flying(now) {
-            return;
-        }
-        self.sheets.paint_flights(painter, self.dpr, now);
-    }
-
-    /// Points the flyers at their live ends: the subtitle, or the piece's
-    /// place in the bar.
-    pub(super) fn resolve_flights(&mut self, now: Instant) {
-        let anchor = self.sheet_anchor(now);
-        let bar = self.bar.as_ref();
-        self.sheets
-            .resolve_flights(anchor.as_ref(), now, &mut |keys| {
-                bar.and_then(|bar| bar.parts_at(keys, now))
-            });
     }
 
     /// Escape and the keyboard leaving drop what waited behind a closing
@@ -556,6 +514,11 @@ impl Island {
                     }
                     Hit::Outside => {
                         self.sheets.leave_body(now, measure);
+                        // A window still painted as it closes in a switch
+                        // takes nothing and closes nothing.
+                        if press && self.sheets.on_leaving(anchor.surface, now, x, y) {
+                            return Some(Vec::new());
+                        }
                         if press {
                             let on_bar = self.on_bar(x, y, now);
                             let on_island = self.state.rect(now, self.size.0).contains(x, y);

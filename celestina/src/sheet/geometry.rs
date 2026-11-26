@@ -100,7 +100,7 @@ pub fn window(capsule: Rect, edge: Edge, body: (f32, f32), surface: (f32, f32)) 
     }
 }
 
-/// The pill a window grows from and folds into: the piece's rect in the bar
+/// The pill a window grows from and closes towards: the piece's rect in the bar
 /// (its corner radius is half its height).
 pub fn pill(piece: Rect) -> Rect {
     sane(piece)

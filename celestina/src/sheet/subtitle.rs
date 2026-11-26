@@ -1,5 +1,6 @@
 //! The subtitle row at the top of every sheet body (CEL-D-008): the open
-//! piece's icon and text, which stay where the piece flew to. The row is
+//! piece's icon and text, which show with the body and leave with the
+//! window (the piece itself crossfades in the bar, CEL-D-010). The row is
 //! built from the piece's [`Face`], so the text is the string the piece's bar
 //! view shows; a piece without text gives the menu's name instead.
 
@@ -24,13 +25,13 @@ pub fn row_key() -> Key {
     Key::named("sheet-subtitle")
 }
 
-/// The icon (the flight of the piece's icon lands on its rect).
+/// The icon.
 #[must_use]
 pub fn icon_key() -> Key {
     Key::named("sheet-subtitle-icon")
 }
 
-/// The text (the flight of the piece's text lands on its rect).
+/// The text.
 #[must_use]
 pub fn text_key() -> Key {
     Key::named("sheet-subtitle-text")

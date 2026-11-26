@@ -21,6 +21,7 @@ pub mod clock;
 pub mod menu;
 mod page_sheets;
 pub mod pages;
+mod piece_fade;
 mod sheets;
 pub mod state;
 pub mod view;
@@ -1174,12 +1175,8 @@ impl Island {
         let rect = self.state.rect(now, self.size.0);
         let radius = self.theme.radius_lg;
         painter.begin(self.size, self.dpr, blur_available);
-        // The flyers' ends first: what the sheet and the bar hide while they
-        // fly depends on what both ends carry.
-        self.resolve_flights(now);
-        let hidden = self.sheets.hidden_pieces(now);
         if let Some(bar) = self.bar.as_mut() {
-            bar.paint(painter, now, &hidden);
+            bar.paint(painter, now);
         }
         painter.haze(rect, radius);
         painter.push_clip(rect, radius);
@@ -1197,7 +1194,6 @@ impl Island {
         }
         painter.pop_clip();
         self.paint_sheet(painter, now);
-        self.paint_flights(painter, now);
         painter.end();
     }
 
@@ -2955,7 +2951,7 @@ mod tests {
             island.sheets.kind(),
             Some(crate::pieces::SheetKind::Workspaces)
         );
-        let at = flight::subtitle_point(&island, t);
+        let at = subtitle_gestures::subtitle_point(&island, t);
         let wheel = |vertical: f32| InputEvent::Axis {
             x: at.0,
             y: at.1,
@@ -5681,14 +5677,14 @@ mod tests {
         let before = shown_rect(&island, t0);
         let core = volume_core(&island.theme);
         assert!(island.open_level_sheet_at(brightness_key(), core, t0));
-        for t in [0, 10, 60, 120, 200, 400] {
+        for t in [0, 10, 60, 120, 200, 259, 260, 400] {
             let now = t0 + ms(t);
             step(&mut island, now);
             assert!(island.sheets.is_open(), "open at +{t} ms");
             assert!(!island.state.is_open());
-            // The old window folds into its piece in 150 ms while the new
-            // one grows.
-            assert_eq!(island.sheets.is_leaving(), t < 150, "leaving at +{t} ms");
+            // The old window closes towards its piece in 260 ms while the
+            // new one grows.
+            assert_eq!(island.sheets.is_leaving(), t < 260, "leaving at +{t} ms");
         }
         assert_eq!(island.sheets.piece(), Some(brightness_key()));
         // The rect started from where it was.
@@ -5714,8 +5710,8 @@ mod tests {
         );
         assert!(!island.sheets.is_open(), "closing");
         assert!(island.sheets.is_shown(t0 + ms(10)), "still painted");
-        step(&mut island, t0 + ms(160));
-        assert!(island.sheet_rect(t0 + ms(160)).is_none(), "gone");
+        step(&mut island, t0 + ms(260));
+        assert!(island.sheet_rect(t0 + ms(260)).is_none(), "gone");
     }
 
     #[test]
@@ -5828,10 +5824,10 @@ mod tests {
         assert!(island.sheets.has_queued());
         step(&mut island, t0 + ms(100));
         assert!(!island.state.is_open(), "still closing at +100 ms");
-        step(&mut island, t0 + ms(150));
-        assert!(island.state.is_open(), "the page opens at +150 ms");
+        step(&mut island, t0 + ms(260));
+        assert!(island.state.is_open(), "the page opens at +260 ms");
         assert_eq!(island.page(), Some(PageId::CLOCK), "the clock page");
-        assert!(!island.sheets.is_shown(t0 + ms(150)));
+        assert!(!island.sheets.is_shown(t0 + ms(260)));
     }
 
     #[test]
@@ -5870,8 +5866,8 @@ mod tests {
         let (mut island, t0) = settled();
         assert!(island.command_at(&Verb::IslandClose, t0));
         assert!(!island.sheets.is_open());
-        step(&mut island, t0 + ms(200));
-        assert!(!island.sheets.is_shown(t0 + ms(200)));
+        step(&mut island, t0 + ms(260));
+        assert!(!island.sheets.is_shown(t0 + ms(260)));
 
         let (mut island, t0) = settled();
         assert!(island.command_at(&Verb::IslandToggle, t0));
@@ -5882,7 +5878,7 @@ mod tests {
         assert!(island.command_at(&Verb::IslandOpen(PageId::ACTIVITY), t0));
         assert!(!island.state.is_open(), "the sheet closes first");
         assert!(!island.sheets.is_open());
-        step(&mut island, t0 + ms(150));
+        step(&mut island, t0 + ms(260));
         assert_eq!(island.page(), Some(PageId::ACTIVITY));
         // Toggle with nothing open opens the last page.
         step(&mut island, t0 + ms(800));
@@ -6040,7 +6036,7 @@ mod tests {
         );
         // Closed again: today's regions.
         island.close_sheet(t);
-        let gone = t + ms(200);
+        let gone = t + ms(260);
         step(&mut island, gone);
         assert!(!island.anything_shown(gone));
         // The piece lands and the capsule widens back with its slot.
@@ -6176,9 +6172,9 @@ mod tests {
         // It flies to the last capsule rect it had and is gone.
         let r = shown_rect(&island, t + ms(75));
         assert!(r.w > 0.0);
-        step(&mut island, t + ms(200));
-        assert!(island.sheet_rect(t + ms(200)).is_none());
-        assert!(!island.sheets.is_shown(t + ms(200)));
+        step(&mut island, t + ms(260));
+        assert!(island.sheet_rect(t + ms(260)).is_none());
+        assert!(!island.sheets.is_shown(t + ms(260)));
     }
 
     #[test]
@@ -6362,9 +6358,13 @@ mod tests {
         assert!(open_on(&mut island, volume(), t0));
         let at = centre(island.state.rect(t0, island.size.0));
         assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
-        assert!(!island.sheets.is_shown(t0), "the sheet is gone at once");
-        step(&mut island, t0);
-        assert!(island.state.is_open(), "the page opens on the same instant");
+        // The window fades out (nothing flies), and what waited opens once
+        // it has.
+        assert!(island.sheets.is_shown(t0 + ms(1)), "it still fades");
+        let done = t0 + ms(260);
+        step(&mut island, done);
+        assert!(!island.sheets.is_shown(done));
+        assert!(island.state.is_open(), "the page opens when it has faded");
     }
 
     #[test]
@@ -6443,7 +6443,8 @@ mod tests {
         assert!(island.sheets.is_open() && !island.state.is_open());
     }
 
-    mod flight;
+    mod crossfade;
     mod page_sheets;
+    mod subtitle_gestures;
     mod window;
 }

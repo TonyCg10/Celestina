@@ -207,6 +207,40 @@ pub struct CutRow {
     pub cuts: Cuts,
 }
 
+/// The least blur, in buffer px, worth an offscreen layer.
+const MIN_BLUR_PX: f32 = 0.5;
+/// The strongest blur femtovg's Gaussian filter takes exactly, in buffer px:
+/// it clamps the sigma there and samples about 3 sigma of taps.
+const MAX_TAP_SIGMA_PX: f32 = 8.0;
+
+/// How a blur of `sigma_px` buffer px is drawn: the layer at `1 / k` of the
+/// resolution, blurred by the returned sigma (in the layer's px, at most
+/// [`MAX_TAP_SIGMA_PX`]), which comes to `sigma_px` once scaled back up.
+fn blur_plan(sigma_px: f32) -> (u32, f32) {
+    let k = (sigma_px / MAX_TAP_SIGMA_PX).ceil().max(1.0);
+    (k as u32, sigma_px / k)
+}
+
+/// The pixel size of the offscreen layer of `rect` at `dpr` and the logical
+/// position of its first pixel, or `None` when `rect` is empty, not finite or
+/// beyond the GPU's `max_side`.
+fn layer_px(rect: Rect, dpr: f32, max_side: u32) -> Option<(u32, u32, (f32, f32))> {
+    let side = |len: f32, at: f32| {
+        if len <= 0.0 {
+            return None;
+        }
+        let origin = (at * dpr).floor();
+        let px = ((at + len) * dpr).ceil() - origin;
+        (px.is_finite() && px >= 1.0 && px <= max_side as f32).then_some(px as u32)
+    };
+    let (w, h) = (side(rect.w, rect.x)?, side(rect.h, rect.y)?);
+    Some((
+        w,
+        h,
+        ((rect.x * dpr).floor() / dpr, (rect.y * dpr).floor() / dpr),
+    ))
+}
+
 /// The one painter of the process.
 pub struct Painter {
     backend: Backend,
@@ -229,6 +263,8 @@ pub struct Painter {
     blur_available: bool,
     /// Whether the missing row images were already warned about.
     row_warned: bool,
+    /// Whether the missing blur images were already warned about.
+    blur_warned: bool,
 }
 
 impl std::fmt::Debug for Painter {
@@ -290,6 +326,7 @@ impl Painter {
             dpr: 1.0,
             blur_available: false,
             row_warned: false,
+            blur_warned: false,
         })
     }
 
@@ -745,6 +782,60 @@ impl Painter {
         }
     }
 
+    /// Draws `draw` through a uniform Gaussian blur of `sigma` logical px:
+    /// an offscreen layer of `rect` (cut to the GPU's texture side), blurred
+    /// and drawn back at the current opacity. femtovg's blur is exact only up
+    /// to a sigma of [`MAX_TAP_SIGMA_PX`] buffer px, so a stronger blur draws
+    /// the layer at `1 / k` of the resolution (see [`blur_plan`]) and scales
+    /// it back up. With `sigma` near 0, or when the layer cannot be made, it
+    /// draws plainly. `rect` should hold what `draw` paints, plus the blur's
+    /// reach (about 3 `sigma`).
+    pub fn blurred(&mut self, rect: Rect, sigma: f32, draw: &mut dyn FnMut(&mut Painter)) {
+        let sigma_px = sigma * self.dpr;
+        let plan = (sigma_px.is_finite() && sigma_px >= MIN_BLUR_PX)
+            .then(|| blur_plan(sigma_px))
+            .and_then(|(k, sigma_layer)| {
+                let scale = self.dpr / k as f32;
+                self.blur_layer(rect, scale)
+                    .map(|(layer, origin)| (layer, origin, scale, sigma_layer))
+            });
+        let Some((layer, origin, scale, sigma_layer)) = plan else {
+            draw(self);
+            return;
+        };
+        self.push_state();
+        self.backend.begin_blur(&layer, origin, scale);
+        self.alpha.current = 1.0;
+        draw(self);
+        self.backend.end_blur();
+        self.pop_state();
+        let (w, h) = layer.size();
+        let drawn = Rect {
+            x: origin.0,
+            y: origin.1,
+            w: w as f32 / scale,
+            h: h as f32 / scale,
+        };
+        self.backend.draw_blur(&layer, sigma_layer, drawn);
+    }
+
+    /// The offscreen pair for a blurred `rect` at `scale` buffer px per
+    /// logical px and the logical origin of its pixels, or `None` for plain
+    /// drawing (warned once per painter).
+    fn blur_layer(
+        &mut self,
+        rect: Rect,
+        scale: f32,
+    ) -> Option<(crate::backend::BlurLayer, (f32, f32))> {
+        let (w, h, origin) = layer_px(rect, scale, self.max_texture_side)?;
+        let layer = self.backend.blur_layer(w, h);
+        if layer.is_none() && !self.blur_warned {
+            self.blur_warned = true;
+            tracing::warn!(w, h, "cannot make the blur images; layers are drawn plain");
+        }
+        Some((layer?, origin))
+    }
+
     /// The offscreen images for `row`, or `None` for a hard clip: no cut, a
     /// row too big for the GPU, or an image that cannot be made (warned
     /// once per painter).
@@ -775,6 +866,13 @@ impl Painter {
         layers
     }
 
+    /// Scales subsequent draws by (`sx`, `sy`) about the origin of the
+    /// current transform (translate first to scale about a point); scoped by
+    /// the enclosing `push_state` / `pop_state`.
+    pub fn scale(&mut self, sx: f32, sy: f32) {
+        self.backend.scale(sx, sy);
+    }
+
     /// Scales subsequent draws by `s` about (`cx`, `cy`), for the press
     /// recoil; scoped by the enclosing `push_state` / `pop_state`.
     pub fn scale_about(&mut self, cx: f32, cy: f32, s: f32) {
@@ -785,6 +883,52 @@ impl Painter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_strong_blur_is_drawn_at_a_lower_resolution_to_keep_its_sigma() {
+        // Up to the filter's own limit nothing changes.
+        assert_eq!(blur_plan(4.0), (1, 4.0));
+        assert_eq!(blur_plan(8.0), (1, 8.0));
+        // 12 logical px at 1.5 is 18 buffer px: a third of the resolution, sigma 6.
+        let (k, sigma) = blur_plan(18.0);
+        assert_eq!(k, 3);
+        assert!((sigma * k as f32 - 18.0).abs() < 1e-4);
+        for px in [8.5, 12.0, 18.0, 24.0, 40.0] {
+            let (k, sigma) = blur_plan(px);
+            assert!(sigma <= MAX_TAP_SIGMA_PX + 1e-4, "{px}: {sigma}");
+            assert!((sigma * k as f32 - px).abs() < 1e-3);
+        }
+        // The layer has 1 / k of the pixels: 276 x 292 logical px at scale 1.5 / 3.
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 276.0,
+            h: 292.0,
+        };
+        let (w, h, _) = layer_px(rect, 1.5 / 3.0, 4096).expect("fits");
+        assert_eq!((w, h), (138, 146));
+    }
+
+    #[test]
+    fn a_blur_layer_is_cut_to_whole_pixels_and_to_the_gpu() {
+        let rect = Rect {
+            x: 10.3,
+            y: 5.0,
+            w: 100.0,
+            h: 50.0,
+        };
+        let (w, h, origin) = layer_px(rect, 2.0, 4096).expect("fits");
+        assert_eq!((w, h), (201, 100));
+        assert_eq!(origin, (10.0, 5.0));
+        assert!(layer_px(rect, 2.0, 150).is_none(), "too wide for the GPU");
+        let empty = Rect { w: 0.0, ..rect };
+        assert!(layer_px(empty, 2.0, 4096).is_none());
+        let nan = Rect {
+            x: f32::NAN,
+            ..rect
+        };
+        assert!(layer_px(nan, 2.0, 4096).is_none());
+    }
 
     #[test]
     fn opacity_multiplies_and_is_scoped() {

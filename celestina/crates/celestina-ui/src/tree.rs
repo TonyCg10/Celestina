@@ -113,6 +113,9 @@ pub(crate) enum Scope {
     Except(NodeId),
     /// The subtrees of this node's children, not the node itself.
     ChildrenOf(NodeId),
+    /// The subtrees of this node's children, even when the node itself is
+    /// hidden (their rects are then the ones they had when last laid out).
+    Inside(NodeId),
 }
 
 /// The retained UI tree of one surface.
@@ -314,6 +317,17 @@ impl Tree {
                     None,
                 ),
                 _ => (Vec::new(), None),
+            },
+            Scope::Inside(parent) => match self.slot(parent) {
+                Some(slot) => (
+                    slot.children
+                        .iter()
+                        .rev()
+                        .map(|&c| Visit::Enter(c))
+                        .collect(),
+                    None,
+                ),
+                None => (Vec::new(), None),
             },
         };
         let mut out = Vec::new();

@@ -18,18 +18,22 @@
 //! glass, regions and anchor glide from the extent it had to the one it
 //! has ([`BarTree::capsule_extent`]) on the same spring, so the glass and the
 //! pieces in it stay one shape; landing it reopens the slot the same way.
+//!
+//! The piece does not vanish with its slot (CEL-D-010): while it leaves it
+//! fades out where it was, blurred and sinking, and when it lands it fades
+//! back in at its place, each on a clock of [`Fades`] that the paint reads.
 
 use std::time::{Duration, Instant};
 
 use celestina_paint::{Painter, Rect, Theme};
 use celestina_shell::settings::BarLayout;
 use celestina_ui::{
-    view, Easing, Highlight, Interaction, Key, Motion, Tree, TreeError, UiEvent, View, ViewKind,
-    BTN_LEFT,
+    view, Easing, Highlight, Interaction, Key, Motion, Tree, TreeError, UiEvent, View, BTN_LEFT,
 };
 use celestina_wayland::InputEvent;
 
 use super::{
+    piece_fade::{self, Fades},
     state::{CAPSULE_H, TOP_GAP},
     view::{centred, CAPSULE_PADDING},
     ScrollRemainder, BTN_MIDDLE, BTN_RIGHT,
@@ -41,7 +45,6 @@ use crate::{
         view::{zone_key, ZoneViews, Zones},
     },
     pieces::{self, Axis, BarCx, Gesture, PieceAction, PieceInput},
-    sheet::flight::{BarKeys, Parts, TextPart},
     tray::scroll_steps,
 };
 
@@ -118,6 +121,11 @@ pub struct BarTree {
     /// Each capsule's glide from the extent it was painted at to its rect,
     /// while its pieces slide.
     glides: [Option<Glide>; 4],
+    /// The pieces fading out of the bar or back into it.
+    fades: Fades,
+    /// The width each leaving piece had in its row when it left: what its
+    /// share of a room shared with a neighbour that also fades is made of.
+    fade_widths: Vec<(Key, f32)>,
 }
 
 /// A capsule on its way from `from` to the rect it was placed at.
@@ -142,6 +150,9 @@ fn bar_tree(reduced: bool, theme: &Theme) -> Tree {
 
 /// The height of a piece's pill when the bar has no rect for it.
 const PILL_H: f32 = 28.0;
+
+/// The grid a fading piece's blur layer snaps its edges to, logical px.
+const LAYER_GRID: f32 = 32.0;
 
 /// The open spring of `theme`: `motion.slow` with the overshoot easing.
 fn spring_of(theme: &Theme) -> (Duration, Easing) {
@@ -172,6 +183,8 @@ impl BarTree {
             spring: spring_of(theme),
             gap: theme.spacing.sm,
             glides: [None; 4],
+            fades: Fades::default(),
+            fade_widths: Vec::new(),
         }
     }
 
@@ -179,9 +192,23 @@ impl BarTree {
     /// slot closes, or reopens, and the pieces beside it slide on the open
     /// spring at the next update, which is where the slides start (`_now` is
     /// when it was asked). A piece the bar does not hold is lifted from
-    /// nothing, and lands again with the sheet.
-    pub fn set_lifted(&mut self, piece: Option<Key>, _now: Instant) {
+    /// nothing, and lands again with the sheet. The piece lifted fades out
+    /// from `now` and the one landed fades back in, each from the opacity it
+    /// has when it is already fading.
+    pub fn set_lifted(&mut self, piece: Option<Key>, now: Instant) {
         if piece != self.lifted {
+            if let Some(landed) = self.lifted {
+                self.fades.start(landed, true, now);
+            }
+            if let Some(leaving) = piece {
+                self.fades.start(leaving, false, now);
+                let width = self
+                    .tree
+                    .node_by_key(leaving)
+                    .map_or(0.0, |id| self.tree.rect(id).w);
+                self.fade_widths.retain(|(k, _)| *k != leaving);
+                self.fade_widths.push((leaving, width));
+            }
             self.lifted = piece;
             self.lift_changed = true;
             self.stale = true;
@@ -272,6 +299,9 @@ impl BarTree {
             }
             self.measure_views(now, lay);
             self.stale = false;
+            // A piece that vanished takes its fade with it.
+            let views = &self.views;
+            self.fades.settle(now, |key| views.owner(key).is_some());
         }
         let placement = place(
             base.theme,
@@ -387,11 +417,163 @@ impl BarTree {
         self.tree.take_fault().or_else(|| self.measure.take_fault())
     }
 
-    /// Paints the bar, every capsule, without the pieces `hidden` (ones that
-    /// are painted elsewhere while they fly, or under an open window).
-    pub fn paint(&mut self, painter: &mut Painter, now: Instant, hidden: &[Key]) {
+    /// Paints the bar, every capsule. A piece that is fading (out of its
+    /// capsule or back into it) is left out of the walk and painted after
+    /// it, at its opacity, sunk and blurred as far as it has left.
+    pub fn paint(&mut self, painter: &mut Painter, now: Instant) {
         self.sync_extents(now);
-        self.tree.paint_hiding(painter, now, hidden);
+        let views = &self.views;
+        self.fades.settle(now, |key| views.owner(key).is_some());
+        let fading = self.fades.active(now);
+        let apart: Vec<Key> = fading.iter().map(|(key, _)| *key).collect();
+        self.tree.paint_hiding(painter, now, &apart);
+        for &(key, opacity) in &fading {
+            self.paint_fading(painter, now, key, opacity, &fading);
+        }
+    }
+
+    /// The room piece `key` has in its capsule at `now`, and how far its
+    /// content must move to sit in it: the gap its steady neighbours leave as
+    /// they slide (less the row gap each keeps), clipped to the capsule as
+    /// painted. Pieces side by side that both fade (a switch between
+    /// neighbours) share that gap in proportion to their width and opacity,
+    /// in row order, so the one that leaves gives way to the one that comes.
+    /// The piece shows through its share only, as through the slot that
+    /// closes and reopens around it.
+    fn live_slot(&self, key: Key, now: Instant, fading: &[(Key, f32)]) -> Option<(Rect, f32)> {
+        let id = self.tree.node_by_key(key)?;
+        let parent = self.tree.parent_of(id)?;
+        let kids = self.tree.painted_children(parent, now);
+        let i = kids.iter().position(|k| k.0 == key)?;
+        let rect = kids[i].1;
+        let capsule = self
+            .zone_of(key)
+            .and_then(|zone| self.capsule_extent(zone, now))
+            .unwrap_or_else(|| self.tree.rect(parent));
+        let opacity = |k: Key| fading.iter().find(|f| f.0 == k).map(|f| f.1);
+        let steady = |k: &&(Key, Rect, bool)| !k.2 && opacity(k.0).is_none();
+        let p = kids[..i].iter().rposition(|k| steady(&k));
+        let n = kids[i + 1..]
+            .iter()
+            .position(|k| steady(&k))
+            .map(|n| n + i + 1);
+        let left = p.map_or(capsule.x + CAPSULE_PADDING, |p| {
+            kids[p].1.x + kids[p].1.w + self.gap
+        });
+        let right = n.map_or(capsule.x + capsule.w - CAPSULE_PADDING, |n| {
+            kids[n].1.x - self.gap
+        });
+        let room = (right - left).max(0.0);
+        // The fading pieces between the steady neighbours, in row order, each
+        // weighted by its width and how much of it shows.
+        let width = |k: &(Key, Rect, bool)| {
+            if k.1.w > 0.0 {
+                k.1.w
+            } else {
+                self.fade_widths
+                    .iter()
+                    .find(|w| w.0 == k.0)
+                    .map_or(0.0, |w| w.1)
+            }
+        };
+        let run: Vec<(Key, f32, f32)> = kids[p.map_or(0, |p| p + 1)..n.unwrap_or(kids.len())]
+            .iter()
+            .filter_map(|k| opacity(k.0).map(|o| (k.0, width(k), width(k) * o)))
+            .collect();
+        let total: f32 = run.iter().map(|r| r.2).sum();
+        let mut x = left;
+        let mut share = (left, if run.len() <= 1 { room } else { 0.0 });
+        if run.len() > 1 && total > 0.0 {
+            for r in &run {
+                let w = room * r.2 / total;
+                if r.0 == key {
+                    share = (x, w);
+                    break;
+                }
+                x += w;
+            }
+        }
+        let own_w = run.iter().find(|r| r.0 == key).map_or(rect.w, |r| r.1);
+        let shown = share.1.clamp(0.0, own_w.max(0.0));
+        let centre = share.0 + share.1 / 2.0;
+        let clip = Rect {
+            x: centre - shown / 2.0,
+            y: capsule.y,
+            w: shown,
+            h: capsule.h,
+        };
+        // Never outside the capsule.
+        let x0 = clip.x.max(capsule.x);
+        let x1 = (clip.x + clip.w).min(capsule.x + capsule.w);
+        let clip = Rect {
+            x: x0,
+            w: (x1 - x0).max(0.0),
+            ..clip
+        };
+        Some((clip, centre - (rect.x + rect.w / 2.0)))
+    }
+
+    /// The inside of piece `key` at `opacity`: in its slot and cut to it,
+    /// moved down, drawn through the blur and faded as a whole, without its
+    /// own plate. Under reduced motion it only fades.
+    fn paint_fading(
+        &mut self,
+        painter: &mut Painter,
+        now: Instant,
+        key: Key,
+        opacity: f32,
+        fading: &[(Key, f32)],
+    ) {
+        let Some(id) = self.tree.node_by_key(key) else {
+            return;
+        };
+        if opacity <= 0.0 {
+            return;
+        }
+        let Some((clip, shift)) = self.live_slot(key, now, fading) else {
+            return;
+        };
+        if clip.w <= 0.0 || clip.h <= 0.0 {
+            return;
+        }
+        let (blur, drop) = piece_fade::look(opacity, self.reduced);
+        // The layer holds the piece where the fade puts it and the blur's
+        // reach, its edges on a 32 px grid so that its size, and so its
+        // images, change only when it crosses a grid line.
+        let own = self.tree.painted_rect(id, now);
+        let reach = 3.0 * piece_fade::BLUR_PX;
+        let grid = |v: f32, up: bool| {
+            let g = (v / LAYER_GRID).floor() * LAYER_GRID;
+            if up && g < v {
+                g + LAYER_GRID
+            } else {
+                g
+            }
+        };
+        let (x0, x1) = (
+            grid(own.x + shift - reach, false),
+            grid(own.x + shift + own.w + reach, true),
+        );
+        let layer = Rect {
+            x: x0,
+            y: clip.y - reach,
+            w: x1 - x0,
+            h: clip.h + 2.0 * reach,
+        };
+        let tree = &mut self.tree;
+        // The slot cuts the blurred piece, not the piece before its blur, so
+        // nothing of it shows past the slot or the capsule.
+        painter.push_state();
+        painter.opacity(opacity);
+        painter.push_clip(clip, 0.0);
+        painter.blurred(layer, blur, &mut |p| {
+            p.push_state();
+            p.translate(shift, drop);
+            tree.paint_inside(p, now, id);
+            p.pop_state();
+        });
+        painter.pop_clip();
+        painter.pop_state();
     }
 
     /// Hands the tree the extents the capsules are painted at `now`.
@@ -512,8 +694,8 @@ impl BarTree {
         })
     }
 
-    /// The pill of piece `key` at `now`: what a window grows from and folds
-    /// into. While the piece is in its row at rest it is the piece's rect
+    /// The pill of piece `key` at `now`: what a window grows from and closes
+    /// towards. While the piece is in its row at rest it is the piece's rect
     /// (its radius is half its height). Its slot, centred where
     /// [`BarTree::slot_rect`] says, is a pill as high as the piece and as wide
     /// as the gap its neighbours leave, never narrower than it is high: a
@@ -554,102 +736,41 @@ impl BarTree {
         })
     }
 
-    /// The icon and the text of piece `piece` as the bar paints them at
-    /// `now`: its first icon, and the text node that reads `text` (a piece
-    /// whose face has no text, or whose bar text is not that string, flies
-    /// its icon only; one drawn without an icon node, like the system load,
-    /// flies its text only). `None` once the bar does not hold the piece or
-    /// nothing of it can fly.
+    /// The slot clip and shift `piece` is painted with while it fades, and
+    /// the painted rects of the pieces beside it in its row (tests).
+    #[cfg(test)]
     #[must_use]
-    pub fn flyers_of(
-        &self,
-        piece: Key,
-        text: Option<&str>,
-        now: Instant,
-    ) -> Option<(BarKeys, Parts)> {
-        self.views.owner(piece)?;
-        let root = self.tree.node_by_key(piece)?;
-        let mut icon = None;
-        let mut word = None;
-        let mut nodes = self.tree.descendants_of(root);
-        nodes.insert(0, root);
-        for id in nodes {
-            match self.tree.kind_of(id) {
-                Some(ViewKind::Icon { key, size, .. }) if icon.is_none() => {
-                    icon = Some((id, key.clone(), *size));
-                }
-                Some(ViewKind::Text {
-                    text: shown, style, ..
-                }) if word.is_none() && text == Some(shown.as_str()) => {
-                    word = Some((id, shown.clone(), style.size));
-                }
-                _ => {}
-            }
-        }
-        if icon.is_none() && word.is_none() {
-            return None;
-        }
-        let keys = BarKeys {
-            piece,
-            icon: icon.map(|(id, ..)| self.tree.key_of(id)),
-            text: word.as_ref().map(|(id, ..)| self.tree.key_of(*id)),
-        };
-        self.parts_at(keys, now).map(|parts| (keys, parts))
+    pub fn fade_slot(&self, piece: Key, now: Instant) -> Option<(Rect, f32, Vec<Rect>)> {
+        self.fades.value(piece, now)?;
+        let fading = self.fades.active(now);
+        let (clip, shift) = self.live_slot(piece, now, &fading)?;
+        let id = self.tree.node_by_key(piece)?;
+        let parent = self.tree.parent_of(id)?;
+        let beside = self
+            .tree
+            .painted_children(parent, now)
+            .into_iter()
+            .filter(|k| k.0 != piece && !k.2)
+            .map(|k| k.1)
+            .collect();
+        Some((clip, shift, beside))
     }
 
-    /// The parts `keys` name as the bar paints them at `now`; `None` once
-    /// the bar does not hold the piece or the nodes.
+    /// The opacity, blur and drop `piece` is painted with while it fades
+    /// (tests).
+    #[cfg(test)]
     #[must_use]
-    pub fn parts_at(&self, keys: BarKeys, now: Instant) -> Option<Parts> {
-        self.views.owner(keys.piece)?;
-        let icon = match keys.icon {
-            Some(k) => {
-                let id = self.tree.node_by_key(k)?;
-                let ViewKind::Icon { key, .. } = self.tree.kind_of(id)? else {
-                    return None;
-                };
-                Some((key.clone(), self.tree.painted_rect(id, now)))
-            }
-            None => None,
-        };
-        let text = keys.text.and_then(|k| {
-            let id = self.tree.node_by_key(k)?;
-            let ViewKind::Text { text, style, .. } = self.tree.kind_of(id)? else {
-                return None;
-            };
-            Some(TextPart {
-                text: text.clone(),
-                rect: self.tree.painted_rect(id, now),
-                size: style.size,
-            })
-        });
-        // A text node gone mid-flight leaves the icon to fly alone.
-        if icon.is_none() && text.is_none() {
-            return None;
-        }
-        let (icon, icon_rect) = match icon {
-            Some((key, rect)) => (Some(key), rect),
-            None => (
-                None,
-                Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    w: 0.0,
-                    h: 0.0,
-                },
-            ),
-        };
-        Some(Parts {
-            icon,
-            icon_rect,
-            text,
-            k: None,
-        })
+    pub fn fade_of(&self, piece: Key, now: Instant) -> Option<(f32, f32, f32)> {
+        let k = self.fades.value(piece, now)?;
+        let (blur, drop) = piece_fade::look(k, self.reduced);
+        Some((k, blur, drop))
     }
 
     #[must_use]
     pub fn is_animating(&self, now: Instant) -> bool {
-        self.tree.is_animating(now) || self.glides.iter().flatten().any(|g| self.gliding(g, now))
+        self.tree.is_animating(now)
+            || self.glides.iter().flatten().any(|g| self.gliding(g, now))
+            || self.fades.is_animating(now)
     }
 
     /// Whether glide `g` still runs at `now`.
@@ -1226,8 +1347,11 @@ mod tests {
         with_cx(|cx| {
             let (mut bar, [a, b, c], t0) = trio(cx, true);
             lift(&mut bar, cx, Some(b), t0);
-            assert!(!bar.is_animating(t0), "no slide");
+            assert!(!bar.tree.is_animating(t0), "no slide");
             assert!(!bar.is_sliding(0, t0));
+            // The piece still fades, with no blur or drop.
+            assert!(bar.is_animating(t0));
+            assert_eq!(bar.fade_of(b, t0), Some((1.0, 0.0, 0.0)));
             assert_eq!(bar.capsule_extent(0, t0), bar.zone_rect(0));
             for k in [a, c] {
                 let id = bar.tree.node_by_key(k);

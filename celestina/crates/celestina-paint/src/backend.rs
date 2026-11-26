@@ -125,9 +125,32 @@ pub(crate) struct Backend {
     row: Option<RowLayers>,
     /// The pixel size an image could not be made for; not retried.
     row_failed: Option<(u32, u32)>,
+    /// The offscreen image pairs of uniformly blurred layers, one per pixel
+    /// size in use; a pair not used in a frame is freed at its flush.
+    blurs: Vec<BlurLayer>,
+    /// The pixel size a blur image could not be made for, kept until another
+    /// size fails (so a size is tried again later).
+    blur_failed: Vec<(u32, u32)>,
     /// Images freed after the next flush: commands recorded this frame may
     /// still read them.
     retired: Vec<ImageId>,
+}
+
+/// The offscreen images of one uniformly blurred layer: the content and its
+/// blurred copy.
+#[derive(Clone, Copy)]
+pub(crate) struct BlurLayer {
+    w: u32,
+    h: u32,
+    src: ImageId,
+    out: ImageId,
+    used: bool,
+}
+
+impl BlurLayer {
+    pub(crate) fn size(&self) -> (u32, u32) {
+        (self.w, self.h)
+    }
 }
 
 /// The offscreen images of a blurred row at one pixel size.
@@ -172,12 +195,17 @@ impl Backend {
             canvas,
             row: None,
             row_failed: None,
+            blurs: Vec::new(),
+            blur_failed: Vec::new(),
             retired: Vec::new(),
         })
     }
 
     /// Starts a frame of `w`×`h` buffer px at `dpr`, cleared to transparent.
     pub(crate) fn begin(&mut self, w: u32, h: u32, dpr: f32) {
+        for b in &mut self.blurs {
+            b.used = false;
+        }
         self.canvas.reset();
         self.canvas.set_size(w, h, 1.0);
         self.canvas.scale(dpr, dpr);
@@ -189,6 +217,16 @@ impl Backend {
     /// Executes the recorded commands on the current framebuffer.
     pub(crate) fn flush(&mut self) {
         self.canvas.flush();
+        let (kept, unused): (Vec<BlurLayer>, Vec<BlurLayer>) =
+            self.blurs.drain(..).partition(|b| b.used);
+        self.blurs = kept;
+        // A frame that blurred nothing forgets the sizes that failed, so the
+        // next blur tries them again.
+        if self.blurs.is_empty() {
+            self.blur_failed.clear();
+        }
+        self.retired
+            .extend(unused.into_iter().flat_map(|b| [b.src, b.out]));
         for id in self.retired.drain(..) {
             self.canvas.delete_image(id);
         }
@@ -249,6 +287,52 @@ impl Backend {
         };
         self.row = Some(l);
         Some(l)
+    }
+
+    /// The offscreen pair for a `w`×`h` px blurred layer, kept while frames
+    /// use it. `None` when an image cannot be made (the size is then not
+    /// tried again).
+    pub(crate) fn blur_layer(&mut self, w: u32, h: u32) -> Option<BlurLayer> {
+        if self.blur_failed.contains(&(w, h)) {
+            return None;
+        }
+        if let Some(b) = self.blurs.iter_mut().find(|b| (b.w, b.h) == (w, h)) {
+            b.used = true;
+            return Some(*b);
+        }
+        let Some(ids) = self.target_images(2, w, h) else {
+            if self.blur_failed.len() >= 4 {
+                self.blur_failed.remove(0);
+            }
+            self.blur_failed.push((w, h));
+            return None;
+        };
+        let b = BlurLayer {
+            w,
+            h,
+            src: ids[0],
+            out: ids[1],
+            used: true,
+        };
+        self.blurs.push(b);
+        Some(b)
+    }
+
+    /// Starts drawing the layer's content into its source image.
+    pub(crate) fn begin_blur(&mut self, l: &BlurLayer, origin: (f32, f32), dpr: f32) {
+        self.begin_offscreen(l.src, (l.w, l.h), origin, dpr);
+    }
+
+    pub(crate) fn end_blur(&mut self) {
+        self.end_offscreen();
+    }
+
+    /// Blurs the content by `sigma_px` (buffer px) and draws it over `rect`
+    /// (logical px) under the current alpha, clip and transform.
+    pub(crate) fn draw_blur(&mut self, l: &BlurLayer, sigma_px: f32, rect: Rect) {
+        self.canvas
+            .filter_image(l.out, ImageFilter::GaussianBlur { sigma: sigma_px }, l.src);
+        self.blit(l.out, rect);
     }
 
     /// Redirects drawing into `image` (`w`×`h` px), cleared: logical
@@ -376,6 +460,11 @@ impl Backend {
 
     pub(crate) fn translate(&mut self, dx: f32, dy: f32) {
         self.canvas.translate(dx, dy);
+    }
+
+    /// Scales by (`sx`, `sy`) about the origin of the current transform.
+    pub(crate) fn scale(&mut self, sx: f32, sy: f32) {
+        self.canvas.scale(sx, sy);
     }
 
     pub(crate) fn scale_about(&mut self, cx: f32, cy: f32, s: f32) {

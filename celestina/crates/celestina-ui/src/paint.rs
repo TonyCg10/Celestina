@@ -78,6 +78,15 @@ impl Tree {
         self.paint_scoped(painter, now, Scope::ChildrenOf(parent), hidden);
     }
 
+    /// Paints what is inside the node `id` alone (its children's subtrees,
+    /// not its own box), even while `id` is hidden (out of the layout, at
+    /// the rects it was last laid out at): a piece that fades out of or into
+    /// its slot is drawn so, by whoever owns its fade. The slides of its
+    /// ancestors still shift it.
+    pub fn paint_inside(&mut self, painter: &mut Painter, now: Instant, id: NodeId) {
+        self.paint_scoped(painter, now, Scope::Inside(id), &[]);
+    }
+
     /// The node `id`'s rect as it is painted at `now`: its layout rect moved
     /// by its slide and its ancestors', or the rect [`Tree::set_extent`] gave
     /// it. An empty rect for a stale id.
@@ -93,31 +102,6 @@ impl Tree {
         };
         self.extent_of(slot.key)
             .unwrap_or_else(|| translated(slot.rect, self.slide_of(id, now)))
-    }
-
-    /// The nodes under `id` (not `id` itself) that are drawn: not hidden and
-    /// not leaving, in paint order.
-    #[must_use]
-    pub fn descendants_of(&self, id: NodeId) -> Vec<NodeId> {
-        let mut out = Vec::new();
-        let mut stack: Vec<NodeId> = self
-            .slot(id)
-            .map(|s| s.children.iter().rev().copied().collect())
-            .unwrap_or_default();
-        while let Some(n) = stack.pop() {
-            let Some(slot) = self.slot(n).filter(|s| !s.hidden() && !s.leaving) else {
-                continue;
-            };
-            out.push(n);
-            stack.extend(slot.children.iter().rev());
-        }
-        out
-    }
-
-    /// What the node `id` is, or `None` for a stale id.
-    #[must_use]
-    pub fn kind_of(&self, id: NodeId) -> Option<&ViewKind> {
-        self.slot(id).map(|s| &s.kind)
     }
 
     /// The rect set for the box `key`, if one is.
@@ -179,6 +163,7 @@ impl Tree {
         let theme = painter.theme().clone();
         let base = match scope {
             Scope::ChildrenOf(parent) => self.slide_of(parent, now),
+            Scope::Inside(root) => self.slide_of(root, now),
             _ => (0.0, 0.0),
         };
         let mut shifts: Vec<(f32, f32)> = vec![base];
@@ -552,6 +537,20 @@ mod tests {
     }
 
     #[test]
+    fn an_inside_walk_enters_what_is_in_a_hidden_node_but_not_the_node() {
+        let (tree, cap, _) = lifted_capsule();
+        let hidden = crate::testing::id(&tree, crate::testing::row_key(1));
+        // The whole walk leaves the hidden node out; the inside walk paints
+        // its children and not its own box.
+        assert!(!tree.walk(Scope::All).contains(&Visit::Enter(hidden)));
+        let inside = tree.walk(Scope::Inside(hidden));
+        assert!(!inside.contains(&Visit::Enter(hidden)));
+        assert!(!inside.contains(&Visit::Enter(cap)));
+        // A stale id yields nothing.
+        assert!(tree.walk(Scope::Inside(usize::MAX)).is_empty());
+    }
+
+    #[test]
     fn a_hidden_key_takes_its_subtree_out_of_the_walk_only() {
         let (tree, card, rows) = crate::testing::card_with_rows();
         let all = tree.walk(Scope::ChildrenOf(card));
@@ -569,17 +568,6 @@ mod tests {
         );
         assert_eq!(two.len(), all.len() - 4);
         assert!(two.contains(&Visit::Enter(rows[1])));
-    }
-
-    #[test]
-    fn the_nodes_under_a_node_are_listed_in_paint_order_with_their_kinds() {
-        let (tree, card, rows) = crate::testing::card_with_rows();
-        let under = tree.descendants_of(card);
-        assert_eq!(&under[..rows.len().min(under.len())][..1], &rows[..1]);
-        assert!(under.contains(&rows[2]));
-        assert!(!under.contains(&card));
-        assert!(matches!(tree.kind_of(card), Some(ViewKind::Box { .. })));
-        assert!(tree.kind_of(usize::MAX).is_none());
     }
 
     #[test]

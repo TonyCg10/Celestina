@@ -1767,3 +1767,29 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-I-011](docs/evidence/2026-11-26-cel-i-011-tray-fixes.md)
+
+## VAL-CEL-D-010 — A menu window blurs out towards its piece and the piece crossfades
+
+- **Status:** pending
+- **Related implementation:** CEL-D-010 (a closing menu window blurs, fades and
+  shrinks towards its piece in 260 ms; the open piece no longer flies: it fades
+  out of the bar, blurred and sinking, when its menu opens, and fades back in
+  from the bar's bottom edge from the first frame of the close; the subtitle is
+  never hidden)
+- **Requires:** the deployed shell after the landing of CEL-D-010 and a layout
+  whose end capsule holds the energy (power profile) and system load pieces
+- **Procedure:** open the energy menu and close it by pressing outside it;
+  open the system load menu and close it with Escape; with one of them open,
+  press another piece of the same capsule (a switch); open and close a menu
+  again quickly; repeat once with reduced motion on
+- **Pass condition:** on close the window blurs out and shrinks towards its
+  piece while the piece fades in at its place from the bar's bottom edge, with
+  no step out of order (the piece is not back after the window has gone, and
+  nothing flies between the window and the bar); on open the piece fades out
+  of the bar blurred and sinking while its slot closes; on a switch the old
+  window blurs out while the new one grows and the old piece fades back in;
+  Escape closes the same way; with reduced motion nothing blurs or moves and
+  the opacities still fade; at rest nothing moves
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-010](docs/evidence/2026-11-26-cel-d-010-menu-close.md)

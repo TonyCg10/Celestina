@@ -288,8 +288,8 @@ impl SessionCore {
     }
 
     /// Paints the body at its own coordinates.
-    pub fn paint(&mut self, painter: &mut celestina_paint::Painter, now: Instant, hidden: &[Key]) {
-        self.tree.paint_hiding(painter, now, hidden);
+    pub fn paint(&mut self, painter: &mut celestina_paint::Painter, now: Instant) {
+        self.tree.paint(painter, now);
     }
 
     /// The menu's tree (the sheet reads its subtitle's place from it).
