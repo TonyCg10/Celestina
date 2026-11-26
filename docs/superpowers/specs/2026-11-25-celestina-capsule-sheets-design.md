@@ -2,7 +2,8 @@
 
 - **Date:** 2026-11-25
 - **Status:** approved by the author on 2026-11-25; §4.2 to §4.4 amended
-  after the author's live tests (CEL-D-007 on 2026-11-26, CEL-D-008 on 2026-11-26)
+  after the author's live tests (CEL-D-007 and CEL-D-008 on 2026-11-26;
+  CEL-D-009, the menu as its own window, on 2026-11-26)
 - **Project:** `celestina` (1.19.x on `main` at `c0052728`)
 - **Entries:** `CEL-D-002` to `CEL-D-005` of the standing tracks
 - **Supersedes:** §6.2, §6.2.1, §6.3, §6.4 and §6.5 of
@@ -96,38 +97,44 @@ cannot animate).
   is open, and released on close exactly as `Suppression::Open/Closed` does
   for the popup today.
 
-### 4.2 The capsule sheet (Dynamic Island)
+### 4.2 The menu window (`CEL-D-009`)
 
-- **Shape.** The zone capsule (y 8, h 40, radius 20) morphs into one rounded
-  rectangle, radius 20: its top 40 px keep the capsule's row of pieces, the
-  rest is the menu body. Glass is the Haze of the capsules (one silhouette;
-  the blur region follows it in 2 px bands as today).
-- **Width and position (CEL-D-008).** The sheet is never narrower than its
-  capsule: every other piece of the row stays visible and clickable. Let `W`
-  be the menu's width, `[L, R]` the capsule's extent (without the open
-  piece, §4.3) and `c` the centre of the open piece's slot.
-  - `W ≥ R − L`: the sheet is `W` wide and contains the whole capsule:
-    `x = clamp(c − W/2, R − W, L)`.
-  - `W < R − L`: the sheet is the capsule's width, `x = L`; the body box
-    (`W` wide) sits under the row at `clamp(c − W/2, L, R − W)`.
-  - Finally `x` is clamped to 16 px from the surface's sides.
-  - The row stays where it is, except for the open piece's slot (§4.3).
-- **Height.** `40 + body`, capped by the surface's room (560 − 8 − 8 = 544).
-  The open spring may overshoot that cap for a moment; the painted sheet and
-  its regions are clipped to the surface.
-  A taller body scrolls inside the sheet with the wheel; a wheel over a
-  slider still adjusts the slider (CEL-I-008).
-- **Motion.** Open: 350 ms (`motion.slow`) with the emphasized OutBack
-  easing, overshoot 1.15 (`motion.overshoot`), from the capsule's rect to the
-  target rect; the body fades in over the last 65 %. Close: 150 ms
-  (`motion.exit`) with the exit curve back to the capsule; the body fades out
-  over the first 60 %. Switching to another piece of the same capsule while
-  open morphs from the current rect to the new target with the open curve;
-  the old body fades out over the first 30 %, the new one in over the last
-  65 %. Reduced motion: geometry jumps, opacities still fade.
+- **Shape.** Each menu is its own window: one rounded rectangle, radius 20,
+  with the capsules' Haze glass, apart from the bar. The bar keeps its
+  capsules as they are, and the open piece still leaves its slot (§4.3).
+  The window is painted on the same `celestina-panel` surface as the bar, as
+  a glass shape of its own with its own blur and input regions (Claude's
+  call: a separate Wayland surface per menu would look the same and would
+  add a second keyboard, catcher and region path).
+- **Size.** The window is as large as its content and no larger: its width
+  is the body's width (§ Bodies) and its height the subtitle plus the
+  content as laid out, with no minimum height of the Island page. The
+  surface's room caps it (560 − 56 − 8 = 496); a taller body scrolls inside
+  the window with the wheel, and a wheel over a slider still adjusts the
+  slider (CEL-I-008). The open spring may overshoot for a moment; the
+  painted window and its regions are clipped to the surface.
+- **Position.** The window's top is at y 56, 8 px under the capsules (y 8,
+  h 40). It lines up with the outer edge of its capsule: in the end zone its
+  right edge is the capsule's right edge, in the start zone its left edge is
+  the capsule's left edge (the author's call on 2026-11-26), and under a
+  centre capsule it is centred on that capsule (Claude's call). It never
+  comes closer than 16 px to the surface's sides; a window wider than its
+  capsule grows towards the inside of the screen. The capsule's outer edge
+  does not move while its open piece's slot closes, so the window stays put.
+- **Motion (variant B).** Open: a pill the size of the open piece (its rect
+  in the bar, radius 14) grows on the open spring (350 ms, `motion.slow`,
+  OutBack 1.15, `motion.overshoot`) into the window, radius 20; the body
+  fades in over the last 65 %. Close: the window folds back into a pill at
+  the piece's slot on the exit curve (150 ms, `motion.exit`) while the slot
+  reopens; the body fades out over the first 60 %, and the flight up of
+  §4.3 follows. Switching to another piece of the same capsule: the window
+  being left folds into its own piece's pill (exit, 150 ms) while the new
+  window grows out of the new piece; for those 150 ms two windows show.
+  Reduced motion: geometry jumps, opacities still fade.
 - **Bodies (widths).** Volume 320 and brightness 320 (their popup contents
-  today, without their own card), session menu 240, workspaces 240 (§4.6),
-  and a page-backed sheet 420 (the Island page width).
+  today, without their own card), session menu 240, workspaces 240 (§4.6).
+  A page-backed window takes its content's natural width, from 240 to 420
+  (the Island page's width is the most), instead of always 420.
 - **Page-backed sheets.** A piece that opens an Island page today
   (network, Bluetooth, notifications, clipboard, energy, system, media,
   phone, clock) opens a sheet whose body is that page's `PageView` body, under
@@ -138,6 +145,14 @@ cannot animate).
   the tab row and notifications.
 - **Tray.** Unchanged: primary activates, middle is the secondary activate,
   right click opens the application's menu (`xdg_popup`). It opens no sheet.
+- **History.** From CEL-D-002 to CEL-D-008 the sheet was one shape with its
+  capsule: the capsule morphed into the menu, at least as wide as the
+  capsule, and a page-backed sheet took the Island page's width and height.
+  In 1.25.0 the author found empty space (the energy menu under its three rows, the
+  brightness menu's left half, the capsule left empty while the system load
+  flew down) and approved on 2026-11-26 version 2 of the menu-window preview:
+  each menu its own window, variant B (the pill that grows out of the
+  piece), lined up with its capsule's outer edge. `CEL-D-009` delivers it.
 
 ### 4.3 The open piece becomes the menu's subtitle (`CEL-D-008`)
 
@@ -156,8 +171,9 @@ cannot animate).
   the sheet (the author's choice on 2026-11-26, after the final review).
 - **Slot.** When a sheet opens on a piece, that piece leaves its capsule: its
   slot closes with the open spring (350 ms, OutBack 1.15), the pieces beside
-  it slide together, and the capsule, with the sheet over it, takes its new
-  width in the same motion. No gap stays behind. When the sheet switches to
+  it slide together, and the capsule takes its new width in the same motion
+  (since `CEL-D-009` the window is apart from the capsule, §4.2). No gap
+  stays behind. When the sheet switches to
   another piece or closes, the piece that comes back reopens its slot with
   the same spring.
 - **Flight.** The piece's icon and text fly between its slot and the
@@ -225,8 +241,8 @@ cannot animate).
 ## 5. Delivery
 
 Four entries, one landing each, in order; each needs its predecessor. The
-two amendments after the live tests follow them, `CEL-D-008` stacked on
-`CEL-D-007`.
+amendments after the live tests follow them: `CEL-D-008` stacked on
+`CEL-D-007`, then `CEL-D-009` from `main`.
 
 | Entry | Delivers |
 |---|---|
@@ -236,6 +252,7 @@ two amendments after the live tests follow them, `CEL-D-008` stacked on
 | `CEL-D-005` | The workspaces list sheet and the wheel on the workspaces piece |
 | `CEL-D-007` | Full opacity around an open sheet and one travelling pill (amendment of 2026-11-26) |
 | `CEL-D-008` | The capsule that never narrows, the slot that closes, the piece that flies down as the subtitle; the sheet stops cutting the row, and the painter keeps its progressive blur for later (amendment of 2026-11-26; [plan](../plans/2026-11-26-celestina-cel-d-008-plan.md)) |
+| `CEL-D-009` | Each menu its own window, as large as its content, grown out of its piece and lined up with its capsule's outer edge (amendment of 2026-11-26; [plan](../plans/2026-11-26-celestina-cel-d-009-plan.md)) |
 
 Nothing else is in flight in `osd/popup.rs` or `session_menu` (the
 coordinating session dropped `CEL-I-010` and `CEL-I-011`), so `CEL-D-002`
@@ -271,3 +288,6 @@ spike's diff.
   anchor keeps the slot's centre.
 - Where a piece declares what its subtitle shows (its icon and text).
 - Whether the Island page and a page-backed sheet share one container.
+- How a page-backed window measures its content's natural width and height
+  (a layout pass of the page's view, or a size each page declares), as long
+  as no row is cut and no empty area stays under the last row.
