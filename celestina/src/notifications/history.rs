@@ -63,6 +63,7 @@ fn row(n: &Notification, live: bool, when: String) -> HistoryRow {
         read: n.read,
         when,
         actions,
+        folding: false,
     }
 }
 

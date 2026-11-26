@@ -95,9 +95,12 @@ pub enum IslandAction {
         more: Rect,
         keyboard: bool,
     },
-    /// A row's dismiss or action button, or dismiss all, on the
+    /// A row's close or action button on the
     /// Notifications page: the notification server runs the command.
     Notification(NotificationsCommand),
+    /// The Notifications page's clear-all button: the notification server
+    /// closes what is live, then forgets what has ended.
+    ClearNotifications,
     /// The Notifications page's switch: the app flips the do-not-disturb
     /// setting, the one owner of the choice.
     ToggleDoNotDisturb,
@@ -146,6 +149,8 @@ pub enum IslandAction {
     Media(MediaCommand),
 }
 
+/// How long a clear-all waits between one row's leave and the next's.
+const CLEAR_STEP: Duration = Duration::from_millis(30);
 /// Linux `BTN_RIGHT` and `BTN_MIDDLE`.
 const BTN_RIGHT: u32 = 0x111;
 const BTN_MIDDLE: u32 = 0x112;
@@ -284,6 +289,15 @@ pub struct Island {
     do_not_disturb: bool,
     /// The notification rows the Notifications page lists.
     history: Vec<HistoryRow>,
+    /// The rows the Notifications page draws: `history`, but while a
+    /// clear-all folds them one by one, the rows that have not left yet.
+    presented: Vec<HistoryRow>,
+    /// A clear-all in flight: when it was pressed and the rows it folds
+    /// (the ones the page shows, marked folding).
+    clearing: Option<(Instant, Vec<HistoryRow>)>,
+    /// The rows a clear-all asked the worker to forget: hidden from the page
+    /// until the worker's snapshot no longer holds them.
+    cleared: Vec<u32>,
     /// What the connectivity pieces and pages read (CEL-2-F): a copy of
     /// the app's, pushed by [`Island::set_connectivity`].
     connectivity: ConnectivityState,
@@ -404,6 +418,9 @@ impl Island {
             owners: NameOwner::default(),
             do_not_disturb: false,
             history: Vec::new(),
+            presented: Vec::new(),
+            clearing: None,
+            cleared: Vec::new(),
             connectivity: ConnectivityState::default(),
             applied_slide: 0.0,
             theme,
@@ -780,6 +797,14 @@ impl Island {
             self.history = history.to_vec();
             seen = true;
         }
+        let presented = self.presented_at(now);
+        if presented != self.presented {
+            self.presented = presented;
+            seen = true;
+        }
+        if self.clearing.is_some() {
+            cx.ctl.redraw_after(CLEAR_STEP);
+        }
         let levels = Levels {
             audio,
             brightness: brightness.get(&self.output).copied(),
@@ -869,6 +894,32 @@ impl Island {
             tracing::debug!(output = %self.output, open = self.state.is_open(), "island: growth settled");
         }
         self.moving = moving;
+    }
+
+    /// The rows the Notifications page draws at `now`: while a clear-all
+    /// folds the rows, row `i` leaves at `i` times [`CLEAR_STEP`] after the
+    /// press, top to bottom, and the empty list follows the last one;
+    /// otherwise the history.
+    fn presented_at(&mut self, now: Instant) -> Vec<HistoryRow> {
+        let history = &self.history;
+        self.cleared
+            .retain(|id| history.iter().any(|r| r.id == *id));
+        if let Some((start, rows)) = &self.clearing {
+            let left = (now.saturating_duration_since(*start).as_millis() / CLEAR_STEP.as_millis())
+                .saturating_add(1);
+            if let Some(n) = usize::try_from(left).ok().filter(|n| *n < rows.len()) {
+                return rows[n..].to_vec();
+            }
+            self.clearing = None;
+        }
+        // Until the worker's snapshot forgets them, the cleared rows stay
+        // out, so none comes back between the fold and the snapshot.
+        let cleared = &self.cleared;
+        history
+            .iter()
+            .filter(|r| !cleared.contains(&r.id))
+            .cloned()
+            .collect()
     }
 
     /// The frame's part for the system monitor: mirrors `newest`
@@ -969,11 +1020,12 @@ impl Island {
         wait
     }
 
-    /// Gives the focus a clipboard action asked for to its node, when the
-    /// clipboard page is shown.
+    /// Gives the focus a page action asked for (a clipboard action, a
+    /// notification removed with the keyboard) to its node, when a page is
+    /// shown.
     pub(super) fn take_pending_focus(&mut self) {
         if let Some(key) = self.pending_focus.take() {
-            if self.shows_clipboard_page() {
+            if self.page_shown().is_some() {
                 if let Some((tree, input)) = self.shown_page_input() {
                     input.focus_key(tree, key);
                 }
@@ -1997,6 +2049,7 @@ impl Island {
             | Verb::Shortcuts(_)
             | Verb::NotificationsToggle
             | Verb::NotificationsDismissAll
+            | Verb::NotificationsClear
             | Verb::WallpaperSet { .. }
             | Verb::WallpaperNext(_)
             | Verb::WallpaperPrev(_)
@@ -2145,6 +2198,80 @@ mod tests {
                 .and_then(BarTree::placement)
                 .and_then(|p| p.start),
         )
+    }
+
+    /// Clear-all folds the rows one after another: row `i` leaves `i` steps
+    /// after the press, and the empty list follows the last one.
+    #[test]
+    fn clear_all_staggers_the_rows_by_30_ms() {
+        let t0 = Instant::now();
+        let ms = |n: u64| t0 + Duration::from_millis(n);
+        let row = |id| HistoryRow {
+            id,
+            summary: format!("n{id}"),
+            ..HistoryRow::default()
+        };
+        let mut island = Island::new("DP-1", (1000.0, 700.0));
+        island.history = (1..=4).map(row).collect();
+        island.presented = island.history.clone();
+        let key = pages::notifications::clear_all_key();
+        let action = island.page_action(PageId::NOTIFICATIONS, key, t0);
+        assert_eq!(action, Some(IslandAction::ClearNotifications));
+        // The worker forgets everything at once; the page still folds.
+        island.history.clear();
+        let ids = |island: &mut Island, at| -> Vec<u32> {
+            island.presented_at(at).iter().map(|r| r.id).collect()
+        };
+        assert_eq!(ids(&mut island, t0), [2, 3, 4], "row 1 leaves at 0 ms");
+        assert_eq!(ids(&mut island, ms(29)), [2, 3, 4]);
+        assert_eq!(ids(&mut island, ms(30)), [3, 4]);
+        assert_eq!(ids(&mut island, ms(60)), [4]);
+        assert_eq!(ids(&mut island, ms(90)), Vec::<u32>::new(), "the last one");
+        assert!(island.clearing.is_none(), "then the empty list shows");
+        // Reduced motion: the rows go at once.
+        island.history = (1..=4).map(row).collect();
+        island.presented = island.history.clone();
+        island.set_reduced_motion(true);
+        island.page_action(PageId::NOTIFICATIONS, key, t0);
+        assert!(island.clearing.is_none());
+    }
+
+    /// Only the rows the page builds fold, and no row comes back between the
+    /// end of the fold and the worker's empty snapshot.
+    #[test]
+    fn clear_all_folds_the_shown_rows_and_keeps_every_cleared_row_out_until_the_worker_answers() {
+        let t0 = Instant::now();
+        let row = |id| HistoryRow {
+            id,
+            summary: format!("n{id}"),
+            ..HistoryRow::default()
+        };
+        let mut island = Island::new("DP-1", (1000.0, 400.0));
+        island.history = (1..=30).map(row).collect();
+        island.presented = island.history.clone();
+        let key = pages::notifications::clear_all_key();
+        assert_eq!(
+            island.page_action(PageId::NOTIFICATIONS, key, t0),
+            Some(IslandAction::ClearNotifications)
+        );
+        let folding = island.clearing.as_ref().map_or(0, |(_, rows)| rows.len());
+        assert!(folding > 0 && folding < 30, "folds {folding} of 30");
+        assert!(island
+            .clearing
+            .as_ref()
+            .is_some_and(|(_, rows)| rows.iter().all(|r| r.folding)));
+        // The fold ends after the shown rows only.
+        let end = t0 + CLEAR_STEP * u32::try_from(folding).unwrap_or(0);
+        // The worker has not answered: its history still holds the rows.
+        assert!(island.presented_at(end).is_empty(), "none comes back");
+        assert!(island.presented_at(end).is_empty());
+        // A notification that arrives meanwhile shows; the answer drops the
+        // cleared ids from the memory.
+        island.history.push(row(99));
+        assert_eq!(island.presented_at(end).len(), 1);
+        island.history = vec![row(99)];
+        assert_eq!(island.presented_at(end).len(), 1);
+        assert!(island.cleared.is_empty());
     }
 
     fn centre(r: Rect) -> (f32, f32) {

@@ -446,11 +446,32 @@ impl Notifications {
             .is_some_and(|position| self.live[position].offers(key))
     }
 
-    /// Marks everything currently shown as seen.
-    pub fn mark_read(&mut self) {
-        for entry in &mut self.live {
+    /// Marks everything as seen, live and history alike, and says whether
+    /// anything changed.
+    pub fn mark_read(&mut self) -> bool {
+        let mut changed = false;
+        for entry in self.live.iter_mut().chain(self.history.iter_mut()) {
+            changed |= !entry.read;
             entry.read = true;
         }
+        changed
+    }
+
+    /// Takes one notification off the list, live or finished. A live one is
+    /// closed as dismissed (the returned [`Closed`]) and does not enter the
+    /// history; a finished one just goes. An unknown id changes nothing.
+    pub fn remove(&mut self, id: u32) -> Option<Closed> {
+        if let Some(position) = self.position_of(id) {
+            self.live.remove(position);
+            return Some(Closed {
+                id,
+                reason: CloseReason::Dismissed,
+            });
+        }
+        if let Some(position) = self.history.iter().position(|entry| entry.id == id) {
+            self.history.remove(position);
+        }
+        None
     }
 
     /// What a surface should show, newest last.
@@ -893,6 +914,62 @@ mod tests {
         server.close(dismissed, CloseReason::Dismissed);
         assert_eq!(server.unread(), 1);
         assert_eq!(seen, 1);
+    }
+
+    #[test]
+    fn mark_read_marks_the_history_too() {
+        let mut server = Notifications::new();
+        server.post(&incoming("gone"), 0);
+        server.expire(u64::MAX);
+        assert!(server.live().is_empty());
+        assert_eq!(server.unread(), 1);
+
+        assert!(server.mark_read());
+        assert_eq!(server.unread(), 0);
+        assert!(server.history()[0].read);
+        assert!(!server.mark_read(), "nothing left to mark");
+    }
+
+    #[test]
+    fn remove_drops_a_history_entry() {
+        let mut server = Notifications::new();
+        let old = server.post(&incoming("old"), 0);
+        let kept = server.post(&incoming("kept"), 0);
+        server.close(old, CloseReason::Expired);
+        server.close(kept, CloseReason::Expired);
+
+        assert_eq!(server.remove(old), None);
+        assert_eq!(server.history().len(), 1);
+        assert_eq!(server.history()[0].id, kept);
+    }
+
+    #[test]
+    fn remove_closes_a_live_one_as_dismissed() {
+        let mut server = Notifications::new();
+        let id = server.post(&incoming("live"), 0);
+
+        assert_eq!(
+            server.remove(id),
+            Some(Closed {
+                id,
+                reason: CloseReason::Dismissed
+            })
+        );
+        assert!(server.live().is_empty());
+        assert!(server.history().is_empty(), "removing is not finishing");
+    }
+
+    #[test]
+    fn remove_of_an_unknown_id_is_a_no_op() {
+        let mut server = Notifications::new();
+        let live = server.post(&incoming("live"), 0);
+        let gone = server.post(&incoming("gone"), 0);
+        server.close(gone, CloseReason::Expired);
+
+        assert_eq!(server.remove(999), None);
+        assert_eq!(server.live().len(), 1);
+        assert_eq!(server.live()[0].id, live);
+        assert_eq!(server.history().len(), 1);
     }
 
     #[test]

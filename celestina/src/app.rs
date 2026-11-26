@@ -1442,6 +1442,9 @@ impl App {
             Verb::NotificationsDismissAll => {
                 self.notifications.send(NotificationsCommand::DismissAll);
             }
+            Verb::NotificationsClear => {
+                self.notifications.send(NotificationsCommand::Clear);
+            }
             Verb::NotificationsToggle if self.polkit_claims_keyboard() => {
                 tracing::info!(
                     "notifications: not toggled while a polkit prompt holds the keyboard"
@@ -1716,6 +1719,9 @@ impl App {
                 IslandAction::Notification(command) => {
                     self.notifications.send(command);
                 }
+                IslandAction::ClearNotifications => {
+                    self.notifications.send(NotificationsCommand::Clear);
+                }
                 IslandAction::ToggleDoNotDisturb => {
                     // The page disables its switch while another program
                     // holds the flag; this keeps the rule if one slips by.
@@ -1935,7 +1941,9 @@ impl App {
         if self.notifications.snapshot().unread > 0
             && self.islands.iter().any(|s| s.island.shows_notifications())
         {
-            self.notifications.send(NotificationsCommand::MarkRead);
+            // Seen here and now: the next frame draws it read, before the
+            // worker's own snapshot says so.
+            self.notifications.mark_viewed();
         }
     }
 

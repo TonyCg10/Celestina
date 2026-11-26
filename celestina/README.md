@@ -216,14 +216,15 @@ not answer within 3 s; an unknown verb exits 2 with the usage. The verbs are
 `island toggle`,
 `island open <activity|notifications|tray|sysmon|clock|clipboard|network|bluetooth|power|phone|media>`,
 `island close`, `launcher toggle`, `notifications toggle`,
-`notifications dismiss-all`, `wallpaper set <output|all> <file>`,
+`notifications dismiss-all`, `notifications clear`, `wallpaper set <output|all> <file>`,
 `wallpaper next [output]`, `wallpaper prev [output]`, `wallpaper mode <mode>`,
 `wallpaper retry`, `clipboard select|remove N [S]`, `clipboard clear|pause|resume`,
 `overview toggle|open|close`, `shortcuts toggle|open|close`,
 `volume up|down|mute|set <0-100>`, `microphone mute|set <0-100>`,
 `brightness up|down|set <0-100> [output]`, `lock`, `lock suspend` and `quit`; `launcher toggle` opens or closes the
 launcher, and `notifications toggle` opens or closes the Notifications page and
-`notifications dismiss-all` dismisses every notification. `overview` opens a
+`notifications dismiss-all` dismisses every live notification, and
+`notifications clear` also empties the history. `overview` opens a
 panel of the focused output's workspaces, with one preview of the output it
 opens on, taken once per opening and discarded on close; `shortcuts` opens the
 keybinds of niri's `config.kdl`, read once per opening. `wallpaper set` and

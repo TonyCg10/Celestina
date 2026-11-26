@@ -180,9 +180,9 @@ pub const BANNER_DISMISS: &str = "Descartar";
 
 // The Notifications page's rows (CEL-1-F).
 
-/// The button above the live notifications that dismisses all of them
-/// ("Dismiss all").
-pub const NOTIFICATIONS_DISMISS_ALL: &str = "Descartar todo";
+/// The button above the list that empties it, live rows and finished ones
+/// alike ("Clear all").
+pub const NOTIFICATIONS_CLEAR_ALL: &str = "Borrar todo";
 
 /// The Tray page's title for an item that has none ("Untitled").
 pub const TRAY_ITEM_UNTITLED: &str = "Sin título";

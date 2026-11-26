@@ -1,8 +1,9 @@
 //! The Notifications page (design §5.5): the do-not-disturb switch, then
 //! every live notification followed by the last ended ones, each with its
-//! icon, summary, two lines of body, arrival time and, while live, a
-//! dismiss button and the producer's action buttons; a dismiss-all button
-//! tops the list while anything is live. While another program holds the
+//! icon, summary, two lines of body, arrival time and a close button that
+//! takes it off the list (a live one is closed too), and, while live, the
+//! producer's action buttons; a clear-all button tops the list while it
+//! has any row. While another program holds the
 //! notifications name the page shows only that program's line and the
 //! switch stays disabled: nothing here would be served.
 
@@ -41,10 +42,10 @@ pub fn switch_key() -> Key {
     Key::named("dnd-switch")
 }
 
-/// The key of the dismiss-all button.
+/// The key of the clear-all button.
 #[must_use]
-pub fn dismiss_all_key() -> Key {
-    Key::named("notes-dismiss-all")
+pub fn clear_all_key() -> Key {
+    Key::named("notes-clear-all")
 }
 
 /// The key of the row of notification `id`.
@@ -53,7 +54,7 @@ pub fn row_key(id: u32) -> Key {
     Key::indexed("note", u64::from(id))
 }
 
-/// The key of the dismiss button of notification `id`.
+/// The key of the close button of notification `id`.
 #[must_use]
 pub fn dismiss_key(id: u32) -> Key {
     Key::indexed("note-dismiss", u64::from(id))
@@ -126,14 +127,17 @@ pub fn action_for(
         return Some(IslandAction::ToggleDoNotDisturb);
     }
     let rows = shown(history, theme, max_size);
-    if key == dismiss_all_key() && rows.first().is_some_and(|r| r.live) {
-        return Some(IslandAction::Notification(NotificationsCommand::DismissAll));
+    if key == clear_all_key() && has_bar(rows) {
+        return Some(IslandAction::ClearNotifications);
     }
-    for row in rows.iter().filter(|r| r.live) {
+    for row in rows {
         if key == dismiss_key(row.id) {
-            return Some(IslandAction::Notification(NotificationsCommand::Close(
+            return Some(IslandAction::Notification(NotificationsCommand::Remove(
                 row.id,
             )));
+        }
+        if !row.live {
+            continue;
         }
         if let Some(a) = (0..row.actions.len()).find(|i| key == action_key(row.id, *i)) {
             return Some(IslandAction::Notification(NotificationsCommand::Invoke(
@@ -143,6 +147,34 @@ pub fn action_for(
         }
     }
     None
+}
+
+/// Where the keyboard goes when the close button of row `id` removes it: the
+/// next row's close button, else the previous one's, else the switch. Rows
+/// are `shown`, in order.
+#[must_use]
+pub fn focus_after_removal(rows: &[HistoryRow], id: u32) -> Key {
+    let at = rows.iter().position(|r| r.id == id);
+    at.and_then(|i| {
+        rows.get(i + 1)
+            .or_else(|| i.checked_sub(1).and_then(|p| rows.get(p)))
+    })
+    .map_or_else(switch_key, |r| dismiss_key(r.id))
+}
+
+/// The accessible name of the page's node `key`: the close button of a row
+/// the page draws (it shows only its icon; the suite has no tooltips).
+#[must_use]
+pub fn button_name(
+    history: &[HistoryRow],
+    theme: &Theme,
+    max_size: (f32, f32),
+    key: Key,
+) -> Option<&'static str> {
+    shown(history, theme, max_size)
+        .iter()
+        .any(|r| key == dismiss_key(r.id))
+        .then_some(copy::BANNER_DISMISS)
 }
 
 /// The switch row and the gap under it.
@@ -168,16 +200,22 @@ fn entry_height(theme: &Theme, row: &HistoryRow) -> f32 {
     (h + 2.0 * theme.spacing.sm).max(theme.row_height)
 }
 
-/// The dismiss-all button's row and the gap under it.
-fn dismiss_all_block(theme: &Theme) -> f32 {
+/// Whether the list has its clear-all bar: with any row, unless a clear-all
+/// is already folding them.
+fn has_bar(rows: &[HistoryRow]) -> bool {
+    !rows.is_empty() && rows.iter().all(|r| !r.folding)
+}
+
+/// The clear-all button's row and the gap under it.
+fn clear_all_block(theme: &Theme) -> f32 {
     BUTTON_H + theme.spacing.xs
 }
 
-/// The height of the list of `rows`: the dismiss-all button when the first
-/// is live, the rows and the gaps between them.
+/// The height of the list of `rows`: the clear-all button when there is
+/// any row, the rows and the gaps between them.
 fn list_height(theme: &Theme, rows: &[HistoryRow]) -> f32 {
-    let top = if rows.first().is_some_and(|r| r.live) {
-        dismiss_all_block(theme)
+    let top = if has_bar(rows) {
+        clear_all_block(theme)
     } else {
         0.0
     };
@@ -187,7 +225,7 @@ fn list_height(theme: &Theme, rows: &[HistoryRow]) -> f32 {
 
 /// The leading rows that fit a page of `max_size`: the rest are not built,
 /// so nothing invisible can be focused or clicked.
-fn shown<'a>(rows: &'a [HistoryRow], theme: &Theme, max_size: (f32, f32)) -> &'a [HistoryRow] {
+pub fn shown<'a>(rows: &'a [HistoryRow], theme: &Theme, max_size: (f32, f32)) -> &'a [HistoryRow] {
     let room = max_size.1 - chrome_height(theme) - switch_block(theme);
     let fit = (1..=rows.len())
         .take_while(|n| list_height(theme, &rows[..*n]) <= room)
@@ -227,16 +265,16 @@ fn dnd_switch(theme: &Theme, on: bool, enabled: bool) -> View {
     row
 }
 
-/// The dismiss-all button over the list of `rows`, then the rows.
+/// The clear-all button over the list of `rows`, then the rows.
 fn entries(theme: &Theme, rows: &[HistoryRow]) -> View {
-    let all = rows.first().is_some_and(|r| r.live).then(|| {
+    let all = has_bar(rows).then(|| {
         let mut bar = centred(view::row(Key::named("notes-bar"))).height(BUTTON_H);
         bar.style.justify_content = JustifyContent::FLEX_END;
         bar.child(button(
             theme,
-            dismiss_all_key(),
-            Key::named("notes-dismiss-all-label"),
-            copy::NOTIFICATIONS_DISMISS_ALL,
+            clear_all_key(),
+            Key::named("notes-clear-all-label"),
+            copy::NOTIFICATIONS_CLEAR_ALL,
         ))
     });
     view::col(Key::named("notifications-rows"))
@@ -281,7 +319,7 @@ fn entry(theme: &Theme, n: &HistoryRow) -> View {
         (Role::TextLo, Role::TextFaint)
     };
     let summary_size = theme.type_scale.row_title;
-    let summary_w = text_w - TIME_W - theme.spacing.sm - if n.live { DISMISS_SIZE } else { 0.0 };
+    let summary_w = text_w - TIME_W - 2.0 * theme.spacing.sm - DISMISS_SIZE;
     let summary = view::col(Key::indexed("note-summary", id))
         .height(line(summary_size))
         .clip()
@@ -305,7 +343,7 @@ fn entry(theme: &Theme, n: &HistoryRow) -> View {
         ),
     )
     .max_width(TIME_W);
-    let dismiss = n.live.then(|| {
+    let dismiss = {
         let mut b = centred(view::row(dismiss_key(n.id)))
             .size(DISMISS_SIZE, DISMISS_SIZE)
             .radius(theme.radius_sm)
@@ -321,12 +359,12 @@ fn entry(theme: &Theme, n: &HistoryRow) -> View {
             );
         b.style.justify_content = JustifyContent::CENTER;
         b
-    });
+    };
     let header = centred(view::row(Key::indexed("note-header", id)))
         .gap(theme.spacing.sm)
         .child(summary)
         .child(when)
-        .children(dismiss);
+        .child(dismiss);
     let body_size = theme.type_scale.body;
     let body = (!n.body.is_empty()).then(|| {
         view::col(Key::indexed("note-body", id))
@@ -486,7 +524,7 @@ mod tests {
         let v = page_with(&held(), &history, MAX);
         let rows = &v.children[1];
         assert_eq!(rows.children.len(), 1, "only the owner line");
-        assert!(find(&v, row_key(1)).is_none() && find(&v, dismiss_all_key()).is_none());
+        assert!(find(&v, row_key(1)).is_none() && find(&v, clear_all_key()).is_none());
         assert!(!v.children[0].interactive && !v.children[0].focusable);
         assert_eq!(wants_in(&held(), &history, (760.0, 2000.0)), PAGE_SIZE);
     }
@@ -570,25 +608,105 @@ mod tests {
     }
 
     #[test]
-    fn only_live_rows_have_buttons() {
+    fn every_row_has_a_close_button() {
         let history = [live(2, &["reply", "mute"]), ended(1)];
         let v = page_with(&NameOwner::default(), &history, MAX);
         let button = |key| find(&v, key).filter(|b| b.interactive && b.focusable);
-        assert!(button(dismiss_key(2)).is_some());
+        for id in [1, 2] {
+            let b = button(dismiss_key(id));
+            assert!(b.is_some(), "row {id} has a close button");
+            assert_eq!(
+                b.map(|b| b.style.size.width),
+                Some(taffy::Dimension::length(24.0))
+            );
+        }
+        // Only a live row has the producer's buttons.
         assert!(button(action_key(2, 0)).is_some() && button(action_key(2, 1)).is_some());
         assert!(button(action_key(2, 2)).is_none());
-        assert!(
-            find(&v, dismiss_key(1)).is_none(),
-            "ended rows have no dismiss"
-        );
         assert!(find(&v, action_key(1, 0)).is_none());
-        assert!(button(dismiss_all_key()).is_some());
         let label = find(&v, Key::indexed("note-action-label", (2 << 8) | 1)).and_then(text_of);
         assert_eq!(label, Some("MUTE"));
-        // Nothing live: no dismiss-all.
-        let v = page_with(&NameOwner::default(), &[ended(1)], MAX);
-        assert!(find(&v, dismiss_all_key()).is_none());
         assert!(!find(&v, row_key(1)).is_some_and(|r| r.interactive || r.focusable));
+        let theme = celestina_paint::Theme::dark();
+        for id in [1, 2] {
+            assert_eq!(
+                button_name(&history, &theme, MAX, dismiss_key(id)),
+                Some(copy::BANNER_DISMISS)
+            );
+        }
+        assert_eq!(button_name(&history, &theme, MAX, action_key(2, 0)), None);
+    }
+
+    #[test]
+    fn clear_all_bar_shows_with_any_row() {
+        for history in [
+            vec![live(1, &[])],
+            vec![ended(1)],
+            vec![live(2, &[]), ended(1)],
+        ] {
+            let v = page_with(&NameOwner::default(), &history, MAX);
+            assert!(
+                find(&v, clear_all_key()).is_some_and(|b| b.interactive && b.focusable),
+                "{history:?}"
+            );
+            let label = find(&v, Key::named("notes-clear-all-label")).and_then(text_of);
+            assert_eq!(label, Some(copy::NOTIFICATIONS_CLEAR_ALL));
+        }
+        let v = page_with(&NameOwner::default(), &[], MAX);
+        assert!(find(&v, clear_all_key()).is_none(), "none when empty");
+    }
+
+    #[test]
+    fn the_summary_leaves_room_for_the_two_gaps_of_the_header() {
+        let theme = celestina_paint::Theme::dark();
+        let v = page_with(&NameOwner::default(), &[ended(1)], MAX);
+        let max = find(&v, Key::indexed("note-summary-text", 1)).and_then(|t| match &t.kind {
+            ViewKind::Text { max_width, .. } => *max_width,
+            _ => None,
+        });
+        assert_eq!(
+            max,
+            Some(text_width(&theme) - TIME_W - 2.0 * theme.spacing.sm - DISMISS_SIZE)
+        );
+    }
+
+    #[test]
+    fn a_folding_row_takes_the_clear_all_bar_with_it() {
+        let mut rows = vec![live(2, &[]), ended(1)];
+        for r in &mut rows {
+            r.folding = true;
+        }
+        let v = page_with(&NameOwner::default(), &rows, MAX);
+        assert!(find(&v, clear_all_key()).is_none());
+        assert!(
+            find(&v, row_key(1)).is_some(),
+            "the rows stay while they fold"
+        );
+        let theme = celestina_paint::Theme::dark();
+        assert_eq!(
+            action_for(&rows, &NameOwner::default(), &theme, MAX, clear_all_key()),
+            None
+        );
+    }
+
+    #[test]
+    fn the_keyboard_follows_a_removal_to_the_next_row_else_the_previous_else_the_switch() {
+        let rows = [live(3, &[]), ended(2), ended(1)];
+        assert_eq!(focus_after_removal(&rows, 3), dismiss_key(2));
+        assert_eq!(focus_after_removal(&rows, 2), dismiss_key(1));
+        assert_eq!(focus_after_removal(&rows, 1), dismiss_key(2), "the last");
+        assert_eq!(focus_after_removal(&rows[..1], 3), switch_key(), "the only");
+        assert_eq!(focus_after_removal(&[], 9), switch_key());
+    }
+
+    #[test]
+    fn close_on_a_finished_row_sends_remove() {
+        let theme = celestina_paint::Theme::dark();
+        let history = [live(2, &["reply"]), ended(1)];
+        let act = |key| action_for(&history, &NameOwner::default(), &theme, MAX, key);
+        let cmd = |c| Some(IslandAction::Notification(c));
+        assert_eq!(act(dismiss_key(1)), cmd(NotificationsCommand::Remove(1)));
+        assert_eq!(act(dismiss_key(2)), cmd(NotificationsCommand::Remove(2)));
     }
 
     #[test]
@@ -599,27 +717,67 @@ mod tests {
         let free = NameOwner::default();
         let cmd = |c| Some(IslandAction::Notification(c));
         assert_eq!(
-            act(&free, dismiss_key(2)),
-            cmd(NotificationsCommand::Close(2))
-        );
-        assert_eq!(
             act(&free, action_key(2, 1)),
             cmd(NotificationsCommand::Invoke(2, "mute".to_owned()))
-        );
-        assert_eq!(
-            act(&free, dismiss_all_key()),
-            cmd(NotificationsCommand::DismissAll)
         );
         assert_eq!(
             act(&free, switch_key()),
             Some(IslandAction::ToggleDoNotDisturb)
         );
-        assert_eq!(act(&free, dismiss_key(1)), None, "ended");
         assert_eq!(act(&free, action_key(2, 2)), None, "no third button");
+        assert_eq!(act(&free, action_key(1, 0)), None, "ended");
         assert_eq!(act(&free, row_key(2)), None);
+        assert_eq!(act(&free, dismiss_key(9)), None, "no such row");
         // While another program holds the name nothing acts.
-        for key in [dismiss_key(2), dismiss_all_key(), switch_key()] {
+        for key in [dismiss_key(2), clear_all_key(), switch_key()] {
             assert_eq!(act(&held(), key), None);
+        }
+    }
+
+    #[test]
+    fn clear_all_asks_to_clear_the_whole_list() {
+        // The app sends the worker one `Clear`; the page asks once.
+        let theme = celestina_paint::Theme::dark();
+        let history = [live(2, &[]), ended(1)];
+        assert_eq!(
+            action_for(
+                &history,
+                &NameOwner::default(),
+                &theme,
+                MAX,
+                clear_all_key()
+            ),
+            Some(IslandAction::ClearNotifications)
+        );
+        assert_eq!(
+            action_for(&[], &NameOwner::default(), &theme, MAX, clear_all_key()),
+            None,
+            "nothing to clear"
+        );
+    }
+
+    /// The rows below a removed one rise on the toolkit's slide (200 ms);
+    /// under reduced motion the rise is a single step: nothing is left
+    /// sliding.
+    #[test]
+    fn reduced_motion_removes_rows_at_once() {
+        let theme = celestina_paint::Theme::dark();
+        let t0 = Instant::now();
+        let history = [ended(3), ended(2), ended(1)];
+        for reduced in [true, false] {
+            let mut tree = Tree::new(reduced, &theme);
+            tree.apply(page_with(&NameOwner::default(), &history, MAX), t0);
+            tree.layout_measured(MAX, fake_measure);
+            // Row 3 goes: rows 2 and 1 rise into its place.
+            tree.apply(page_with(&NameOwner::default(), &history[1..], MAX), t0);
+            tree.layout_measured(MAX, fake_measure);
+            let slide = |id| tree.node_by_key(row_key(id)).map(|n| tree.offset(n, t0).1);
+            let (a, b) = (slide(2), slide(1));
+            if reduced {
+                assert_eq!((a, b), (Some(0.0), Some(0.0)), "a step, no slide");
+            } else {
+                assert!(a.is_some_and(|dy| dy > 0.0), "rises over {a:?}");
+            }
         }
     }
 

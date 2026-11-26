@@ -1526,6 +1526,28 @@ None has been run and none is closed by an agent.
 - **Evidence:** none; the unit's automated evidence is
   [CEL-I-009](docs/evidence/2026-11-25-cel-i-009-brightness-gaps.md)
 
+## VAL-CEL-I-010 — Removing notifications and clearing the list
+
+- **Status:** pending
+- **Related implementation:** CEL-I-010 (the Notifications page: a close
+  button on every row, the clear-all bar, the history marked read when the page
+  is seen)
+- **Requires:** the deployed shell after the landing of CEL-I-010, with a few
+  notifications live and a few ended (for example posted with `notify-send`)
+- **Procedure:** (1) post a notification while the page is closed, so the bell
+  shows its dot, then open the page. (2) Press the x of a finished row and of
+  a live one (its banner, if on screen, goes too). (3) Move over and Tab to an
+  x. (4) Press "Borrar todo" with a banner on screen. (5) With reduced motion
+  on, remove a row
+- **Pass condition:** (1) the dot is gone as the window opens and does not
+  flash on again; (2) each row folds away and the rows below rise; (3) the x
+  shows its hover plate and its focus ring; (4) every row and the banner go and
+  the window narrows to its smallest width on a short spring, showing "Sin
+  notificaciones"; (5) the row goes without sliding
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-I-010](docs/evidence/2026-11-26-cel-i-010-notifications.md)
+
 ## VAL-CEL-D-002 — The volume menu grows out of the bar's end capsule
 
 - **Status:** pending

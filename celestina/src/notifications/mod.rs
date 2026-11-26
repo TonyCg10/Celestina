@@ -49,6 +49,10 @@ pub struct NotificationsState {
     /// A command was refused already: the next refusals are not logged,
     /// they fail for the same reason.
     refusal_logged: bool,
+    /// The worker has not yet answered the `MarkRead` that [`Self::mark_viewed`]
+    /// queued: its snapshot repeats the one held, yet every surface still
+    /// has to draw it.
+    seen_unanswered: bool,
 }
 
 impl NotificationsState {
@@ -60,6 +64,7 @@ impl NotificationsState {
             owner: None,
             provider,
             refusal_logged: false,
+            seen_unanswered: false,
         }
     }
 
@@ -67,6 +72,43 @@ impl NotificationsState {
     #[must_use]
     pub fn snapshot(&self) -> &NotificationsSnapshot {
         &self.snapshot
+    }
+
+    /// Marks everything read in the held snapshot and rows, ahead of the
+    /// worker's own snapshot, so a notification that arrives while the page
+    /// is shown is never drawn unread for a frame. The worker's snapshot
+    /// that follows is then equal to this one. Whether anything changed.
+    pub fn see_all(&mut self) -> bool {
+        if self.snapshot.unread == 0 {
+            return false;
+        }
+        let snapshot = &mut self.snapshot;
+        for entry in snapshot
+            .toasts
+            .iter_mut()
+            .chain(&mut snapshot.live)
+            .chain(&mut snapshot.history)
+        {
+            entry.read = true;
+        }
+        snapshot.unread = 0;
+        for row in &mut self.rows {
+            row.read = true;
+        }
+        true
+    }
+
+    /// What is on the Notifications page counts as seen: asks the worker to
+    /// mark everything read and, only if it was queued, marks the held state
+    /// read ahead of it ([`Self::see_all`]). The worker's answer then redraws
+    /// every surface once, though it repeats the held snapshot. Whether
+    /// anything was marked.
+    pub fn mark_viewed(&mut self) -> bool {
+        if self.snapshot.unread == 0 || !self.send(NotificationsCommand::MarkRead) {
+            return false;
+        }
+        self.seen_unanswered = self.see_all();
+        self.seen_unanswered
     }
 
     /// The rows of the Notifications page: live first, then ended.
@@ -92,8 +134,13 @@ impl NotificationsState {
                 Applied::Changed
             }
             NotificationsEvent::Snapshot(snapshot) => {
+                let answered = std::mem::take(&mut self.seen_unanswered);
                 if snapshot == self.snapshot {
-                    return Applied::Unchanged;
+                    return if answered {
+                        Applied::Changed
+                    } else {
+                        Applied::Unchanged
+                    };
                 }
                 let (secs, _) = clock::unix_now();
                 self.rows = history::history_rows(
@@ -162,6 +209,8 @@ pub fn toggle_verb(open: Option<PageId>) -> Verb {
 mod tests {
     use std::sync::mpsc::Receiver;
 
+    use celestina_shell::notifications::{Notification, Urgency};
+
     use super::*;
 
     fn state_with_worker() -> (NotificationsState, Receiver<NotificationsCommand>) {
@@ -176,6 +225,97 @@ mod tests {
             unread,
             ..NotificationsSnapshot::default()
         }
+    }
+
+    #[test]
+    fn see_all_clears_the_unread_count_and_the_rows_ahead_of_the_worker() {
+        let (mut state, _queue) = state_with_worker();
+        let notification = Notification {
+            id: 1,
+            app_name: "Magnetita".to_owned(),
+            summary: "hello".to_owned(),
+            body: String::new(),
+            image: None,
+            actions: Vec::new(),
+            urgency: Urgency::Normal,
+            posted_ms: 0,
+            expires_at_ms: None,
+            read: false,
+        };
+        let unread = NotificationsSnapshot {
+            live: vec![notification.clone()],
+            toasts: vec![notification],
+            unread: 1,
+            ..NotificationsSnapshot::default()
+        };
+        assert!(state
+            .apply(NotificationsEvent::Snapshot(unread.clone()))
+            .is_changed());
+        assert!(state.see_all());
+        assert_eq!(state.snapshot().unread, 0);
+        assert!(state.rows().iter().all(|row| row.read));
+        assert!(!state.see_all(), "nothing left: no loop");
+
+        // The worker's snapshot after its MarkRead is what is held already.
+        let mut seen = unread;
+        seen.unread = 0;
+        seen.live[0].read = true;
+        seen.toasts[0].read = true;
+        assert_eq!(
+            state.apply(NotificationsEvent::Snapshot(seen)),
+            Applied::Unchanged
+        );
+    }
+
+    #[test]
+    fn the_answer_to_a_viewed_mark_redraws_every_surface_once() {
+        let (mut state, queue) = state_with_worker();
+        let notification = Notification {
+            id: 1,
+            app_name: "app".to_owned(),
+            summary: "hello".to_owned(),
+            body: String::new(),
+            image: None,
+            actions: Vec::new(),
+            urgency: Urgency::Normal,
+            posted_ms: 0,
+            expires_at_ms: None,
+            read: false,
+        };
+        let unread = NotificationsSnapshot {
+            history: vec![notification],
+            unread: 1,
+            ..NotificationsSnapshot::default()
+        };
+        let _ = state.apply(NotificationsEvent::Snapshot(unread.clone()));
+        assert!(state.mark_viewed());
+        assert_eq!(queue.try_recv(), Ok(NotificationsCommand::MarkRead));
+        let mut seen = unread;
+        seen.unread = 0;
+        seen.history[0].read = true;
+        assert_eq!(
+            state.apply(NotificationsEvent::Snapshot(seen.clone())),
+            Applied::Changed,
+            "the other outputs still draw the dot"
+        );
+        assert_eq!(
+            state.apply(NotificationsEvent::Snapshot(seen)),
+            Applied::Unchanged,
+            "once"
+        );
+    }
+
+    #[test]
+    fn nothing_is_marked_seen_when_the_command_is_refused() {
+        let (mut state, queue) = state_with_worker();
+        let unread = NotificationsSnapshot {
+            unread: 1,
+            ..NotificationsSnapshot::default()
+        };
+        let _ = state.apply(NotificationsEvent::Snapshot(unread));
+        drop(queue);
+        assert!(!state.mark_viewed());
+        assert_eq!(state.snapshot().unread, 1, "still unread");
     }
 
     #[test]

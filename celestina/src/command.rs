@@ -47,6 +47,7 @@ verbs: island toggle
        shortcuts toggle|open|close
        notifications toggle
        notifications dismiss-all
+       notifications clear
        wallpaper set OUTPUT|all FILE
        wallpaper next [OUTPUT]
        wallpaper prev [OUTPUT]
@@ -117,6 +118,8 @@ pub enum Verb {
     Shortcuts(Presence),
     NotificationsToggle,
     NotificationsDismissAll,
+    /// Clears the history and dismisses what is live.
+    NotificationsClear,
     /// `wallpaper set <output|all> <file>`: `file` is a bare name in the
     /// wallpaper folder.
     WallpaperSet {
@@ -241,6 +244,7 @@ impl Verb {
             }
             ["notifications", "toggle"] => Verb::NotificationsToggle,
             ["notifications", "dismiss-all"] => Verb::NotificationsDismissAll,
+            ["notifications", "clear"] => Verb::NotificationsClear,
             ["wallpaper", "set", target, file] if output_name(target) && file_name(file) => {
                 Verb::WallpaperSet {
                     target: if *target == "all" {
@@ -352,6 +356,7 @@ impl Verb {
             Verb::Shortcuts(presence) => vec!["shortcuts", presence.word()],
             Verb::NotificationsToggle => vec!["notifications", "toggle"],
             Verb::NotificationsDismissAll => vec!["notifications", "dismiss-all"],
+            Verb::NotificationsClear => vec!["notifications", "clear"],
             Verb::Caffeine(switch) => vec!["caffeine", verbs::switch_word(*switch)],
             Verb::NightLight(switch) => vec!["nightlight", verbs::switch_word(*switch)],
             Verb::Session(action) => vec!["session", verbs::action_word(*action)],
@@ -488,6 +493,7 @@ mod tests {
             (Verb::Shortcuts(Presence::Close), "shortcuts close"),
             (Verb::NotificationsToggle, "notifications toggle"),
             (Verb::NotificationsDismissAll, "notifications dismiss-all"),
+            (Verb::NotificationsClear, "notifications clear"),
             (Verb::Caffeine(Switch::On), "caffeine on"),
             (Verb::Caffeine(Switch::Off), "caffeine off"),
             (Verb::Caffeine(Switch::Toggle), "caffeine toggle"),
@@ -918,7 +924,7 @@ mod tests {
 
     #[test]
     fn every_accepted_verb_string_parses_to_its_verb() {
-        let table: [(&[&str], Verb); 11] = [
+        let table: [(&[&str], Verb); 12] = [
             (&["island", "toggle"], Verb::IslandToggle),
             (
                 &["island", "open", "activity"],
@@ -938,6 +944,7 @@ mod tests {
                 &["notifications", "dismiss-all"],
                 Verb::NotificationsDismissAll,
             ),
+            (&["notifications", "clear"], Verb::NotificationsClear),
             (&["quit"], Verb::Quit),
         ];
         for (words, verb) in table {

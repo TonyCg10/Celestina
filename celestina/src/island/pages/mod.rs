@@ -82,6 +82,9 @@ pub struct HistoryRow {
     /// default, which belongs to the banner's body), at most the machine's
     /// bound; ended rows offer none.
     pub actions: Vec<RowAction>,
+    /// A clear-all is folding the row: the list has no clear-all bar while
+    /// any row folds, so the bar leaves with the press, not with the last row.
+    pub folding: bool,
 }
 
 /// One action button of a live notification's row.
@@ -441,6 +444,7 @@ mod tests {
                     label: (*label).to_owned(),
                 })
                 .collect(),
+            folding: false,
         }
     }
 
@@ -664,8 +668,8 @@ mod tests {
                 "   Key(14428596922856908928) box",
                 " Key(2551833107654166475) box",
                 "  Key(15487842299666878042) box",
-                "   Key(10834817680499137729) box",
-                "    Key(1830734672865307682) text \"Descartar todo\"",
+                "   Key(12985064790912276236) box",
+                "    Key(5288965452099437499) text \"Borrar todo\"",
                 "  Key(16452716187036512225) box",
                 "   Key(13453905839215043437) icon",
                 "   Key(888077872929100793) box",
@@ -687,6 +691,8 @@ mod tests {
                 "     Key(14522393168612388179) box",
                 "      Key(15821697436879829139) text \"Summary 6\"",
                 "     Key(10328303877464568691) text \"09:41\"",
+                "     Key(6511591844237036455) box",
+                "      Key(8138051357192889433) icon",
                 "    Key(13452444099412391487) box",
                 "     Key(16993145369898682183) text \"Body 6\"",
             ],

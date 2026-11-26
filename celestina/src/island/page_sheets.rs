@@ -19,9 +19,10 @@ use crate::{
     island::pages::{
         activity, bluetooth as bluetooth_page, clock as clock_page, media as media_page,
         network as network_page, notifications, page_view, phone as phone_page,
-        power as power_page, sysmon as sysmon_page,
+        power as power_page, sysmon as sysmon_page, HistoryRow,
     },
     pieces::{Face, PageId, SheetKind},
+    providers::notifications::NotificationsCommand,
     sheet::PageBody,
 };
 
@@ -39,7 +40,7 @@ impl Island {
             output: &self.output,
             owners: &self.owners,
             do_not_disturb: self.do_not_disturb,
-            history: &self.history,
+            history: &self.presented,
             items: &self.tray_rows,
             sysmon: self.page_sysmon.as_ref(),
             weather: self.weather.as_ref(),
@@ -322,7 +323,7 @@ impl Island {
         &mut self,
         page: PageId,
         key: Key,
-        _now: Instant,
+        now: Instant,
     ) -> Option<IslandAction> {
         if page == PageId::CLIPBOARD {
             if let Some(handled) = self.clipboard_activate(key) {
@@ -345,12 +346,13 @@ impl Island {
         {
             Some(action)
         } else if let Some(action) = notifications::action_for(
-            &self.history,
+            &self.presented,
             &self.owners,
             &self.theme,
             self.state.max_page_size(),
             key,
         ) {
+            self.notification_pressed(&action, key, now);
             Some(action)
         } else if let Some(action) = phone_page::action_for(&self.phone, key) {
             Some(action)
@@ -364,6 +366,41 @@ impl Island {
                 key,
             )
         }
+    }
+
+    /// What the page does besides the action of a press on its node `key`:
+    /// a clear-all folds the rows shown one after another (the worker
+    /// forgets them all at once), and a keyboard removal moves the focus to
+    /// a row that stays.
+    fn notification_pressed(&mut self, action: &IslandAction, key: Key, now: Instant) {
+        let shown =
+            notifications::shown(&self.presented, &self.theme, self.state.max_page_size()).to_vec();
+        let keyboard = self.shown_page_input().is_some_and(|(tree, _)| {
+            tree.highlight()
+                .focused
+                .is_some_and(|node| tree.key_of(node) == key)
+        });
+        match action {
+            IslandAction::ClearNotifications => {
+                let folding: Vec<HistoryRow> = shown
+                    .into_iter()
+                    .map(|row| HistoryRow {
+                        folding: true,
+                        ..row
+                    })
+                    .collect();
+                self.cleared = self.presented.iter().map(|r| r.id).collect();
+                self.clearing = (!self.reduced).then_some((now, folding));
+                if keyboard {
+                    self.pending_focus = Some(notifications::switch_key());
+                }
+            }
+            IslandAction::Notification(NotificationsCommand::Remove(id)) if keyboard => {
+                self.pending_focus = Some(notifications::focus_after_removal(&shown, *id));
+            }
+            _ => {}
+        }
+        self.stale = true;
     }
 
     /// What the row `key` of the connectivity `page` offers: only the page

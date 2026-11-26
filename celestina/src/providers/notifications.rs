@@ -112,14 +112,17 @@ pub struct NotificationsSnapshot {
 pub enum NotificationsCommand {
     /// The person dismissed one notification.
     Close(u32),
+    /// The person took one notification off the list, live or finished.
+    Remove(u32),
     /// The person pressed one of its actions: the key the producer offered.
     Invoke(u32, String),
     /// The person cleared the stack.
     DismissAll,
     /// Do not disturb on or off.
     SetQuiet(bool),
-    /// Forget what has ended.
-    ClearHistory,
+    /// Empty the list in one step: close what is live (`Dismissed`), then
+    /// forget what has ended, so no snapshot shows the half-way state.
+    Clear,
     /// The pointer entered (`true`) or left the banner stack; expiry is held
     /// while it rests there.
     Hover(bool),
@@ -262,6 +265,13 @@ impl Core {
                 .map(Signal::Closed)
                 .into_iter()
                 .collect(),
+            NotificationsCommand::Remove(id) => {
+                let before = self.machine.live().len() + self.machine.history().len();
+                let closed = self.machine.remove(id);
+                // A history entry has no close to report, but it is gone.
+                self.dirty |= self.machine.live().len() + self.machine.history().len() != before;
+                closed.map(Signal::Closed).into_iter().collect()
+            }
             NotificationsCommand::Invoke(id, key) => {
                 // A key the producer never offered is never sent on its
                 // behalf.
@@ -283,18 +293,18 @@ impl Core {
                 self.machine.set_quiet(quiet);
                 Vec::new()
             }
-            NotificationsCommand::ClearHistory => {
-                self.dirty |= !self.machine.history().is_empty();
+            NotificationsCommand::Clear => {
+                let closed = self.machine.dismiss_all();
+                self.dirty |= !closed.is_empty() || !self.machine.history().is_empty();
                 self.machine.clear_history();
-                Vec::new()
+                closed.into_iter().map(Signal::Closed).collect()
             }
             NotificationsCommand::Hover(hovered) => {
                 self.clock.set_paused(real_ms, hovered);
                 Vec::new()
             }
             NotificationsCommand::MarkRead => {
-                self.dirty |= self.machine.live().iter().any(|entry| !entry.read);
-                self.machine.mark_read();
+                self.dirty |= self.machine.mark_read();
                 Vec::new()
             }
             NotificationsCommand::Post(notice) => {
@@ -870,9 +880,75 @@ mod tests {
         );
         core.command(NotificationsCommand::MarkRead, 3);
         let _ = core.take_snapshot();
-        core.command(NotificationsCommand::ClearHistory, 4);
+        core.command(NotificationsCommand::Clear, 4);
         let cleared = core.take_snapshot();
         assert!(cleared.is_some_and(|s| s.history.is_empty() && s.unread == 0));
+    }
+
+    #[test]
+    fn clear_closes_what_is_live_and_empties_the_history_in_one_snapshot() {
+        let mut core = Core::new();
+        let a = core.post(&incoming("a", Urgency::Normal, 100), 0);
+        core.tick(1_000);
+        let b = core.post(&incoming("b", Urgency::Normal, 0), 2_000);
+        let _ = core.take_snapshot();
+        assert!(!core.machine.history().is_empty() && !core.machine.live().is_empty());
+        assert_eq!(
+            core.command(NotificationsCommand::Clear, 3_000),
+            vec![closed(b, CloseReason::Dismissed)],
+            "only the live one is closed; {a} had ended"
+        );
+        let only = core.take_snapshot();
+        assert!(only.is_some_and(|s| s.live.is_empty() && s.history.is_empty()));
+        assert!(
+            core.take_snapshot().is_none(),
+            "one snapshot, no half-way state"
+        );
+    }
+
+    #[test]
+    fn mark_read_publishes_when_only_the_history_was_unread() {
+        let mut core = Core::new();
+        core.post(&incoming("a", Urgency::Normal, 100), 0);
+        core.tick(1_000);
+        assert!(core.machine.live().is_empty());
+        let _ = core.take_snapshot();
+
+        core.command(NotificationsCommand::MarkRead, 3);
+        let published = core.take_snapshot();
+        assert!(published.is_some_and(|s| s.unread == 0 && s.history[0].read));
+
+        // Nothing unread: no snapshot, so the app's mark-when-viewed cannot loop.
+        core.command(NotificationsCommand::MarkRead, 4);
+        assert!(core.take_snapshot().is_none());
+    }
+
+    #[test]
+    fn remove_command_reaches_the_domain() {
+        let mut core = Core::new();
+        let live = core.post(&incoming("live", Urgency::Normal, 0), 0);
+        let gone = core.post(&incoming("gone", Urgency::Normal, 0), 0);
+        core.close(gone, CloseReason::Expired);
+        let _ = core.take_snapshot();
+
+        assert_eq!(
+            core.command(NotificationsCommand::Remove(live), 1),
+            vec![closed(live, CloseReason::Dismissed)]
+        );
+        assert!(core.take_snapshot().is_some_and(|s| s.live.is_empty()));
+
+        assert!(core
+            .command(NotificationsCommand::Remove(gone), 2)
+            .is_empty());
+        assert!(core.take_snapshot().is_some_and(|s| s.history.is_empty()));
+
+        assert!(core
+            .command(NotificationsCommand::Remove(gone), 3)
+            .is_empty());
+        assert!(
+            core.take_snapshot().is_none(),
+            "an unknown id changes nothing"
+        );
     }
 
     #[test]
