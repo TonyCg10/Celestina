@@ -717,6 +717,12 @@ Message::CloseLevelSheet(SurfaceId)
 
 ---
 
+### Task B5: the focus indicator replaces the spotlight (added 2026-11-25)
+
+The author's approved indicator is the focus (I5): the other pieces of the open capsule dim to 40 %, the open one keeps its grey pill, no light. Part A's spotlight (decision 9, `Painter::spotlight`, `spotlight.rs`) came from a misreading; B5 removed it and added the dim (`Indicator::dim`, `child_opacity`, `paint_row`'s open key and dim level). Brief: the sessions' shared notes, `cel-d/sdd/task-B5-brief.md`.
+
+---
+
 ## Part C — `CEL-D-004`: one centre capsule with time, date and weather
 
 **Worktree:** `sh scripts/worktree.sh open celestina CEL-D-004` from `main` once `CEL-D-003` has landed. If it has not, stack it with `--from unit/celestina/CEL-D-003`.

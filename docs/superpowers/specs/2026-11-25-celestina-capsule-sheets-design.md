@@ -161,14 +161,15 @@ cannot animate).
 
 ### 4.4 Which menu is open
 
-- The open piece keeps today's grey pill (`controlHover`, radius 12) while its
-  sheet is open, and a soft white spotlight falls from it into the menu: a
-  cone 2.5 × the piece's width at its foot, from the piece's bottom edge down
-  116 px, white at 13 % → 4 % (at 42 %) → 0 (at 85 %), with feathered sides
-  (no hard edge, no light line), and inside it a fainter, narrower core
-  (the middle third, 50 px, 9 % → 0), as in the approved preview. It fades in 140 ms after the sheet
-  starts opening (200 ms, One UI curve) and, when switching pieces, slides
-  with the pill using the open spring. Reduced motion: no slide, no delay.
+- While a sheet is open, the open piece keeps today's grey pill
+  (`controlHover`, radius 12), which slides with the open spring when the
+  sheet switches pieces, and every other piece of that capsule's row is
+  painted at 40 % opacity: the approved "focus" indicator (I5 of the preview).
+  The dim comes in over 200 ms (One UI curve) and goes over 150 ms (exit
+  curve) on close; a switch keeps it. Reduced motion: it jumps.
+- Correction of 2026-11-25: this section first described a white spotlight
+  under the open piece, from a misreading of the author's choice; CEL-D-002
+  shipped it and CEL-D-003 (Task B5) replaced it with the focus indicator.
 
 ### 4.5 One centre capsule (`CEL-D-004`)
 
