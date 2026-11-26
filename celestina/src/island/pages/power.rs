@@ -227,6 +227,7 @@ mod tests {
         theme: &'a Theme,
     ) -> PageCx<'a> {
         PageCx {
+            content_w: None,
             theme,
             max_size: max,
             model: None,

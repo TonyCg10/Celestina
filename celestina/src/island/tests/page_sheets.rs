@@ -9,7 +9,7 @@ use crate::{
     connectivity::state::sample as connectivity_sample,
     island::{
         pages::{page_view, tabs},
-        view::{page_sheet_size, sheet_more_key, PAGE_SHEET_W},
+        view::{page_sheet_size, sheet_more_key, PAGE_SHEET_MIN_W, PAGE_SHEET_W},
     },
     pieces::SheetKind,
 };
@@ -36,7 +36,10 @@ fn new_island() -> (Island, Instant) {
 
 /// Asks the bell's sheet of `page`, lets it settle and returns the time.
 fn open_page_sheet(island: &mut Island, page: PageId, t: Instant) -> Instant {
-    assert_eq!(island.sheet_request(bell(), SheetKind::Page(page), t), None);
+    assert_eq!(
+        island.sheet_request(bell(), SheetKind::Page(page), t, &mut fake_measure),
+        None
+    );
     let t = t + ms(400);
     step(island, t);
     t
@@ -48,10 +51,7 @@ fn node_at(island: &Island, key: Key, now: Instant) -> (f32, f32) {
     let Some(r) = island.sheets.body_node_rect(key) else {
         panic!("no sheet node {key:?}");
     };
-    (
-        sheet.x + r.x + r.w / 2.0,
-        sheet.y + geometry::ROW_H + r.y + r.h / 2.0,
-    )
+    (sheet.x + r.x + r.w / 2.0, sheet.y + r.y + r.h / 2.0)
 }
 
 fn press_key(keysym: u32) -> InputEvent {
@@ -95,12 +95,14 @@ fn a_bar_piece_with_a_page_opens_its_page_as_a_sheet() {
             !island.state.is_open(),
             "{page:?}: the Island's page stays shut"
         );
-        assert_eq!(
-            island.sheets.body_size().map(|s| s.0),
-            Some(PAGE_SHEET_W),
-            "{page:?}"
+        let natural = island.page_content_size(page, t0, &mut fake_measure);
+        let (w, _) = page_sheet_size(&island.theme, natural);
+        assert!(
+            (PAGE_SHEET_MIN_W..=PAGE_SHEET_W).contains(&w),
+            "{page:?}: {w}"
         );
-        assert_eq!(shown_rect(&island, now).w, PAGE_SHEET_W, "{page:?}");
+        assert_eq!(island.sheets.body_size().map(|s| s.0), Some(w), "{page:?}");
+        assert_eq!(shown_rect(&island, now).w, w, "{page:?}");
         // The subtitle with the overflow button, and none of the Island
         // page's chrome.
         for key in [
@@ -127,7 +129,8 @@ fn a_bar_piece_with_a_page_opens_its_page_as_a_sheet() {
             );
         }
         // The title is the page's own.
-        let (body, _) = island.page_sheet_view(bell(), page);
+        let natural = island.page_content_size(page, t0, &mut fake_measure);
+        let (body, _) = island.page_sheet_view(bell(), page, natural);
         let ViewKind::Text { text, .. } = &body.children[0].children[1].kind else {
             panic!("{page:?}: the subtitle's second node is not its text");
         };
@@ -137,7 +140,7 @@ fn a_bar_piece_with_a_page_opens_its_page_as_a_sheet() {
 }
 
 #[test]
-fn the_page_sheets_body_is_the_islands_page_content() {
+fn the_page_sheets_body_is_the_pages_content_at_its_natural_size() {
     for page in [
         PageId::NETWORK,
         PageId::BLUETOOTH,
@@ -146,34 +149,21 @@ fn the_page_sheets_body_is_the_islands_page_content() {
     ] {
         let (mut island, t0) = new_island();
         island.set_reduced_motion(true);
-        // The Island's page, laid out: how tall its content box is.
-        island.open(page, t0);
-        island.apply_views(t0);
-        lay_fake(&mut island, t0);
-        let island_body = match island.page.node_by_key(Key::named("body")) {
-            Some(id) => island.page.rect(id),
-            None => panic!("{page:?}: no Island page body"),
-        };
-        island.close_everything(t0);
-        island.state.close(t0, true);
-        let t = open_page_sheet(&mut island, page, t0 + ms(400));
-        // The sheet's content box is that box, and holds the same view.
+        let t = open_page_sheet(&mut island, page, t0);
+        let natural = island.page_content_size(page, t0, &mut fake_measure);
+        let (body, size) = island.page_sheet_view(bell(), page, natural);
+        assert_eq!(island.sheets.body_size(), Some(size), "{page:?}");
+        assert_eq!(size, page_sheet_size(&island.theme, natural), "{page:?}");
+        // The content box is as tall as the content, and holds the same view.
         let content = match island.sheets.body_node_rect(Key::named("sheet-content")) {
             Some(r) => r,
             None => panic!("{page:?}: no sheet content"),
         };
-        assert_eq!(
-            (content.w, content.h),
-            (island_body.w, island_body.h),
-            "{page:?}"
-        );
-        let (body, size) = island.page_sheet_view(bell(), page);
+        assert_eq!(content.h, natural.1, "{page:?}");
         assert_eq!(
             body.children[1].children[0],
             page_view(page).view(&island.page_cx())
         );
-        assert_eq!(island.sheets.body_size(), Some(size));
-        assert_eq!(size, page_sheet_size(&island.theme, island_body.h));
         let _ = t;
     }
 }
@@ -235,7 +225,7 @@ fn the_more_button_of_a_sheet_asks_for_the_menu_below_itself_in_surface_coordina
     };
     let more = Rect {
         x: sheet.x + button.x,
-        y: sheet.y + geometry::ROW_H + button.y,
+        y: sheet.y + button.y,
         ..button
     };
     let at = node_at(&island, sheet_more_key(), t);
@@ -301,7 +291,11 @@ fn a_dismissed_menu_closes_the_sheet_and_reopen_grows_it_again() {
     );
     let later = t + ms(400);
     step(&mut island, later);
-    assert_eq!(shown_rect(&island, later).w, PAGE_SHEET_W);
+    let natural = island.page_content_size(PageId::NETWORK, t0, &mut fake_measure);
+    assert_eq!(
+        shown_rect(&island, later).w,
+        page_sheet_size(&island.theme, natural).0
+    );
 }
 
 #[test]
@@ -475,7 +469,12 @@ fn the_phone_sheet_closes_when_the_duty_goes_off() {
     let later = t + ms(400);
     step(&mut island, later);
     assert_eq!(
-        island.sheet_request(bell(), SheetKind::Page(PageId::PHONE), later),
+        island.sheet_request(
+            bell(),
+            SheetKind::Page(PageId::PHONE),
+            later,
+            &mut fake_measure
+        ),
         None
     );
     assert!(!island.sheets.is_open());
@@ -515,7 +514,12 @@ fn a_piece_asking_for_its_page_again_closes_the_sheet_and_another_switches_it() 
     let t = t + ms(400);
     step(&mut island, t);
     assert_eq!(
-        island.sheet_request(bluetooth, SheetKind::Page(PageId::BLUETOOTH), t),
+        island.sheet_request(
+            bluetooth,
+            SheetKind::Page(PageId::BLUETOOTH),
+            t,
+            &mut fake_measure
+        ),
         None
     );
     assert!(!island.sheets.is_open());
@@ -572,7 +576,12 @@ fn a_page_sheet_that_waited_for_the_island_page_is_built_again_when_it_opens() {
     island.open(PageId::ACTIVITY, t0);
     let t = t0 + ms(400);
     assert_eq!(
-        island.sheet_request(bell(), SheetKind::Page(PageId::NOTIFICATIONS), t),
+        island.sheet_request(
+            bell(),
+            SheetKind::Page(PageId::NOTIFICATIONS),
+            t,
+            &mut fake_measure
+        ),
         None
     );
     assert!(island.sheets.has_queued());
@@ -672,7 +681,12 @@ fn the_catcher_exists_exactly_while_something_is_shown() {
     island.open(PageId::ACTIVITY, t0);
     let t = t0 + ms(400);
     assert_eq!(
-        island.sheet_request(bell(), SheetKind::Page(PageId::NETWORK), t),
+        island.sheet_request(
+            bell(),
+            SheetKind::Page(PageId::NETWORK),
+            t,
+            &mut fake_measure
+        ),
         None
     );
     assert!(island.sheets.has_queued());
@@ -689,7 +703,12 @@ fn a_notifications_sheet_that_opens_from_the_queue_is_seen_when_it_opens() {
     island.open(PageId::ACTIVITY, t0);
     let t = t0 + ms(400);
     assert_eq!(
-        island.sheet_request(bell(), SheetKind::Page(PageId::NOTIFICATIONS), t),
+        island.sheet_request(
+            bell(),
+            SheetKind::Page(PageId::NOTIFICATIONS),
+            t,
+            &mut fake_measure
+        ),
         None
     );
     assert!(
@@ -708,7 +727,7 @@ fn a_phone_sheet_that_waits_is_given_up_when_the_duty_goes_off() {
     island.open(PageId::ACTIVITY, t0);
     let t = t0 + ms(400);
     assert_eq!(
-        island.sheet_request(bell(), SheetKind::Page(PageId::PHONE), t),
+        island.sheet_request(bell(), SheetKind::Page(PageId::PHONE), t, &mut fake_measure),
         None
     );
     assert!(island.sheets.has_queued());
@@ -720,7 +739,7 @@ fn a_phone_sheet_that_waits_is_given_up_when_the_duty_goes_off() {
     island.open(PageId::ACTIVITY, t + ms(600));
     let t = t + ms(1000);
     assert_eq!(
-        island.sheet_request(bell(), SheetKind::Page(PageId::PHONE), t),
+        island.sheet_request(bell(), SheetKind::Page(PageId::PHONE), t, &mut fake_measure),
         None
     );
     assert!(island.sheets.has_queued());
@@ -768,14 +787,22 @@ fn a_polkit_prompt_holds_the_keyboard_from_the_island() {
     step(&mut island, later);
     // A press that would open a sheet or a page is refused.
     assert_eq!(
-        island.sheet_request(bell(), SheetKind::Page(PageId::NETWORK), later),
+        island.sheet_request(
+            bell(),
+            SheetKind::Page(PageId::NETWORK),
+            later,
+            &mut fake_measure
+        ),
         None
     );
     assert!(!island.sheets.is_shown(later));
     island.open(PageId::ACTIVITY, later);
     assert!(!island.state.is_open());
     let session = SheetKind::Session;
-    assert_eq!(island.sheet_request(bell(), session, later), None);
+    assert_eq!(
+        island.sheet_request(bell(), session, later, &mut fake_measure),
+        None
+    );
     assert!(!island.sheets.is_shown(later));
     assert!(!island.wants_catcher(later));
     assert_eq!(
@@ -881,4 +908,229 @@ fn after_close_the_piece_lands_and_shows_its_hover_again() {
     );
     // Gone: nothing is hidden and the pointer's hover paints as ever.
     assert_eq!(hovered_and_hidden(&island, t), (Some(network), Vec::new()));
+}
+
+/// The sheet's content box, as the body shows it.
+fn content_box(island: &Island) -> celestina_paint::Rect {
+    match island.sheets.body_node_rect(Key::named("sheet-content")) {
+        Some(r) => r,
+        None => panic!("no sheet content"),
+    }
+}
+
+#[test]
+fn the_energy_window_has_no_empty_area_under_its_rows() {
+    let (mut island, t0) = new_island();
+    island.set_reduced_motion(true);
+    let t = open_page_sheet(&mut island, PageId::POWER, t0);
+    let theme = &island.theme;
+    let rows = match island.sheets.body_node_rect(Key::named("power-rows")) {
+        Some(r) => r,
+        None => panic!("no power rows"),
+    };
+    let content = content_box(&island);
+    // The box is exactly the rows: nothing is left under the last one.
+    assert_eq!(content.h, rows.h);
+    assert_eq!(rows.y, content.y);
+    let (_, h) = island.sheets.body_size().unwrap_or_default();
+    assert_eq!(
+        h,
+        theme.spacing.xs
+            + crate::sheet::subtitle::SUBTITLE_H
+            + theme.spacing.sm
+            + rows.h
+            + theme.spacing.lg
+    );
+    // The Island's page asks for a taller content box than that.
+    let island_h = page_view(PageId::POWER).wants(&island.page_cx()).1;
+    let old_content_h = island_h - view::chrome_height(theme);
+    assert!(content.h < old_content_h, "{} < {old_content_h}", content.h);
+    assert_eq!(shown_rect(&island, t).h, h);
+}
+
+#[test]
+fn a_page_window_is_as_wide_as_its_content() {
+    let theme = Theme::dark();
+    let pad = 2.0 * theme.spacing.lg;
+    assert_eq!(page_sheet_size(&theme, (100.0, 50.0)).0, PAGE_SHEET_MIN_W);
+    assert_eq!(page_sheet_size(&theme, (300.0, 50.0)).0, 300.0 + pad);
+    assert_eq!(page_sheet_size(&theme, (900.0, 50.0)).0, PAGE_SHEET_W);
+    assert_eq!(
+        page_sheet_size(&theme, (f32::NAN, 50.0)).0,
+        PAGE_SHEET_MIN_W
+    );
+    // On screen: each page's window is its measured content, within 240..420.
+    for page in [PageId::NETWORK, PageId::BLUETOOTH, PageId::POWER] {
+        let (mut island, t0) = new_island();
+        let now = open_page_sheet(&mut island, page, t0);
+        let natural = island.page_content_size(page, t0, &mut fake_measure);
+        let w = shown_rect(&island, now).w;
+        assert_eq!(w, (natural.0 + pad).clamp(PAGE_SHEET_MIN_W, PAGE_SHEET_W));
+    }
+}
+
+/// A Bluetooth section with `n` paired devices.
+fn bluetooth_with(n: usize) -> ConnectivityState {
+    use celestina_shell::connectivity::{BtIcon, BtRow, BtSection, Service};
+
+    let rows = (0..n).filter_map(|i| {
+        BtRow::new(
+            &format!("AA:BB:CC:DD:EE:{i:02X}"),
+            &format!("Device {i}"),
+            BtIcon::Other,
+            true,
+            false,
+            true,
+            None,
+        )
+    });
+    let mut state = connectivity_sample::ready();
+    state.apply(&crate::connectivity::ConnectivityEvent::Bluetooth(
+        Service::Ready(BtSection::new(true, false, rows)),
+    ));
+    state
+}
+
+#[test]
+fn bluetooth_with_five_devices_measures_every_row() {
+    let (mut island, t0) = new_island();
+    island.set_reduced_motion(true);
+    island.set_connectivity(&bluetooth_with(5));
+    island.apply_views(t0);
+    lay_fake(&mut island, t0);
+    open_page_sheet(&mut island, PageId::BLUETOOTH, t0);
+    let content = content_box(&island);
+    for i in 0..5 {
+        let key = bluetooth_page::row_key(&format!("AA:BB:CC:DD:EE:{i:02X}"));
+        let row = match island.sheets.body_node_rect(key) {
+            Some(r) => r,
+            None => panic!("no row for device {i}"),
+        };
+        assert!(
+            row.y + row.h <= content.y + content.h,
+            "device {i} is cut: {row:?} in {content:?}"
+        );
+    }
+    // One more device makes the window one row taller, and nothing else.
+    let before = island.sheets.body_size().unwrap_or_default().1;
+    island.set_connectivity(&bluetooth_with(6));
+    step(&mut island, t0 + ms(500));
+    let after = island.sheets.body_size().unwrap_or_default().1;
+    assert!(
+        after > before,
+        "{after} > {before}: the window follows its content"
+    );
+}
+
+#[test]
+fn a_tall_page_still_scrolls_at_496() {
+    let theme = Theme::dark();
+    let surface = (1920.0, 560.0);
+    // A body taller than the room: the window stops at 496, the body keeps
+    // its size and scrolls.
+    let body = page_sheet_size(&theme, (300.0, 600.0));
+    assert!(body.1 > 496.0, "{body:?}");
+    let window = crate::sheet::geometry::window(
+        celestina_paint::Rect {
+            x: 800.0,
+            y: 8.0,
+            w: 200.0,
+            h: 40.0,
+        },
+        crate::sheet::geometry::Edge::Centre,
+        body,
+        surface,
+    );
+    assert_eq!(window.h, 496.0);
+    assert_eq!(window.h, crate::sheet::geometry::max_height(surface));
+    // On screen: a window never passes that cap.
+    let (mut island, t0) = new_island();
+    island.set_reduced_motion(true);
+    island.set_connectivity(&bluetooth_with(12));
+    island.apply_views(t0);
+    lay_fake(&mut island, t0);
+    let t = open_page_sheet(&mut island, PageId::BLUETOOTH, t0);
+    let body_h = island.sheets.body_size().unwrap_or_default().1;
+    assert_eq!(
+        shown_rect(&island, t).h,
+        body_h.min(crate::sheet::geometry::max_height(island.size))
+    );
+}
+
+#[test]
+fn the_level_session_and_workspaces_windows_keep_their_widths() {
+    let (mut island, t0) = level_island();
+    island.set_reduced_motion(true);
+    let core = volume_core(&island.theme);
+    assert!(island.open_level_sheet_at(volume(), core, t0));
+    let t = t0 + ms(400);
+    step(&mut island, t);
+    assert_eq!(shown_rect(&island, t).w, 320.0, "volume");
+    let (mut island, t0) = level_island();
+    island.set_reduced_motion(true);
+    let core = brightness_core(&island.theme);
+    assert!(island.open_level_sheet_at(brightness_key(), core, t0));
+    let t = t0 + ms(400);
+    step(&mut island, t);
+    assert_eq!(shown_rect(&island, t).w, 320.0, "brightness");
+    for (piece, kind) in [
+        ("session", SheetKind::Session),
+        ("workspaces", SheetKind::Workspaces),
+    ] {
+        let (mut island, t0) = level_island();
+        island.set_reduced_motion(true);
+        assert_eq!(
+            island.sheet_request(Key::named(piece), kind, t0, &mut fake_measure),
+            None
+        );
+        let t = t0 + ms(400);
+        step(&mut island, t);
+        assert_eq!(shown_rect(&island, t).w, 240.0, "{piece}");
+    }
+}
+
+#[test]
+fn the_system_load_and_clock_windows_are_360_wide_and_their_parts_fit() {
+    // The System page with a reading: 360, and its sparkline inside.
+    let (mut island, t0) = new_island();
+    island.set_reduced_motion(true);
+    island.mirror_sysmon(Some(&sample(1)), t0);
+    island.stale = true;
+    island.apply_views(t0);
+    lay_fake(&mut island, t0);
+    let t = open_page_sheet(&mut island, PageId::SYSMON, t0);
+    assert_eq!(shown_rect(&island, t).w, 360.0);
+    let lg = island.theme.spacing.lg;
+    let content = content_box(&island);
+    assert_eq!(content.w, 360.0 - 2.0 * lg);
+    let spark = match island
+        .sheets
+        .body_node_rect(Key::indexed("sysmon-spark", 0))
+    {
+        Some(r) => r,
+        None => panic!("no sparkline"),
+    };
+    assert!(spark.x >= content.x && spark.x + spark.w <= content.x + content.w + 0.01);
+    // The Clock page with a date: 360, its grid of seven cells inside.
+    let (mut island, t0) = new_island();
+    island.set_reduced_motion(true);
+    island.set_today(1_792_281_480, 0);
+    island.apply_views(t0);
+    lay_fake(&mut island, t0);
+    let t = open_page_sheet(&mut island, PageId::CLOCK, t0);
+    assert_eq!(shown_rect(&island, t).w, 360.0);
+    // Every other page is measured, none declares a width.
+    for page in [
+        PageId::NETWORK,
+        PageId::BLUETOOTH,
+        PageId::NOTIFICATIONS,
+        PageId::CLIPBOARD,
+        PageId::POWER,
+        PageId::MEDIA,
+        PageId::PHONE,
+    ] {
+        assert_eq!(page_view(page).sheet_width(), None, "{page:?}");
+    }
+    assert_eq!(page_view(PageId::SYSMON).sheet_width(), Some(360.0));
+    assert_eq!(page_view(PageId::CLOCK).sheet_width(), Some(360.0));
 }

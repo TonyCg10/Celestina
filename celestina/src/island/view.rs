@@ -344,34 +344,46 @@ pub fn page(
         .child(tabs::tabs(theme, open, body_w))
 }
 
-/// A page sheet's width, logical px: the Island page's.
+/// The widest a page sheet gets, logical px: the Island page's width.
 pub const PAGE_SHEET_W: f32 = 420.0;
 
-/// The size of a page sheet's body whose page content is `content_h` tall:
-/// the top padding, the subtitle, the gap, the content and the bottom
-/// padding.
+/// The narrowest a page sheet gets, logical px.
+pub const PAGE_SHEET_MIN_W: f32 = 240.0;
+
+/// The size of a page sheet's body whose page content measures `content`
+/// (its natural size): as wide as the content plus the side padding, within
+/// [`PAGE_SHEET_MIN_W`] and [`PAGE_SHEET_W`], and as tall as the top padding,
+/// the subtitle, the gap, the content and the bottom padding. A body taller
+/// than the surface has room for scrolls: the window caps it.
 #[must_use]
-pub fn page_sheet_size(theme: &Theme, content_h: f32) -> (f32, f32) {
+pub fn page_sheet_size(theme: &Theme, content: (f32, f32)) -> (f32, f32) {
+    let sane = |v: f32| if v.is_finite() { v.max(0.0) } else { 0.0 };
     (
-        PAGE_SHEET_W,
-        theme.spacing.xs + SUBTITLE_H + theme.spacing.sm + content_h + theme.spacing.lg,
+        (sane(content.0) + 2.0 * theme.spacing.lg).clamp(PAGE_SHEET_MIN_W, PAGE_SHEET_W),
+        theme.spacing.xs + SUBTITLE_H + theme.spacing.sm + sane(content.1) + theme.spacing.lg,
     )
 }
 
 /// The body of a page sheet (CEL-D-003, CEL-D-008): the subtitle of the
 /// piece that opened it (`face`, or the page's `title` when the piece has no
 /// text) with the overflow button at its right, then the page's `content` in
-/// a clipped box `content_h` tall. No clock, no close button and no tabs: the
+/// a clipped box as tall as `content` (its natural size). No clock, no close button and no tabs: the
 /// sheet is closed by the way it was opened, and the Island's tabs stay on
 /// the Island.
 #[must_use]
-pub fn page_sheet(theme: &Theme, face: &Face, title: &str, content: View, content_h: f32) -> View {
-    let size = page_sheet_size(theme, content_h);
+pub fn page_sheet(
+    theme: &Theme,
+    face: &Face,
+    title: &str,
+    content: View,
+    natural: (f32, f32),
+) -> View {
+    let size = page_sheet_size(theme, natural);
     let more = button(theme, sheet_more_key(), "sheet-more-label", copy::MORE);
     let header = subtitle(theme, face, title, Some(more));
     let body_w = (size.0 - 2.0 * theme.spacing.lg).max(0.0);
     let body = view::col(Key::named("sheet-content"))
-        .size(body_w, content_h)
+        .size(body_w, natural.1.max(0.0))
         .clip()
         .child(content);
     view::col(Key::named("page-sheet"))
@@ -694,13 +706,14 @@ mod tests {
     fn a_page_sheet_is_a_subtitle_and_the_content_in_a_clipped_box() {
         let theme = Theme::dark();
         let content_h = 120.0;
+        let natural = (400.0, content_h);
         let face = Face {
             icon: "link",
             text: None,
         };
-        let tree = laid_out(page_sheet(&theme, &face, "Red", content(), content_h));
-        let (w, h) = page_sheet_size(&theme, content_h);
-        assert_eq!(w, PAGE_SHEET_W);
+        let tree = laid_out(page_sheet(&theme, &face, "Red", content(), natural));
+        let (w, h) = page_sheet_size(&theme, natural);
+        assert_eq!(w, PAGE_SHEET_W, "wider content stops at the widest");
         let root = rect_of(&tree, Key::named("page-sheet"));
         assert_eq!((root.x, root.y, root.w, root.h), (0.0, 0.0, w, h));
         let header = rect_of(&tree, crate::sheet::subtitle::row_key());
@@ -746,7 +759,7 @@ mod tests {
             icon: "link",
             text: None,
         };
-        let v = page_sheet(&theme, &face, "Red", content(), 100.0);
+        let v = page_sheet(&theme, &face, "Red", content(), (100.0, 100.0));
         let sub = &v.children[0];
         assert_eq!(sub.key, crate::sheet::subtitle::row_key());
         let kinds: Vec<Key> = sub.children.iter().map(|c| c.key).collect();
@@ -767,7 +780,7 @@ mod tests {
             icon: "gauge",
             text: Some("CPU 23% · RAM 41%".to_owned()),
         };
-        let v = page_sheet(&theme, &face, "Sistema", content(), 100.0);
+        let v = page_sheet(&theme, &face, "Sistema", content(), (100.0, 100.0));
         let ViewKind::Text { text, .. } = &v.children[0].children[1].kind else {
             panic!("the subtitle's second node is its text");
         };

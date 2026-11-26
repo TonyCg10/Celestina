@@ -103,6 +103,10 @@ pub struct PageCx<'a> {
     pub theme: &'a Theme,
     /// The largest page the surface allows, logical px.
     pub max_size: (f32, f32),
+    /// The width a page that sizes its inner parts draws them in (a sheet
+    /// of a declared width, minus its padding); `None` for the Island's
+    /// page, whose width is [`PAGE_SIZE`]'s.
+    pub content_w: Option<f32>,
     /// The last niri model, if the compositor has sent one.
     pub model: Option<&'a NiriModel>,
     /// The output whose Island shows the page.
@@ -150,6 +154,22 @@ pub trait PageView {
     /// The size the page asks for with `cx`, logical px; the Island clamps
     /// it to the surface.
     fn wants(&self, cx: &PageCx<'_>) -> (f32, f32);
+    /// The width of the page as a capsule sheet when its content has no
+    /// natural width of its own (fixed inner parts); `None` for a page whose
+    /// content is measured.
+    fn sheet_width(&self) -> Option<f32> {
+        None
+    }
+}
+
+impl PageCx<'_> {
+    /// The width of the content box a page draws its fixed parts in: the
+    /// sheet's, else the Island page's.
+    #[must_use]
+    pub fn content_width(&self) -> f32 {
+        self.content_w
+            .unwrap_or(PAGE_SIZE.0 - 2.0 * self.theme.spacing.lg)
+    }
 }
 
 /// A list with one non-interactive row that says `text`: what the
@@ -229,6 +249,7 @@ pub(crate) fn wants_of(
     max_size: (f32, f32),
 ) -> (f32, f32) {
     page.wants(&PageCx {
+        content_w: None,
         clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
         theme: &Theme::dark(),
         max_size,
@@ -291,6 +312,7 @@ mod tests {
         let history = [HistoryRow::default()];
         let items = [TrayRow::default(), TrayRow::default()];
         let cx = PageCx {
+            content_w: None,
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             theme: &celestina_paint::Theme::dark(),
             max_size: (760.0, 560.0),
@@ -519,6 +541,7 @@ mod tests {
         let theme = Theme::dark();
         let pv = page_view(page);
         let cx = PageCx {
+            content_w: None,
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             theme: &theme,
             max_size: (760.0, 560.0),

@@ -100,9 +100,13 @@ pub fn shown_month(today: Today, offset: i32) -> Option<Month> {
     Month::new(year, month)
 }
 
+/// The Clock page's width as a capsule sheet, logical px (the approved
+/// preview's).
+const SHEET_W: f32 = 360.0;
+
 /// The width of one day cell on a page of the default width.
 fn cell_width(cx: &PageCx<'_>) -> f32 {
-    (PAGE_SIZE.0 - 2.0 * cx.theme.spacing.lg) / 7.0
+    cx.content_width() / 7.0
 }
 
 /// The Clock page.
@@ -138,6 +142,10 @@ impl PageView for Clock {
             page = page.child(weather(cx, reading));
         }
         page
+    }
+
+    fn sheet_width(&self) -> Option<f32> {
+        Some(SHEET_W)
     }
 
     /// The default size, taller when the grid and the weather need it.
@@ -339,6 +347,7 @@ mod tests {
         let theme = Theme::dark();
         let owners = NameOwner::default();
         f(&PageCx {
+            content_w: None,
             theme: &theme,
             max_size: (760.0, 560.0),
             model: None,
@@ -589,6 +598,7 @@ mod tests {
         let theme = Theme::dark();
         let owners = NameOwner::default();
         let v = Clock.view(&PageCx {
+            content_w: None,
             theme: &theme,
             max_size: (760.0, 560.0),
             model: None,

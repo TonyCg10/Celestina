@@ -22,6 +22,8 @@ pub struct PageBody {
     page: PageId,
     theme: Theme,
     size: (f32, f32),
+    /// The page content's natural size, which `size` was made from.
+    content: (f32, f32),
     tree: Tree,
     input: Interaction,
 }
@@ -36,7 +38,8 @@ impl std::fmt::Debug for PageBody {
 }
 
 impl PageBody {
-    /// The body of `page` showing `view`, `size` big.
+    /// The body of `page` showing `view`, `size` big for a page content of
+    /// natural size `content`.
     #[must_use]
     pub fn new(
         page: PageId,
@@ -44,6 +47,7 @@ impl PageBody {
         reduced: bool,
         view: View,
         size: (f32, f32),
+        content: (f32, f32),
         now: Instant,
     ) -> PageBody {
         let mut tree = Tree::new(reduced, theme);
@@ -52,9 +56,16 @@ impl PageBody {
             page,
             theme: theme.clone(),
             size,
+            content,
             tree,
             input: Interaction::new(),
         }
+    }
+
+    /// The page content's natural size the body was sized for.
+    #[must_use]
+    pub fn content(&self) -> (f32, f32) {
+        self.content
     }
 
     /// The page this body shows.
@@ -64,8 +75,9 @@ impl PageBody {
     }
 
     /// Shows `view` at `size`: what the pointer and keyboard held stays.
-    pub fn apply(&mut self, view: View, size: (f32, f32), now: Instant) {
+    pub fn apply(&mut self, view: View, size: (f32, f32), content: (f32, f32), now: Instant) {
         self.size = size;
+        self.content = content;
         self.tree.apply(view, now);
     }
 

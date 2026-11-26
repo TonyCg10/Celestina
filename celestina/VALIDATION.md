@@ -1691,3 +1691,30 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-008](docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row.md)
+
+## VAL-CEL-D-009 — Each capsule menu is its own window, lined up with its capsule
+
+- **Status:** pending
+- **Related implementation:** CEL-D-009 (a capsule's menu is a window of its
+  own under the bar, sized to its content and lined up with the capsule's
+  outer edge: the right edge for the end capsule, the left edge for the start
+  capsule; it grows out of the open piece's pill and folds back into it; on a
+  switch the old window folds while the new one grows)
+- **Requires:** the deployed shell after the landing of CEL-D-009 and a layout
+  whose end capsule holds the energy (power profile), Bluetooth, brightness
+  and system load pieces, and whose start capsule holds the notifications piece
+- **Procedure:** open the energy menu, then the Bluetooth, brightness and
+  system load menus one by one, and read each window's edges and the space
+  under its last row. Open a menu on the start capsule (notifications). Open
+  a menu and watch it grow out of its piece. Switch to another piece of the
+  same capsule while a menu is open. Close the menu by pressing outside it
+- **Pass condition:** every window sits under the bar with its right edge on
+  the end capsule's right edge (the left edge on the left edge for the start
+  capsule), is as wide and as tall as its content needs (the energy window
+  clearly narrower than the system load one, with no empty area under its
+  rows), grows out of the open piece's pill on the spring and folds back into
+  the piece's slot on close; during a switch exactly two windows show for
+  about 150 ms (the old one folding, the new one growing) and one afterwards
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-009](docs/evidence/2026-11-26-cel-d-009-menu-windows.md)

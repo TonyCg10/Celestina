@@ -219,7 +219,12 @@ fn a_piece_without_text_flies_its_icon_only() {
     lay_fake(&mut island, t);
     let session = Key::named("session");
     assert_eq!(
-        island.sheet_request(session, crate::pieces::SheetKind::Session, t),
+        island.sheet_request(
+            session,
+            crate::pieces::SheetKind::Session,
+            t,
+            &mut fake_measure
+        ),
         None
     );
     step(&mut island, t);
@@ -267,7 +272,7 @@ fn the_only_piece_of_a_capsule_keeps_a_row_and_flies() {
         step(&mut island, at);
         island.resolve_flights(at);
         let rect = shown_rect(&island, at);
-        assert!(rect.w > 0.0 && rect.h >= geometry::ROW_H, "{rect:?}");
+        assert!(rect.w > 0.0 && rect.h > 0.0, "{rect:?}");
         assert!(rect.w.is_finite() && rect.x.is_finite());
     }
     // No zero-width flyer end.
@@ -327,7 +332,8 @@ fn a_text_only_piece_flies_its_text() {
         island.sheet_request(
             clock,
             crate::pieces::SheetKind::Page(crate::pieces::PageId::CLOCK),
-            t
+            t,
+            &mut fake_measure
         ),
         None
     );
@@ -350,7 +356,12 @@ fn a_switch_does_not_hide_the_text_of_a_face_without_text() {
     let (mut island, t0) = level_island();
     let session = Key::named("session");
     assert_eq!(
-        island.sheet_request(session, crate::pieces::SheetKind::Session, t0),
+        island.sheet_request(
+            session,
+            crate::pieces::SheetKind::Session,
+            t0,
+            &mut fake_measure
+        ),
         None
     );
     step(&mut island, t0);
@@ -367,18 +378,18 @@ fn a_switch_does_not_hide_the_text_of_a_face_without_text() {
 }
 
 #[test]
-fn the_leaving_body_keeps_its_own_slot() {
+fn the_leaving_window_keeps_its_own_pill() {
     let (mut island, t0) = level_island();
     assert!(open_on(&mut island, volume(), t0));
     let t = t0 + ms(400);
     step(&mut island, t);
-    let before = island.sheet_anchor(t).map(|a| a.piece);
+    let before = island.sheet_anchor(t).map(|a| a.pill);
     let core = brightness_core(&island.theme);
     assert!(island.open_level_sheet_at(brightness_key(), core, t));
-    let leaving = island.sheets.leaving_slot();
-    assert_eq!(leaving, before, "the old body keeps the slot it had");
-    let now = island.sheet_anchor(t).map(|a| a.piece);
-    assert_ne!(leaving, now, "the new body has the new piece's slot");
+    let leaving = island.sheets.leaving_pill();
+    assert_eq!(leaving, before, "the old window folds into the pill it had");
+    let now = island.sheet_anchor(t).map(|a| a.pill);
+    assert_ne!(leaving, now, "the new window grows from the new piece's");
 }
 
 #[test]
@@ -388,20 +399,13 @@ fn a_scrolled_subtitle_flies_from_where_it_is() {
     body.layout(&mut |tree: &mut Tree, room: (f32, f32)| {
         tree.layout_measured(room, fake_measure);
     });
-    let sheet = Rect {
+    let window = Rect {
         x: 100.0,
-        y: 8.0,
+        y: 56.0,
         w: 320.0,
         h: 300.0,
     };
-    let slot = Rect {
-        x: 200.0,
-        y: 8.0,
-        w: 0.0,
-        h: 40.0,
-    };
-    let at =
-        |scroll| crate::sheet::subtitle_parts(&body, sheet, slot, scroll).map(|p| p.icon_rect.y);
+    let at = |scroll| crate::sheet::subtitle_parts(&body, window, scroll).map(|p| p.icon_rect.y);
     assert_eq!(at(0.0).zip(at(30.0)).map(|(a, b)| a - b), Some(30.0));
 }
 
@@ -448,10 +452,9 @@ fn a_right_click_on_the_volume_subtitle_mutes_and_a_click_closes() {
 
 /// The middle of the open sheet's subtitle row, in surface coordinates.
 pub(in crate::island) fn subtitle_point(island: &Island, now: Instant) -> (f32, f32) {
-    let rect = shown_rect(island, now);
     let anchor = island.sheet_anchor(now).expect("an anchor");
     let size = island.sheets.body_size().expect("a body");
-    let at = geometry::body_box(rect, anchor.piece, size.0);
+    let at = geometry::window(anchor.capsule, anchor.edge, size, anchor.surface);
     let row = island
         .sheets
         .body_node_rect(subtitle::row_key())
@@ -464,7 +467,12 @@ fn session_open() -> (Island, Instant) {
     let (mut island, t0) = level_island();
     let session = Key::named("session");
     assert_eq!(
-        island.sheet_request(session, crate::pieces::SheetKind::Session, t0),
+        island.sheet_request(
+            session,
+            crate::pieces::SheetKind::Session,
+            t0,
+            &mut fake_measure
+        ),
         None
     );
     let t = t0 + ms(400);

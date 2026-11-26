@@ -1,8 +1,10 @@
-//! Capsule sheets: a bar capsule grows into its menu (CEL-D-002). The pure
-//! rules ([`geometry`]) and clocks ([`motion`]) hold no painter and no GL;
-//! [`Sheets`] owns what is open on one output: the sheet's rect, its body, the
-//! body being left in a switch, the open that waits for another thing to
-//! close and the scroll. The Island wires it to the bar (`island::sheets`).
+//! Capsule menus: a piece of a bar capsule opens a window of its own under
+//! the bar (CEL-D-002, CEL-D-009). The pure rules ([`geometry`]) and clocks
+//! ([`motion`]) hold no painter and no GL; [`Sheets`] owns what is open on one
+//! output: the window's rect, its body, the window being left in a switch
+//! (it folds into its piece on its own clock), the open that waits for
+//! another thing to close and the scroll. The Island wires it to the bar
+//! (`island::sheets`).
 //!
 //! Nothing here stores a measure: whatever cuts or measures text takes the
 //! caller's `Measure` for the length of the call, because the painter is
@@ -23,7 +25,7 @@ use celestina_wayland::InputEvent;
 
 pub use body::{BodyOutcome, PageBody, SheetBody, WorkspacesBody};
 use flight::{BarKeys, Flight, Parts, TextPart};
-use geometry::ROW_H;
+use geometry::Edge;
 use motion::SheetMotion;
 
 use crate::pieces::{PageId, SheetKind};
@@ -45,13 +47,15 @@ fn slide_follows(until: Option<Instant>, now: Instant) -> bool {
 /// A change of a rect under this is no change.
 const EPS: f32 = 0.01;
 
-/// Where a sheet grows from: its capsule (as it is painted now, without the
-/// open piece), the slot of the opening piece (its centre; the piece itself
-/// is out of the row while the sheet is open) and the surface.
+/// What a window hangs from: its capsule as it is painted now (without the
+/// open piece) and the edge of it the window lines up with, the pill of the
+/// open piece (its rect in the bar while it is in its row, the pill of its
+/// slot while it is out of it) and the surface.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Anchor {
     pub capsule: Rect,
-    pub piece: Rect,
+    pub edge: Edge,
+    pub pill: Rect,
     pub surface: (f32, f32),
 }
 
@@ -91,30 +95,30 @@ struct OpenSheet {
     keys: Option<BarKeys>,
 }
 
-/// The body being left in a switch, with the scroll it had.
+/// The window being left in a switch: its body with the scroll it had, on
+/// its own clock, folding into the pill of its own piece.
 #[derive(Debug)]
 struct Leaving {
     body: SheetBody,
     scroll: f32,
-    /// The piece it was open on and the slot it had (its body box).
+    /// The piece it was open on.
     piece: Key,
-    slot: Rect,
+    /// The fold's clock.
+    motion: SheetMotion,
+    /// The window it had (where its body sits while it folds).
+    target: Rect,
+    /// The pill of its piece, as last seen.
+    pill: Rect,
 }
 
-/// Where the subtitle's icon and text are for a sheet at `sheet` whose slot
-/// is `slot`, the body scrolled `scroll`: the body box under the row, plus the
-/// nodes' own rects. `None` when the body has no subtitle icon.
-pub(crate) fn subtitle_parts(
-    body: &SheetBody,
-    sheet: Rect,
-    slot: Rect,
-    scroll: f32,
-) -> Option<Parts> {
+/// Where the subtitle's icon and text are for a window at `window`, the body
+/// scrolled `scroll`: the body sits at the window's origin, plus the nodes'
+/// own rects. `None` when the body has no subtitle icon.
+pub(crate) fn subtitle_parts(body: &SheetBody, window: Rect, scroll: f32) -> Option<Parts> {
     let tree = body.tree();
-    let at = geometry::body_box(sheet, slot, body.size().0);
     let shift = |r: Rect| Rect {
-        x: r.x + at.x,
-        y: r.y + at.y - scroll,
+        x: r.x + window.x,
+        y: r.y + window.y - scroll,
         ..r
     };
     let icon = tree.node_by_key(subtitle::icon_key())?;
@@ -206,7 +210,9 @@ fn translated(ev: &InputEvent, dx: f32, dy: f32) -> InputEvent {
 #[derive(Debug, Default)]
 pub struct Sheets {
     open: Option<OpenSheet>,
-    leaving: Option<Leaving>,
+    /// The windows being left in switches, each folding into its own
+    /// piece's pill on its own clock until it has folded.
+    leaving: Vec<Leaving>,
     queued: Option<Next>,
     scroll: Scroll,
     /// The capsule was sliding at the last follow, or the one before: its
@@ -308,7 +314,7 @@ impl Sheets {
     #[must_use]
     pub fn subtitle_text(&self) -> Option<String> {
         let o = self.open.as_ref()?;
-        subtitle_parts(&o.body, o.target, o.anchor.piece, self.scroll.offset())?
+        subtitle_parts(&o.body, o.target, self.scroll.offset())?
             .text
             .map(|t| t.text)
     }
@@ -353,7 +359,7 @@ impl Sheets {
             return;
         }
         o.keys = Some(keys);
-        let Some(to) = subtitle_parts(&o.body, o.target, o.anchor.piece, scroll) else {
+        let Some(to) = subtitle_parts(&o.body, o.target, scroll) else {
             return;
         };
         let from = carried.unwrap_or(from);
@@ -371,10 +377,12 @@ impl Sheets {
     }
 
     /// Points the flyers at their live ends at `now`: a flight down lands on
-    /// the subtitle as it is (the sheet's target under `anchor`), a flight up
+    /// the subtitle as it is (the window's target under `anchor`), a flight up
     /// on the piece's place in the bar (`bar`). A close's flight takes its
-    /// start from the subtitle when it begins. A flyer whose end is gone (the
-    /// piece left the bar, the sheet is gone) is dropped.
+    /// start from the subtitle when it begins, where it is painted (the body
+    /// sits at the window's target, whatever the window's rect does). A flyer
+    /// whose end is gone (the piece left the bar, the window is gone) is
+    /// dropped.
     pub fn resolve_flights(
         &mut self,
         anchor: Option<&Anchor>,
@@ -383,7 +391,7 @@ impl Sheets {
     ) {
         let open = self.open.as_ref();
         let scroll = self.scroll.offset();
-        let rect = anchor.and_then(|a| self.rect(a, now));
+        let shown = anchor.and_then(|a| self.rect(a, now));
         self.flights.retain_mut(|f| {
             if f.up {
                 let Some(to) = bar(f.keys) else {
@@ -391,9 +399,10 @@ impl Sheets {
                 };
                 f.to = to;
                 if !f.armed && f.started(now) {
-                    if let (Some(o), Some(a), Some(r)) = (open, anchor, rect) {
+                    if let (Some(o), Some(a), Some(_)) = (open, anchor, shown) {
                         if o.piece == f.keys.piece {
-                            if let Some(from) = subtitle_parts(&o.body, r, a.piece, scroll) {
+                            let at = Sheets::target_of(a, o.body.size());
+                            if let Some(from) = subtitle_parts(&o.body, at, scroll) {
                                 f.from = from;
                             }
                         }
@@ -406,7 +415,7 @@ impl Sheets {
                     .zip(anchor)
                     .and_then(|(o, a)| {
                         let target = Sheets::target_of(a, o.body.size());
-                        subtitle_parts(&o.body, target, a.piece, scroll)
+                        subtitle_parts(&o.body, target, scroll)
                     });
                 let Some(to) = live else {
                     return false;
@@ -442,14 +451,14 @@ impl Sheets {
         let Some(o) = self.open.as_ref().filter(|o| !o.motion.is_closing()) else {
             return false;
         };
-        let at = geometry::body_box(rect, anchor.piece, o.body.size().0);
+        let at = Sheets::target_of(anchor, o.body.size());
         let (lx, ly) = (x - at.x, y - at.y + self.scroll.offset());
         let tree = o.body.tree();
         let rect_of = |key| tree.node_by_key(key).map(|id| tree.rect(id));
         rect_of(subtitle::row_key()).is_some_and(|row| row.contains(lx, ly))
             && !rect_of(crate::island::view::sheet_more_key()).is_some_and(|m| m.contains(lx, ly))
-            // Under the row window the subtitle is clipped to the viewport.
-            && geometry::viewport(rect).contains(x, y)
+            // The window clips its body, and the bar's band is not its own.
+            && geometry::hit(rect, x, y) == geometry::Hit::Body
     }
 
     /// The open sheet's kind, else the queued one's.
@@ -510,7 +519,7 @@ impl Sheets {
         self.revision
     }
 
-    /// The last anchor the sheet knew: where it goes back to when its piece
+    /// The last anchor the window knew: where it folds back to when its piece
     /// vanishes.
     #[must_use]
     pub fn last_anchor(&self) -> Option<Anchor> {
@@ -522,53 +531,90 @@ impl Sheets {
     }
 
     fn target_of(anchor: &Anchor, size: (f32, f32)) -> Rect {
-        geometry::target(anchor.capsule, anchor.piece, size, anchor.surface)
+        geometry::window(anchor.capsule, anchor.edge, size, anchor.surface)
     }
 
-    /// The sheet's rect at `now`, or `None` when none is shown. While it
-    /// closes the rect flies to the capsule of `anchor`.
+    /// The window's rect at `now`, or `None` when none is shown. While it
+    /// closes the rect folds into the pill of `anchor`.
     #[must_use]
     pub fn rect(&self, anchor: &Anchor, now: Instant) -> Option<Rect> {
         let o = self.open.as_ref().filter(|o| !o.motion.closed(now))?;
         let to = if o.motion.is_closing() {
-            anchor.capsule
+            anchor.pill
         } else {
             Sheets::target_of(anchor, o.body.size())
         };
-        Some(o.motion.rect(now, anchor.capsule, to, anchor.surface))
+        Some(o.motion.rect(now, to, anchor.surface))
     }
 
-    /// Drops what has finished: a sheet whose close flight ended, a body
-    /// that has faded out.
+    /// The windows painted at `now`, each with its corner radius: the one
+    /// open (or closing, under `anchor`) and the one being left in a switch.
+    /// What the glass, the blur and the input regions cover.
+    #[must_use]
+    pub fn windows(
+        &self,
+        anchor: Option<&Anchor>,
+        surface: (f32, f32),
+        now: Instant,
+    ) -> Vec<(Rect, f32)> {
+        let mut out = Vec::new();
+        for l in self.leaving.iter().filter(|l| !l.motion.closed(now)) {
+            out.push((l.motion.rect(now, l.pill, surface), l.motion.radius(now)));
+        }
+        if let (Some(o), Some(rect)) = (self.open.as_ref(), anchor.and_then(|a| self.rect(a, now)))
+        {
+            out.push((rect, o.motion.radius(now)));
+        }
+        out.retain(|(r, _)| r.w > 0.0 && r.h > 0.0);
+        out
+    }
+
+    /// The pill of the piece the window being left folds into, as the bar
+    /// has it now.
+    pub fn follow_leaving(&mut self, piece: Key, pill: Rect) {
+        for l in self.leaving.iter_mut().filter(|l| l.piece == piece) {
+            l.pill = pill;
+        }
+    }
+
+    /// The pieces whose windows are being left, while they fold.
+    #[must_use]
+    pub fn leaving_pieces(&self, now: Instant) -> Vec<Key> {
+        self.leaving
+            .iter()
+            .filter(|l| !l.motion.closed(now))
+            .map(|l| l.piece)
+            .collect()
+    }
+
+    /// Drops what has finished: a window whose close flight ended, a window
+    /// that has folded.
     fn reap(&mut self, now: Instant) {
         if self.open.as_ref().is_some_and(|o| o.motion.closed(now)) {
             self.open = None;
-            self.leaving = None;
             self.scroll = Scroll::default();
             self.hovering = false;
             self.bump();
         }
-        let faded = match &self.open {
-            Some(o) => o.motion.leaving_opacity(now) <= 0.0,
-            None => true,
-        };
-        if faded {
-            self.leaving = None;
+        let folding = self.leaving.len();
+        self.leaving.retain(|l| !l.motion.closed(now));
+        if self.leaving.len() != folding {
+            self.bump();
         }
         self.flights.retain(|f| !f.done(now));
     }
 
-    /// Sets the scroll's extent: the body's height in the sheet's viewport.
+    /// Sets the scroll's extent: the body's height in the window.
     fn refresh_extent(&mut self) {
         if let Some(o) = &self.open {
-            self.scroll
-                .set_extent(o.size.1, (o.target.h - ROW_H).max(0.0));
+            self.scroll.set_extent(o.size.1, o.target.h);
         }
     }
 
     /// Opens `request` from `anchor`, or, with a sheet already open (not
-    /// closing), switches it to the request's body: one morph, the old body
-    /// fading out. What the old body held goes out first.
+    /// closing), switches it to the request's body: the old window folds
+    /// into its own piece's pill while the new one grows out of its piece's.
+    /// What the old body held goes out first.
     pub fn open(
         &mut self,
         request: Request,
@@ -595,19 +641,26 @@ impl Sheets {
         // slot, is where the flight down starts from.
         self.carried = self.take_flyer(piece, now).map(|parts| (piece, parts));
         if self.open.as_ref().is_some_and(|o| !o.motion.is_closing()) {
-            self.fly_old_piece_up(piece, anchor, now);
+            self.fly_old_piece_up(piece, now);
         }
         if let Some(o) = self.open.as_mut().filter(|o| !o.motion.is_closing()) {
-            let shown = o
-                .motion
-                .rect(now, o.anchor.capsule, o.target, anchor.surface);
+            // The window being left folds into its own piece's pill on its
+            // own clock; the new one grows out of its piece's.
+            let shown = o.motion.rect(now, o.target, anchor.surface);
+            let mut folding = std::mem::replace(
+                &mut o.motion,
+                SheetMotion::open(anchor.pill, theme, now, reduced),
+            );
+            folding.close(shown, o.anchor.pill, now);
             let mut old = std::mem::replace(&mut o.body, body);
             old.flush(now);
-            self.leaving = Some(Leaving {
+            self.leaving.push(Leaving {
                 body: old,
                 scroll: self.scroll.offset(),
                 piece: o.piece,
-                slot: o.anchor.piece,
+                motion: folding,
+                target: o.target,
+                pill: o.anchor.pill,
             });
             o.keys = None;
             o.zone = zone;
@@ -616,7 +669,6 @@ impl Sheets {
             o.anchor = *anchor;
             o.target = target;
             o.size = size;
-            o.motion.switch(shown, anchor.capsule, now);
             self.scroll = Scroll::default();
         } else {
             if let Some(mut old) = self.open.take() {
@@ -627,13 +679,12 @@ impl Sheets {
                 piece,
                 kind,
                 body,
-                motion: SheetMotion::open(anchor.capsule, theme, now, reduced),
+                motion: SheetMotion::open(anchor.pill, theme, now, reduced),
                 anchor: *anchor,
                 target,
                 size,
                 keys: None,
             });
-            self.leaving = None;
             self.scroll = Scroll::default();
         }
         self.hovering = false;
@@ -644,7 +695,7 @@ impl Sheets {
     /// A switch from the open piece to `next`: the old piece's icon and
     /// text fly up from the subtitle (or from where its flyer was) to its
     /// slot, which reopens, in the exit step.
-    fn fly_old_piece_up(&mut self, next: Key, anchor: &Anchor, now: Instant) {
+    fn fly_old_piece_up(&mut self, next: Key, now: Instant) {
         let Some((piece, keys, reduced, ladder)) = self
             .open
             .as_ref()
@@ -659,12 +710,8 @@ impl Sheets {
         let Some(o) = self.open.as_ref() else {
             return;
         };
-        let shown = o
-            .motion
-            .rect(now, o.anchor.capsule, o.target, anchor.surface);
         let scroll = self.scroll.offset();
-        let Some(from) = flyer.or_else(|| subtitle_parts(&o.body, shown, o.anchor.piece, scroll))
-        else {
+        let Some(from) = flyer.or_else(|| subtitle_parts(&o.body, o.target, scroll)) else {
             return;
         };
         let to = limited_to(&from, keys);
@@ -672,9 +719,10 @@ impl Sheets {
             .push(Flight::up_on_switch(keys, from, to, &ladder, now));
     }
 
-    /// Starts the close: the sheet flies back to its capsule. What its body
-    /// holds goes out first. Does nothing without an open sheet. The piece's
-    /// slot reopens at once; its icon and text fly up 60 ms later.
+    /// Starts the close: the window folds into the pill of its piece's slot.
+    /// What its body holds goes out first. Does nothing without an open
+    /// window. The piece's slot reopens at once; its icon and text fly up
+    /// 60 ms later.
     pub fn close(&mut self, anchor: &Anchor, now: Instant) {
         let Some(shown) = self.rect(anchor, now) else {
             return;
@@ -693,11 +741,12 @@ impl Sheets {
             return;
         };
         o.body.flush(now);
-        o.motion.close(shown, now);
+        o.motion.close(shown, anchor.pill, now);
         let keys = o.keys.filter(|_| !o.motion.reduced());
+        let at = Sheets::target_of(anchor, o.body.size());
         let from = flyer
             .clone()
-            .or_else(|| subtitle_parts(&o.body, shown, anchor.piece, scroll));
+            .or_else(|| subtitle_parts(&o.body, at, scroll));
         if let (Some(keys), Some(from)) = (keys, from) {
             let to = limited_to(&from, keys);
             self.flights
@@ -708,12 +757,12 @@ impl Sheets {
     }
 
     /// Takes the open sheet away at once, with no exit motion: what its body
-    /// holds goes out first. The next [`Sheets::open`] then grows from the
-    /// capsule again.
+    /// holds goes out first. The next [`Sheets::open`] then grows from its
+    /// piece's pill.
     pub fn drop_open(&mut self, now: Instant) {
         if let Some(mut old) = self.open.take() {
             old.body.flush(now);
-            self.leaving = None;
+            self.leaving.clear();
             self.flights.clear();
             self.scroll = Scroll::default();
             self.hovering = false;
@@ -779,10 +828,8 @@ impl Sheets {
             self.slide_until = Some(now + SLIDE_GRACE);
         }
         if o.motion.is_closing() {
-            // On its way out the sheet keeps the slot it had: the piece
-            // coming back into the row does not move its body.
-            o.anchor.capsule = anchor.capsule;
-            o.anchor.surface = anchor.surface;
+            // On its way out the window folds into the live pill.
+            o.anchor = *anchor;
             return;
         }
         o.anchor = *anchor;
@@ -799,9 +846,7 @@ impl Sheets {
         let target = Sheets::target_of(&o.anchor, size);
         if !same(target, o.target) {
             if !slide_follows(self.slide_until, now) {
-                let shown = o
-                    .motion
-                    .rect(now, o.anchor.capsule, o.target, o.anchor.surface);
+                let shown = o.motion.rect(now, o.target, o.anchor.surface);
                 o.motion.resize(shown, now);
             }
             o.target = target;
@@ -821,11 +866,11 @@ impl Sheets {
         now: Instant,
         measure: &mut Measure<'_>,
     ) -> BodyOutcome {
-        let Some(rect) = self.rect(anchor, now) else {
+        if self.rect(anchor, now).is_none() {
             return BodyOutcome::Keep { changed: false };
-        };
-        let body_w = self.open.as_ref().map_or(0.0, |o| o.body.size().0);
-        let at = geometry::body_box(rect, anchor.piece, body_w);
+        }
+        let size = self.open.as_ref().map_or((0.0, 0.0), |o| o.body.size());
+        let at = Sheets::target_of(anchor, size);
         let (dx, dy) = (at.x, at.y - self.scroll.offset());
         let Some(o) = self.open.as_mut().filter(|o| !o.motion.is_closing()) else {
             return BodyOutcome::Keep { changed: false };
@@ -916,71 +961,62 @@ impl Sheets {
         if let Some(o) = self.open.as_mut() {
             o.body.layout(lay);
         }
-        if let Some(l) = self.leaving.as_mut() {
+        for l in &mut self.leaving {
             l.body.layout(lay);
         }
     }
 
-    /// Paints the sheet: its Haze, the row (the capsule's pieces, but for
-    /// the open one, clipped to the row's window) and the bodies. `row` paints
-    /// the capsule's pieces, given the piece nobody paints.
-    pub fn paint(
-        &mut self,
-        painter: &mut Painter,
-        anchor: &Anchor,
-        now: Instant,
-        row: &mut dyn FnMut(&mut Painter, &[Key]),
-    ) {
+    /// Paints the windows: the one being left (folding into its pill) under
+    /// the open one. Each is its Haze at its rect and corner radius, then its
+    /// body under one rounded clip of that rect. The body sits at its
+    /// window's target, so the rect reveals it rather than carrying it.
+    pub fn paint(&mut self, painter: &mut Painter, anchor: &Anchor, now: Instant) {
+        let surface = anchor.surface;
+        let leaving_hidden: Vec<Vec<Key>> = self
+            .leaving
+            .iter()
+            .map(|l| self.subtitle_hidden(l.piece, now))
+            .collect();
+        let open_hidden = self
+            .open
+            .as_ref()
+            .map(|o| self.subtitle_hidden(o.piece, now))
+            .unwrap_or_default();
+        for (l, hidden) in self.leaving.iter_mut().zip(&leaving_hidden) {
+            if l.motion.closed(now) {
+                continue;
+            }
+            let rect = l.motion.rect(now, l.pill, surface);
+            let radius = l.motion.radius(now);
+            if rect.w > 0.0 && rect.h > 0.0 {
+                haze_at(painter, rect, radius, l.motion.glass_opacity(now));
+                let alpha = l.motion.body_opacity(now);
+                if alpha > 0.0 {
+                    let at = (l.target.x, l.target.y - l.scroll);
+                    paint_body(painter, rect, radius, at, alpha, |p| {
+                        l.body.paint(p, now, hidden);
+                    });
+                }
+            }
+        }
         let Some(rect) = self.rect(anchor, now) else {
             return;
         };
         if rect.w <= 0.0 || rect.h <= 0.0 {
             return;
         }
-        let radius = painter.theme().radius_lg;
-        painter.haze(rect, radius);
-        painter.push_clip(geometry::row_window(rect), radius);
-        row(painter, &self.hidden_pieces(now));
-        painter.pop_clip();
-        // The bodies, each under one rounded clip of the viewport.
-        let view = geometry::viewport(rect);
-        let body_w = self.open.as_ref().map_or(0.0, |o| o.body.size().0);
-        let box_ = geometry::body_box(rect, anchor.piece, body_w);
-        let at = (box_.x, box_.y);
-        let leaving_hidden = self
-            .leaving
-            .as_ref()
-            .map(|l| self.subtitle_hidden(l.piece, now))
-            .unwrap_or_default();
-        let open_hidden = self
-            .open
-            .as_ref()
-            .map(|o| self.subtitle_hidden(o.piece, now))
-            .unwrap_or_default();
-        if let (Some(l), Some(o)) = (self.leaving.as_mut(), self.open.as_ref()) {
-            let alpha = o.motion.leaving_opacity(now);
-            if alpha > 0.0 {
-                let own = geometry::body_box(rect, l.slot, l.body.size().0);
-                paint_body(
-                    painter,
-                    view,
-                    radius,
-                    (own.x, own.y - l.scroll),
-                    alpha,
-                    |p| {
-                        l.body.paint(p, now, &leaving_hidden);
-                    },
-                );
-            }
-        }
         let offset = self.scroll.offset();
-        if let Some(o) = self.open.as_mut() {
-            let alpha = o.motion.body_opacity(now);
-            if alpha > 0.0 {
-                paint_body(painter, view, radius, (at.0, at.1 - offset), alpha, |p| {
-                    o.body.paint(p, now, &open_hidden);
-                });
-            }
+        let Some(o) = self.open.as_mut() else {
+            return;
+        };
+        let radius = o.motion.radius(now);
+        haze_at(painter, rect, radius, o.motion.glass_opacity(now));
+        let alpha = o.motion.body_opacity(now);
+        if alpha > 0.0 {
+            let at = Sheets::target_of(anchor, o.body.size());
+            paint_body(painter, rect, radius, (at.x, at.y - offset), alpha, |p| {
+                o.body.paint(p, now, &open_hidden);
+            });
         }
     }
 
@@ -991,11 +1027,11 @@ impl Sheets {
         slide_follows(self.slide_until, now)
     }
 
-    /// The slot the body being left had (tests).
+    /// The pill the window being left folds into (tests).
     #[cfg(test)]
     #[must_use]
-    pub fn leaving_slot(&self) -> Option<Rect> {
-        self.leaving.as_ref().map(|l| l.slot)
+    pub fn leaving_pill(&self) -> Option<Rect> {
+        self.leaving.last().map(|l| l.pill)
     }
 
     /// The scroll offset (tests).
@@ -1023,7 +1059,7 @@ impl Sheets {
     #[cfg(test)]
     #[must_use]
     pub fn is_leaving(&self) -> bool {
-        self.leaving.is_some()
+        !self.leaving.is_empty()
     }
 
     /// Whether a clock runs and the surface needs a frame. A sheet at rest
@@ -1033,7 +1069,8 @@ impl Sheets {
         let open = self.open.as_ref().is_some_and(|o| {
             o.motion.wants_frame(now) || o.motion.closed(now) || o.body.is_animating(now)
         });
-        open || self.leaving.is_some() || self.is_flying(now)
+        let folding = !self.leaving.is_empty();
+        open || folding || self.is_flying(now)
     }
 
     /// How long until the body's throttle or an asked-level hold is due;
@@ -1045,6 +1082,17 @@ impl Sheets {
             .filter(|o| !o.motion.is_closing())
             .and_then(|o| o.body.wait(now))
     }
+}
+
+/// The window's glass at `alpha`.
+fn haze_at(painter: &mut Painter, rect: Rect, radius: f32, alpha: f32) {
+    if alpha <= 0.0 {
+        return;
+    }
+    painter.push_state();
+    painter.opacity(alpha);
+    painter.haze(rect, radius);
+    painter.pop_state();
 }
 
 /// Paints one body under one rounded clip of `view`, translated to `at`, at

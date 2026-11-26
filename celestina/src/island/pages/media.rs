@@ -519,6 +519,7 @@ mod tests {
     fn view_of(media: &MediaState, max: (f32, f32)) -> View {
         let owners = NameOwner::default();
         Media.view(&PageCx {
+            content_w: None,
             theme: &Theme::dark(),
             max_size: max,
             model: None,
@@ -542,6 +543,7 @@ mod tests {
     fn wants_of(media: &MediaState, max: (f32, f32)) -> (f32, f32) {
         let owners = NameOwner::default();
         Media.wants(&PageCx {
+            content_w: None,
             theme: &Theme::dark(),
             max_size: max,
             model: None,

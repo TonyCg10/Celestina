@@ -1,6 +1,7 @@
-//! The Island's side of the capsule sheets (CEL-D-002): the open-sheet owner
-//! [`Sheets`] wired to the bar, the page and the input. At most one of three
-//! things is shown: nothing, the Island's page, or one capsule sheet; a
+//! The Island's side of the capsule menus (CEL-D-002, CEL-D-009): the
+//! open-window owner [`Sheets`] wired to the bar, the page and the input. At
+//! most one of three things is shown: nothing, the Island's page, or one
+//! capsule window (and, for 150 ms of a switch, the one it folds away); a
 //! closing one still counts as shown, so a request that comes while another
 //! thing is shown closes it and waits for it to go (`Sheets::queue`).
 
@@ -16,7 +17,7 @@ use crate::{
     pieces::{workspaces as workspaces_piece, Gesture, PageId, PieceAction, SheetKind},
     session_menu::SessionCore,
     sheet::{
-        geometry::{self, Hit},
+        geometry::{self, Edge, Hit},
         workspaces::workspaces_view,
         Anchor, BodyOutcome, Next, Request, SheetBody, WorkspacesBody,
     },
@@ -196,21 +197,13 @@ impl Island {
         self.bar.as_ref().and_then(|bar| bar.node_rect(key))
     }
 
-    /// The anchor of the sheet held: its capsule and the piece's slot as the
-    /// bar has them, else the last it knew (a piece that vanished). A sheet
-    /// on its way out keeps the slot it had, so its body does not move while
-    /// the piece comes back into the row.
+    /// The anchor of the window held: its capsule and the piece's pill as the
+    /// bar has them, else the last it knew (a piece that vanished: the window
+    /// folds into the last pill it had).
     pub(super) fn sheet_anchor(&self, now: Instant) -> Option<Anchor> {
         let (zone, piece) = self.sheets.anchor_ids()?;
-        let last = self.sheets.last_anchor();
-        match (self.live_anchor(zone, piece, now), last) {
-            (Some(live), Some(last)) if !self.sheets.is_open() => Some(Anchor {
-                piece: last.piece,
-                ..live
-            }),
-            (Some(live), _) => Some(live),
-            (None, last) => last,
-        }
+        self.live_anchor(zone, piece, now)
+            .or_else(|| self.sheets.last_anchor())
     }
 
     /// Whether [`Island::open_level_sheet`] would find `piece` on the bar.
@@ -225,18 +218,28 @@ impl Island {
     }
 
     /// The anchor the bar gives at `now` for `piece` in `zone`: the capsule
-    /// as it is painted (the pieces beside the open one may be sliding) and
-    /// the piece's slot. `None` when either is gone.
+    /// as it is painted (the pieces beside the open one may be sliding), the
+    /// edge of it its zone lines up with and the piece's pill. `None` when
+    /// either is gone.
     pub(super) fn live_anchor(&self, zone: usize, piece: Key, now: Instant) -> Option<Anchor> {
         let bar = self.bar.as_ref()?;
         Some(Anchor {
             capsule: bar.capsule_extent(zone, now)?,
-            piece: bar.slot_rect(piece, now)?,
+            edge: Edge::of_zone(zone),
+            pill: geometry::pill(bar.pill_of(piece, now)?),
             surface: self.size,
         })
     }
 
-    /// The sheet's rect at `now`, when one is shown.
+    /// The windows painted at `now` with their corner radii, for the glass
+    /// and the regions.
+    pub(super) fn sheet_windows(&self, now: Instant) -> Vec<(Rect, f32)> {
+        let anchor = self.sheet_anchor(now);
+        self.sheets.windows(anchor.as_ref(), self.size, now)
+    }
+
+    /// The window's rect at `now`, when one is shown (tests).
+    #[cfg(test)]
     pub(super) fn sheet_rect(&self, now: Instant) -> Option<Rect> {
         self.sheets.rect(&self.sheet_anchor(now)?, now)
     }
@@ -257,13 +260,14 @@ impl Island {
     }
 
     /// What a piece's sheet request does: the open piece again closes its
-    /// sheet; the session menu and a page are built here (neither measures
-    /// anything); a level sheet asks the app to build the body.
+    /// sheet; the session menu is built here and a page is built and
+    /// measured here with `measure`; a level sheet asks the app to build the body.
     pub(super) fn sheet_request(
         &mut self,
         key: Key,
         kind: SheetKind,
         now: Instant,
+        measure: &mut Measure<'_>,
     ) -> Option<IslandAction> {
         if self.sheets.piece() == Some(key) {
             self.close_sheet(now);
@@ -276,7 +280,7 @@ impl Island {
                 if page == PageId::PHONE && !self.phone_duty {
                     tracing::info!("a phone sheet: the phone duty is off; nothing was done");
                 } else {
-                    self.open_page_sheet(key, page, now);
+                    self.open_page_sheet(key, page, now, measure);
                 }
                 return None;
             }
@@ -385,9 +389,15 @@ impl Island {
         self.start_flight(piece, now);
     }
 
-    /// The frame's part after the layout: the sheet follows its capsule and
-    /// piece, and closes on its exit motion when either is gone.
+    /// The frame's part after the layout: the window follows its capsule and
+    /// piece, and closes on its exit motion when either is gone; the window
+    /// being left folds into its piece's pill as the bar has it.
     pub(super) fn sheets_after_layout(&mut self, now: Instant) {
+        for piece in self.sheets.leaving_pieces(now) {
+            if let Some(pill) = self.bar.as_ref().and_then(|bar| bar.pill_of(piece, now)) {
+                self.sheets.follow_leaving(piece, geometry::pill(pill));
+            }
+        }
         let Some((zone, piece)) = self.sheets.anchor_ids() else {
             return;
         };
@@ -410,22 +420,13 @@ impl Island {
         }
     }
 
-    /// Paints the sheet over the Island's capsule and page: its glass, its
-    /// row (the capsule's pieces but the open one) and its body.
+    /// Paints the windows over the bar, the Island's capsule and its page:
+    /// each one's glass and body.
     pub(super) fn paint_sheet(&mut self, painter: &mut Painter, now: Instant) {
         let Some(anchor) = self.sheet_anchor(now) else {
             return;
         };
-        let Some((zone, _)) = self.sheets.anchor_ids() else {
-            return;
-        };
-        let mut bar = self.bar.as_mut();
-        let mut row = |p: &mut Painter, hidden: &[Key]| {
-            if let Some(bar) = bar.as_deref_mut() {
-                bar.paint_row(p, now, zone, hidden);
-            }
-        };
-        self.sheets.paint(painter, &anchor, now, &mut row);
+        self.sheets.paint(painter, &anchor, now);
     }
 
     /// Paints the flyers (the icons and texts of the pieces on their way
@@ -466,10 +467,11 @@ impl Island {
         }
     }
 
-    /// Input while a sheet is open. `Some` when the sheet took the event;
-    /// `None` to let it reach what is outside the sheet (another capsule,
-    /// the Island's capsule). The sheet is hit before the bar and the capsule
-    /// it covers.
+    /// Input while a window is open. `Some` when the window took the event;
+    /// `None` to let it reach what is outside it: the bar (its other pieces,
+    /// another capsule, the glass) and the Island's capsule. The window is
+    /// hit first, but it never covers the bar, so a press on the bar reaches
+    /// it and its switch or close-then-open rules.
     pub(super) fn sheet_input(
         &mut self,
         ev: &InputEvent,
@@ -541,26 +543,16 @@ impl Island {
                     _ => None,
                 };
                 if gesture && self.sheets.on_subtitle(&anchor, now, x, y) {
-                    if let Some(out) = self.subtitle_gesture(ev, pressed, now) {
-                        self.pointer_is_the_sheets(true, now);
+                    if let Some(out) = self.subtitle_gesture(ev, pressed, now, measure) {
+                        self.pointer_is_the_sheets(now);
                         return Some(out);
                     }
                 }
                 match geometry::hit(rect, x, y) {
                     Hit::Body => {
-                        self.pointer_is_the_sheets(true, now);
+                        self.pointer_is_the_sheets(now);
                         let outcome = self.sheets.input(ev, &anchor, now, measure);
                         Some(self.apply_outcome(outcome, now))
-                    }
-                    Hit::Row => {
-                        self.sheets.leave_body(now, measure);
-                        let on_capsule = anchor.capsule.contains(x, y);
-                        self.pointer_is_the_sheets(!on_capsule, now);
-                        if on_capsule {
-                            Some(self.bar_input(ev, false, false, now))
-                        } else {
-                            Some(Vec::new())
-                        }
                     }
                     Hit::Outside => {
                         self.sheets.leave_body(now, measure);
@@ -597,6 +589,7 @@ impl Island {
         ev: &InputEvent,
         pressed: Option<u32>,
         now: Instant,
+        measure: &mut Measure<'_>,
     ) -> Option<Vec<IslandAction>> {
         let piece = self.sheets.piece()?;
         match *ev {
@@ -624,17 +617,14 @@ impl Island {
                 matches!(gesture, Gesture::Scroll(..)) || *action != PieceAction::None
             })
             .collect();
-        Some(self.apply_asked(asked, false, now))
+        Some(self.apply_asked(asked, false, now, measure))
     }
 
-    /// The pointer is the sheet's: the Island's capsule ends its hover, and
-    /// so does the bar when `bar` (a pointer on the sheet's row over its own
-    /// capsule is the bar's to hover).
-    fn pointer_is_the_sheets(&mut self, bar: bool, now: Instant) {
-        if bar {
-            if let Some(tree) = self.bar.as_mut() {
-                tree.leave(now);
-            }
+    /// The pointer is the window's: the bar and the Island's capsule end
+    /// their hover.
+    fn pointer_is_the_sheets(&mut self, now: Instant) {
+        if let Some(tree) = self.bar.as_mut() {
+            tree.leave(now);
         }
         self.capsule_input
             .pointer(&mut self.capsule, &InputEvent::PointerLeave, now);

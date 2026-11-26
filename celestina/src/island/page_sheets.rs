@@ -12,7 +12,8 @@ use celestina_shell::connectivity::Action;
 use celestina_ui::{Interaction, Key, Tree, View};
 
 use super::{
-    clock, pages::tabs, view, Island, IslandAction, PageCx, XKB_KEY_DELETE, XKB_KEY_KP_DELETE,
+    clock, pages::tabs, view, Island, IslandAction, Measure, PageCx, XKB_KEY_DELETE,
+    XKB_KEY_KP_DELETE,
 };
 use crate::{
     island::pages::{
@@ -30,6 +31,7 @@ impl Island {
     /// helpers find the same keys in both.
     pub(super) fn page_cx(&self) -> PageCx<'_> {
         PageCx {
+            content_w: None,
             clipboard: &self.clip_panel,
             theme: &self.theme,
             max_size: self.state.max_page_size(),
@@ -92,37 +94,97 @@ impl Island {
             })
     }
 
-    /// The body view and size of `page` as a sheet of `piece`: its content in
-    /// a box as tall as the page would be, less what the Island spends on
-    /// tabs and its title row, under the piece's subtitle.
-    pub(super) fn page_sheet_view(&self, piece: Key, page: PageId) -> (View, (f32, f32)) {
-        let cx = self.page_cx();
+    /// The natural size of the content of `page` as a sheet: its view laid
+    /// out on its own (every text measured with the frame's `measure`), as
+    /// wide as its widest row and as tall as its rows, whatever size the
+    /// Island's page asks for.
+    pub(super) fn page_content_size(
+        &self,
+        page: PageId,
+        now: Instant,
+        measure: &mut Measure<'_>,
+    ) -> (f32, f32) {
         let shown = page_view(page);
-        let wants = shown.wants(&cx).1;
-        let wants = if wants.is_finite() && wants > 0.0 {
-            wants.min(cx.max_size.1)
-        } else {
-            super::state::PAGE_SIZE.1
-        };
-        let content_h = (wants - view::chrome_height(&self.theme)).max(0.0);
+        let content = shown.view(&self.sheet_cx(page));
+        let key = content.key;
+        let mut tree = Tree::new(true, &self.theme);
+        tree.apply(content, now);
+        // Room enough for any page: the root takes its content's size.
+        tree.layout_measured((view::PAGE_SHEET_W, 1.0e5), |text, style, width| {
+            measure(text, style, width)
+        });
+        let (w, h) = tree.node_by_key(key).map_or((0.0, 0.0), |id| {
+            let r = tree.rect(id);
+            (r.w, r.h)
+        });
+        // A page with a declared width is that wide whatever its rows are.
+        (self.declared_content_w(page).unwrap_or(w), h)
+    }
+
+    /// What the pages read as a sheet: the Island's, with the content width
+    /// of the sheet a page declares ([`PageView::sheet_width`]).
+    fn sheet_cx(&self, page: PageId) -> PageCx<'_> {
+        PageCx {
+            content_w: self.declared_content_w(page),
+            ..self.page_cx()
+        }
+    }
+
+    /// The content width of the sheet `page` declares: its width less the
+    /// side padding.
+    fn declared_content_w(&self, page: PageId) -> Option<f32> {
+        page_view(page)
+            .sheet_width()
+            .map(|w| (w - 2.0 * self.theme.spacing.lg).max(0.0))
+    }
+
+    /// The body view and size of `page` as a sheet of `piece`, for a page
+    /// content of natural size `content`: the piece's subtitle over the
+    /// content in a box as big as the content.
+    pub(super) fn page_sheet_view(
+        &self,
+        piece: Key,
+        page: PageId,
+        content: (f32, f32),
+    ) -> (View, (f32, f32)) {
+        let shown = page_view(page);
         let face = self.sheet_face(piece, page);
         let body = view::page_sheet(
             &self.theme,
             &face,
             shown.title(),
-            shown.view(&cx),
-            content_h,
+            shown.view(&self.sheet_cx(page)),
+            content,
         );
-        (body, view::page_sheet_size(&self.theme, content_h))
+        (body, view::page_sheet_size(&self.theme, content))
     }
 
-    /// Opens `page` as the sheet of `piece`. `false` when the bar has no such
-    /// piece.
-    pub(super) fn open_page_sheet(&mut self, piece: Key, page: PageId, now: Instant) -> bool {
+    /// Opens `page` as the sheet of `piece`, as big as its content measures
+    /// with `measure`. `false` when the bar has no such piece.
+    pub(super) fn open_page_sheet(
+        &mut self,
+        piece: Key,
+        page: PageId,
+        now: Instant,
+        measure: &mut Measure<'_>,
+    ) -> bool {
+        let content = self.page_content_size(page, now, measure);
+        self.open_page_sheet_sized(piece, page, content, now)
+    }
+
+    /// [`Island::open_page_sheet`] for a content of size `content` already
+    /// measured.
+    fn open_page_sheet_sized(
+        &mut self,
+        piece: Key,
+        page: PageId,
+        content: (f32, f32),
+        now: Instant,
+    ) -> bool {
         // A page that opens starts fresh, as a page opened on the Island.
         self.forget_page_state();
-        let (body, size) = self.page_sheet_view(piece, page);
-        let body = PageBody::new(page, &self.theme, self.reduced, body, size, now);
+        let (body, size) = self.page_sheet_view(piece, page, content);
+        let body = PageBody::new(page, &self.theme, self.reduced, body, size, content, now);
         self.open_sheet_at(
             piece,
             SheetKind::Page(page),
@@ -131,16 +193,28 @@ impl Island {
         )
     }
 
-    /// Builds the open page sheet's body again (what the page reads
-    /// changed): the focus and hover stay, the sheet follows a new size.
-    pub(super) fn apply_page_sheet(&mut self, now: Instant) {
+    /// The views were built again: the open page sheet is measured and built
+    /// again at the frame's next step ([`Island::refit_page_sheet`]).
+    pub(super) fn apply_page_sheet(&mut self) {
+        self.page_sheet_stale = true;
+    }
+
+    /// Builds the open page sheet's body again when what the page reads
+    /// changed: the focus and hover stay, and the sheet follows the size the
+    /// new content measures (a device appearing makes it taller).
+    pub(super) fn refit_page_sheet(&mut self, now: Instant, measure: &mut Measure<'_>) {
+        if !std::mem::take(&mut self.page_sheet_stale) {
+            return;
+        }
         let (Some(page), Some((_, piece))) = (self.sheets.page(), self.sheets.anchor_ids()) else {
             return;
         };
-        let (body, size) = self.page_sheet_view(piece, page);
+        let content = self.page_content_size(page, now, measure);
+        let (body, size) = self.page_sheet_view(piece, page, content);
         if let Some(open) = self.sheets.page_body_mut() {
-            open.apply(body, size, now);
+            open.apply(body, size, content, now);
         }
+        self.take_pending_focus();
     }
 
     /// What a page keeps while it is shown, given up when it is not: the
@@ -183,9 +257,13 @@ impl Island {
         let (Some(piece), Some(page)) = (self.sheets.piece(), self.sheets.page()) else {
             return false;
         };
+        // It grows again at the size it had: no text is measured here.
+        let Some(content) = self.sheets.page_body_mut().map(|body| body.content()) else {
+            return false;
+        };
         self.forget_page_state();
         self.sheets.drop_open(now);
-        self.open_page_sheet(piece, page, now);
+        self.open_page_sheet_sized(piece, page, content, now);
         true
     }
 

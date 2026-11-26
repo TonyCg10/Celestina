@@ -723,6 +723,7 @@ mod tests {
         static CONNECTIVITY: std::sync::LazyLock<crate::connectivity::state::ConnectivityState> =
             std::sync::LazyLock::new(Default::default);
         PageCx {
+            content_w: None,
             theme,
             max_size,
             model: None,

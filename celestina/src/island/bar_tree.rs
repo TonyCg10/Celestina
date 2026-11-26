@@ -31,7 +31,7 @@ use celestina_wayland::InputEvent;
 
 use super::{
     state::{CAPSULE_H, TOP_GAP},
-    view::centred,
+    view::{centred, CAPSULE_PADDING},
     ScrollRemainder, BTN_MIDDLE, BTN_RIGHT,
 };
 use crate::{
@@ -113,6 +113,8 @@ pub struct BarTree {
     lift_changed: bool,
     /// The open spring, from the theme: how long and on which curve.
     spring: (Duration, Easing),
+    /// The gap the row keeps between pieces, from the theme.
+    gap: f32,
     /// Each capsule's glide from the extent it was painted at to its rect,
     /// while its pieces slide.
     glides: [Option<Glide>; 4],
@@ -137,6 +139,9 @@ fn bar_tree(reduced: bool, theme: &Theme) -> Tree {
     tree.set_hit_painted(true);
     tree
 }
+
+/// The height of a piece's pill when the bar has no rect for it.
+const PILL_H: f32 = 28.0;
 
 /// The open spring of `theme`: `motion.slow` with the overshoot easing.
 fn spring_of(theme: &Theme) -> (Duration, Easing) {
@@ -165,6 +170,7 @@ impl BarTree {
             lifted: None,
             lift_changed: false,
             spring: spring_of(theme),
+            gap: theme.spacing.sm,
             glides: [None; 4],
         }
     }
@@ -221,6 +227,7 @@ impl BarTree {
         self.tree.set_theme(theme);
         self.measure.set_theme(theme);
         self.spring = spring_of(theme);
+        self.gap = theme.spacing.sm;
         self.stale = true;
     }
 
@@ -380,29 +387,11 @@ impl BarTree {
         self.tree.take_fault().or_else(|| self.measure.take_fault())
     }
 
-    /// Paints the bar, without the capsule of zone `skip` when one is given
-    /// (a sheet draws that one itself) and without the pieces `hidden` (ones
-    /// that are painted elsewhere while they fly).
-    pub fn paint(
-        &mut self,
-        painter: &mut Painter,
-        now: Instant,
-        skip: Option<usize>,
-        hidden: &[Key],
-    ) {
+    /// Paints the bar, every capsule, without the pieces `hidden` (ones that
+    /// are painted elsewhere while they fly, or under an open window).
+    pub fn paint(&mut self, painter: &mut Painter, now: Instant, hidden: &[Key]) {
         self.sync_extents(now);
-        match skip.and_then(|zone| self.zone_node(zone)) {
-            Some(id) => self.tree.paint_except_hiding(painter, now, id, hidden),
-            None => self.tree.paint_hiding(painter, now, hidden),
-        }
-    }
-
-    /// Paints only the pieces of zone `zone`'s capsule: not its box or Haze,
-    /// and not the pieces `hidden`.
-    pub fn paint_row(&mut self, painter: &mut Painter, now: Instant, zone: usize, hidden: &[Key]) {
-        if let Some(id) = self.zone_node(zone) {
-            self.tree.paint_children_hiding(painter, now, id, hidden);
-        }
+        self.tree.paint_hiding(painter, now, hidden);
     }
 
     /// Hands the tree the extents the capsules are painted at `now`.
@@ -523,6 +512,48 @@ impl BarTree {
         })
     }
 
+    /// The pill of piece `key` at `now`: what a window grows from and folds
+    /// into. While the piece is in its row at rest it is the piece's rect
+    /// (its radius is half its height). Its slot, centred where
+    /// [`BarTree::slot_rect`] says, is a pill as high as the piece and as wide
+    /// as the gap its neighbours leave, never narrower than it is high: a
+    /// square while the slot is shut, the piece's rect once it has reopened.
+    /// `None` once the bar does not hold the piece.
+    #[must_use]
+    pub fn pill_of(&self, key: Key, now: Instant) -> Option<Rect> {
+        let slot = self.slot_rect(key, now)?;
+        let id = self.tree.node_by_key(key)?;
+        let parent = self.tree.parent_of(id)?;
+        let kids = self.tree.painted_children(parent, now);
+        let i = kids.iter().position(|k| k.0 == key)?;
+        let (_, rect, hidden) = kids[i];
+        let h = if rect.h > 0.0 { rect.h } else { PILL_H };
+        let own = if rect.w > 0.0 { rect.w } else { h };
+        // The room between the nearest neighbours, less the gap each keeps;
+        // a piece at an end of its capsule has the capsule's inner edge
+        // there instead.
+        let capsule = self
+            .zone_of(key)
+            .and_then(|zone| self.capsule_extent(zone, now))
+            .unwrap_or_else(|| self.tree.rect(parent));
+        let room = {
+            let prev = kids[..i].iter().rev().find(|k| !k.2);
+            let next = kids[i + 1..].iter().find(|k| !k.2);
+            let left = prev.map_or(capsule.x + CAPSULE_PADDING, |p| p.1.x + p.1.w + self.gap);
+            let right = next.map_or(capsule.x + capsule.w - CAPSULE_PADDING, |n| {
+                n.1.x - self.gap
+            });
+            right - left
+        };
+        let w = if hidden { h } else { room.clamp(h, own.max(h)) };
+        Some(Rect {
+            x: slot.x - w / 2.0,
+            y: rect.y,
+            w,
+            h,
+        })
+    }
+
     /// The icon and the text of piece `piece` as the bar paints them at
     /// `now`: its first icon, and the text node that reads `text` (a piece
     /// whose face has no text, or whose bar text is not that string, flies
@@ -638,13 +669,11 @@ impl BarTree {
         self.tree.highlight()
     }
 
-    /// The capsules as they are painted at `now` (fading ones included, the
-    /// one of zone `skip` left out), with the haze's corner `radius`: what
-    /// the blur and input regions cover.
+    /// The capsules as they are painted at `now` (fading ones included), with
+    /// the haze's corner `radius`: what the blur and input regions cover.
     #[must_use]
-    pub fn shapes(&self, now: Instant, radius: f32, skip: Option<usize>) -> Vec<Shape> {
+    pub fn shapes(&self, now: Instant, radius: f32) -> Vec<Shape> {
         (0..zone_keys().len())
-            .filter(|&zone| Some(zone) != skip)
             .filter(|&zone| {
                 self.zone_node(zone)
                     .is_some_and(|id| self.tree.effective_opacity(id, now) > 0.0)
@@ -658,18 +687,9 @@ impl BarTree {
     /// Whether (`x`, `y`) is on one of the capsules, as painted at `now`.
     #[must_use]
     pub fn contains(&self, x: f32, y: f32, now: Instant) -> bool {
-        self.contains_except(x, y, None, now)
-    }
-
-    /// Whether (`x`, `y`) is on a capsule other than zone `except`'s, as
-    /// painted at `now`.
-    #[must_use]
-    pub fn contains_except(&self, x: f32, y: f32, except: Option<usize>, now: Instant) -> bool {
         (0..zone_keys().len()).any(|zone| {
-            Some(zone) != except
-                && self
-                    .capsule_extent(zone, now)
-                    .is_some_and(|r| r.contains(x, y))
+            self.capsule_extent(zone, now)
+                .is_some_and(|r| r.contains(x, y))
         })
     }
 
@@ -824,7 +844,6 @@ mod tests {
 
     use super::*;
     use crate::island::pages::NameOwner;
-    use crate::island::view::CAPSULE_PADDING;
 
     /// 7 px per char, 16 px tall.
     fn fake_measure(s: &str, _: &TextStyle, _: Option<f32>) -> (f32, f32) {
@@ -879,7 +898,7 @@ mod tests {
             let mut bar = BarTree::new(&only(&["notifications"], &[]), cx.theme, false);
             bar.update(cx, 1920.0, 140.0, t0, &mut lay());
             let placed = bar.placement.and_then(|p| p.start);
-            let painted = bar.shapes(t0, cx.theme.radius_lg, None);
+            let painted = bar.shapes(t0, cx.theme.radius_lg);
             assert_eq!(painted.len(), 1);
             assert_eq!(Some(painted[0].0), placed);
             assert!(placed
@@ -893,10 +912,10 @@ mod tests {
             let t0 = Instant::now();
             let mut bar = BarTree::new(&only(&[], &["notifications"]), cx.theme, false);
             bar.update(cx, 1920.0, 140.0, t0, &mut lay());
-            let before = bar.shapes(t0, 0.0, None);
+            let before = bar.shapes(t0, 0.0);
             // A narrower surface moves the end capsule left.
             bar.update(cx, 1280.0, 140.0, t0, &mut lay());
-            let after = bar.shapes(t0, 0.0, None);
+            let after = bar.shapes(t0, 0.0);
             assert_eq!(before.len(), 1);
             assert_eq!(after.len(), 1);
             assert!(after[0].0.x < before[0].0.x);
@@ -1092,7 +1111,7 @@ mod tests {
                     "+{ms} ms: {extent:?} vs {want:?}"
                 );
                 // The glass and the regions are that extent.
-                let shapes = bar.shapes(now, 20.0, None);
+                let shapes = bar.shapes(now, 20.0);
                 assert_eq!(shapes.first().map(|s| s.0), extent);
                 assert!(bar.contains(want.x + 1.0, 28.0, now));
             }
@@ -1101,7 +1120,7 @@ mod tests {
             assert_eq!(bar.capsule_extent(0, t0).map(|r| r.w), whole.map(|r| r.w));
             let end = after(t0, 400);
             assert_eq!(bar.capsule_extent(0, end), rest);
-            assert_eq!(bar.shapes(end, 20.0, None).first().map(|s| s.0), rest);
+            assert_eq!(bar.shapes(end, 20.0).first().map(|s| s.0), rest);
             assert!(
                 !bar.is_sliding(0, end) && !bar.is_animating(end),
                 "no frames at rest"
@@ -1133,7 +1152,7 @@ mod tests {
                 bar.sync_extents(now);
                 let painted = bar.zone_node(3).map(|id| bar.tree.painted_rect(id, now));
                 let extent = bar.capsule_extent(3, now);
-                let shape = bar.shapes(now, 20.0, None).last().map(|s| s.0);
+                let shape = bar.shapes(now, 20.0).last().map(|s| s.0);
                 assert!(
                     painted
                         .zip(extent)
@@ -1241,7 +1260,7 @@ mod tests {
             assert!(slot.is_some_and(|s| s.w == 0.0 && s.x.is_finite()));
             let end = after(t0, 400);
             assert!(bar.capsule_extent(0, end).is_some_and(|e| e.w == 2.0 * pad));
-            assert_eq!(bar.shapes(end, 20.0, None).len(), 1);
+            assert_eq!(bar.shapes(end, 20.0).len(), 1);
         });
     }
 
@@ -1321,6 +1340,77 @@ mod tests {
                 (slot - centre).abs() <= cx.theme.spacing.sm,
                 "slot {slot} centre {centre}"
             );
+        });
+    }
+    #[test]
+    fn the_pill_is_the_piece_at_rest_a_square_while_lifted_and_grows_back() {
+        with_cx(|cx| {
+            let (mut bar, [_, b, _], t0) = trio(cx, false);
+            let piece = bar.node_rect(b).unwrap_or(ZERO);
+            // In its row at rest: the piece's own rect.
+            assert_eq!(bar.pill_of(b, t0), Some(piece));
+            // Lifted, its slot is shut: a square as high as the piece,
+            // centred on the slot.
+            lift(&mut bar, cx, Some(b), t0);
+            let shut = after(t0, 400);
+            let slot = bar.slot_rect(b, shut).map_or(f32::NAN, |s| s.x);
+            let pill = bar.pill_of(b, shut).unwrap_or(ZERO);
+            assert_eq!((pill.w, pill.h, pill.y), (piece.h, piece.h, piece.y));
+            assert!((pill.x + pill.w / 2.0 - slot).abs() < 0.01);
+            // Landed, the slot reopens on the spring: the pill widens from
+            // the square to the piece, and ends as the piece's rect.
+            let t1 = after(t0, 500);
+            lift(&mut bar, cx, None, t1);
+            let width = |ms: u64| bar.pill_of(b, after(t1, ms)).map_or(f32::NAN, |p| p.w);
+            assert!(width(0) <= piece.h + 0.01, "starts shut: {}", width(0));
+            assert!(width(175) > width(0), "grows");
+            assert!(width(175) <= piece.w + 0.01);
+            assert!((width(400) - piece.w).abs() < 0.01, "ends as the piece");
+            assert_eq!(bar.pill_of(b, after(t1, 400)), Some(piece));
+            // A piece the bar does not hold has none.
+            assert!(bar.pill_of(Key::named("nothing"), t0).is_none());
+        });
+    }
+
+    #[test]
+    fn a_piece_at_the_end_of_its_capsule_reopens_inside_the_capsules_edge() {
+        with_cx(|cx| {
+            for order in [
+                ["brightness", "notifications"],
+                ["notifications", "brightness"],
+            ] {
+                let t0 = Instant::now();
+                let mut bar = BarTree::new(&only(&order, &[]), cx.theme, false);
+                bar.update(cx, 1920.0, 300.0, t0, &mut lay());
+                let keys: Vec<Key> = bar
+                    .views
+                    .start
+                    .as_ref()
+                    .map(|v| v.children.iter().map(|c| c.key).collect())
+                    .unwrap_or_default();
+                assert_eq!(keys.len(), 2, "both pieces draw something");
+                let end = if order[0] == "brightness" {
+                    keys[0]
+                } else {
+                    keys[1]
+                };
+                let piece = bar.node_rect(end).unwrap_or(ZERO);
+                assert!(piece.w > piece.h, "a wide piece: {piece:?}");
+                lift(&mut bar, cx, Some(end), t0);
+                let shut = after(t0, 400);
+                lift(&mut bar, cx, None, shut);
+                // Its slot reopens from a square: the pill is not the whole
+                // piece over the neighbour still sliding out.
+                let pill = bar.pill_of(end, shut).unwrap_or(ZERO);
+                assert!(
+                    pill.w <= piece.h + 0.01,
+                    "{order:?}: a square, not the whole piece: {} vs {}",
+                    pill.w,
+                    piece.w
+                );
+                let later = bar.pill_of(end, after(shut, 400)).unwrap_or(ZERO);
+                assert!((later.w - piece.w).abs() < 0.01, "{order:?}: {later:?}");
+            }
         });
     }
 }

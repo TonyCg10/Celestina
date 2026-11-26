@@ -1,6 +1,6 @@
-//! The clocks of a capsule sheet: the rect's flights (open, switch, close, a
-//! resize at rest) and the body's opacities. Pure: every method takes the
-//! instant, nothing reads a clock.
+//! The clocks of a capsule menu window: the rect's flights (grow from the
+//! pill, fold into it, a resize at rest), its corner radius and the body's
+//! opacity. Pure: every method takes the instant, nothing reads a clock.
 
 use std::time::{Duration, Instant};
 
@@ -11,19 +11,18 @@ use celestina_ui::{Easing, Motion, EXIT, ONE_UI};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
     Open,
-    Switch,
     Close,
 }
 
-/// The sheet's rect and its body's opacities over time.
+/// The window's rect, radius and body opacity over time.
 #[derive(Clone, Debug)]
 pub struct SheetMotion {
     kind: Kind,
+    /// Where the flight starts: the pill (an open) or the window as it was
+    /// shown (a close).
     from: Rect,
-    /// The capsule when the flight began: an open or a switch starts from
-    /// `from` moved by how far the capsule's edges have moved since, so a
-    /// capsule that slides under the flight carries the sheet with it.
-    capsule: Rect,
+    /// The corner radius at the start and at the end of the flight.
+    radius: (f32, f32),
     start: Instant,
     duration: Duration,
     easing: Easing,
@@ -76,7 +75,7 @@ impl SheetMotion {
     fn flight(
         kind: Kind,
         from: Rect,
-        capsule: Rect,
+        radius: (f32, f32),
         now: Instant,
         ladder: MotionMs,
         overshoot: f32,
@@ -84,12 +83,12 @@ impl SheetMotion {
     ) -> SheetMotion {
         let (step, easing) = match kind {
             Kind::Close => (Motion::Exit, Easing::Bezier(EXIT)),
-            Kind::Open | Kind::Switch => (Motion::Slow, Easing::OutBack(overshoot)),
+            Kind::Open => (Motion::Slow, Easing::OutBack(overshoot)),
         };
         SheetMotion {
             kind,
             from,
-            capsule,
+            radius,
             start: now,
             duration: step.duration(&ladder),
             easing,
@@ -100,12 +99,13 @@ impl SheetMotion {
         }
     }
 
-    /// A sheet opening from `capsule`.
-    pub fn open(capsule: Rect, theme: &Theme, now: Instant, reduced: bool) -> SheetMotion {
+    /// A window growing out of `pill` (the open piece's rect in the bar, its
+    /// radius half its height) to the large radius of the theme.
+    pub fn open(pill: Rect, theme: &Theme, now: Instant, reduced: bool) -> SheetMotion {
         SheetMotion::flight(
             Kind::Open,
-            capsule,
-            capsule,
+            pill,
+            (finite(pill.h) / 2.0, theme.radius_lg),
             now,
             theme.motion,
             theme.overshoot,
@@ -113,24 +113,9 @@ impl SheetMotion {
         )
     }
 
-    /// The body is replaced while the sheet stays: the rect flies from
-    /// `shown` to the new target. `capsule` is the capsule's extent now.
-    pub fn switch(&mut self, shown: Rect, capsule: Rect, now: Instant) {
-        let reduced = self.reduced;
-        *self = SheetMotion::flight(
-            Kind::Switch,
-            shown,
-            capsule,
-            now,
-            self.ladder,
-            self.overshoot,
-            reduced,
-        );
-    }
-
-    /// The body changed size while at rest: the rect morphs from `shown` to
-    /// the new target. During a flight the flight carries the new target, so
-    /// this does nothing; under reduced motion the rect jumps.
+    /// The body changed size while the window stays: the rect morphs from
+    /// `shown` to the new target. During a flight the flight carries the new
+    /// target, so this does nothing; under reduced motion the rect jumps.
     pub fn resize(&mut self, shown: Rect, now: Instant) {
         if self.reduced || self.kind == Kind::Close || self.flying(now) {
             return;
@@ -138,16 +123,18 @@ impl SheetMotion {
         self.resize = Some((shown, now));
     }
 
-    /// The sheet goes back to its capsule.
-    pub fn close(&mut self, shown: Rect, now: Instant) {
+    /// The window folds into `pill` (its piece's live slot; only its height
+    /// counts here, for the end radius), from `shown`.
+    pub fn close(&mut self, shown: Rect, pill: Rect, now: Instant) {
         if self.kind == Kind::Close {
             return;
         }
         let reduced = self.reduced;
+        let radius = (self.radius(now), finite(pill.h) / 2.0);
         *self = SheetMotion::flight(
             Kind::Close,
             shown,
-            shown,
+            radius,
             now,
             self.ladder,
             self.overshoot,
@@ -177,37 +164,14 @@ impl SheetMotion {
         (elapsed < duration).then(|| elapsed.as_secs_f32() / duration.as_secs_f32())
     }
 
-    /// Where the flight starts at `now`: `from`, its edges moved as far as
-    /// the capsule's (`capsule` is the capsule's extent now) since the flight
-    /// began, so a capsule that shrinks or grows under an open carries the
-    /// sheet with it and the two stay one shape. A close starts where it was.
-    fn start_at(&self, capsule: Rect) -> Rect {
-        if self.kind == Kind::Close {
-            return self.from;
-        }
-        let left = self.from.x + (capsule.x - self.capsule.x);
-        let right = self.from.x
-            + self.from.w
-            + ((capsule.x + capsule.w) - (self.capsule.x + self.capsule.w));
-        Rect {
-            x: left,
-            w: (right - left).max(0.0),
-            ..self.from
-        }
-    }
-
-    /// The rect at `now`. `capsule` is the capsule's extent now and `to` the
-    /// live target (the capsule while closing). The OutBack overshoot is cut
-    /// to `surface`.
-    pub fn rect(&self, now: Instant, capsule: Rect, to: Rect, surface: (f32, f32)) -> Rect {
+    /// The rect at `now`. `to` is the live end of the flight: the window's
+    /// target while it grows, the piece's pill while it folds. The OutBack
+    /// overshoot is cut to `surface`.
+    pub fn rect(&self, now: Instant, to: Rect, surface: (f32, f32)) -> Rect {
         let rect = if self.reduced {
             to
         } else if self.flying(now) {
-            lerp_rect(
-                self.start_at(capsule),
-                to,
-                self.easing.eval(self.fraction(now)),
-            )
+            lerp_rect(self.from, to, self.easing.eval(self.fraction(now)))
         } else if let Some((from, start)) = self.resize.filter(|_| self.kind != Kind::Close) {
             match self.resize_fraction(start, now) {
                 Some(x) => lerp_rect(from, to, ONE_UI.eval(x)),
@@ -219,21 +183,39 @@ impl SheetMotion {
         within(rect, surface)
     }
 
-    /// The body's opacity: fades in over the last 65 % of an open or a
-    /// switch, out over the first 60 % of a close.
+    /// The corner radius at `now`: from the pill's (half its height) to the
+    /// theme's large radius while it grows, and back while it folds. The
+    /// OutBack overshoot never takes it past either end.
+    pub fn radius(&self, now: Instant) -> f32 {
+        let (from, to) = self.radius;
+        let k = if self.reduced || !self.flying(now) {
+            1.0
+        } else {
+            self.easing.eval(self.fraction(now))
+        };
+        let r = from + (to - from) * k;
+        r.clamp(from.min(to), from.max(to))
+    }
+
+    /// The body's opacity: fades in over the last 65 % of an open, out over
+    /// the first 60 % of a close (the window being left in a switch folds, so
+    /// it fades this way too).
     pub fn body_opacity(&self, now: Instant) -> f32 {
         let t = self.fraction(now);
         match self.kind {
-            Kind::Open | Kind::Switch => ((t - 0.35) / 0.65).clamp(0.0, 1.0),
+            Kind::Open => ((t - 0.35) / 0.65).clamp(0.0, 1.0),
             Kind::Close => (1.0 - t / 0.6).clamp(0.0, 1.0),
         }
     }
 
-    /// The body being left in a switch: fades out over the first 30 %.
-    pub fn leaving_opacity(&self, now: Instant) -> f32 {
+    /// The glass's opacity: whole while the window grows or stays, and
+    /// fading over the last 15 % of a fold, so the pill it folds into gives
+    /// way to the piece that comes back to the slot.
+    pub fn glass_opacity(&self, now: Instant) -> f32 {
         match self.kind {
-            Kind::Switch => (1.0 - self.fraction(now) / 0.3).clamp(0.0, 1.0),
-            Kind::Open | Kind::Close => 0.0,
+            Kind::Open => 1.0,
+            Kind::Close if self.reduced => 0.0,
+            Kind::Close => ((1.0 - self.fraction(now)) / 0.15).clamp(0.0, 1.0),
         }
     }
 
@@ -280,6 +262,33 @@ impl SheetMotion {
 mod tests {
     use super::*;
 
+    #[test]
+    fn the_glass_fades_over_the_last_15_percent_of_a_fold() {
+        let theme = Theme::dark();
+        let t0 = Instant::now();
+        let pill = Rect {
+            x: 100.0,
+            y: 14.0,
+            w: 28.0,
+            h: 28.0,
+        };
+        let mut m = SheetMotion::open(pill, &theme, t0, false);
+        assert_eq!(m.glass_opacity(t0), 1.0);
+        let shown = Rect {
+            x: 60.0,
+            y: 56.0,
+            w: 300.0,
+            h: 200.0,
+        };
+        m.close(shown, pill, t0);
+        let exit = Motion::Exit.duration(&theme.motion);
+        let at = |f: f32| t0 + exit.mul_f32(f);
+        assert_eq!(m.glass_opacity(at(0.5)), 1.0);
+        assert_eq!(m.glass_opacity(at(0.85)), 1.0);
+        assert!((m.glass_opacity(at(0.925)) - 0.5).abs() < 0.02);
+        assert_eq!(m.glass_opacity(at(1.0)), 0.0);
+    }
+
     const SURFACE: (f32, f32) = (1920.0, 560.0);
 
     fn r(x: f32, y: f32, w: f32, h: f32) -> Rect {
@@ -294,29 +303,38 @@ mod tests {
         (a - b).abs() < 1e-3
     }
 
-    fn capsule() -> Rect {
-        r(1000.0, 8.0, 100.0, 40.0)
+    fn near_rect(a: Rect, b: Rect) -> bool {
+        near(a.x, b.x) && near(a.y, b.y) && near(a.w, b.w) && near(a.h, b.h)
+    }
+
+    /// The open piece's rect in the bar.
+    fn pill() -> Rect {
+        r(1040.0, 14.0, 60.0, 28.0)
     }
 
     fn target() -> Rect {
-        r(930.0, 8.0, 240.0, 276.0)
+        r(930.0, 56.0, 240.0, 236.0)
     }
 
     fn opened(t0: Instant) -> SheetMotion {
-        SheetMotion::open(capsule(), &Theme::dark(), t0, false)
+        SheetMotion::open(pill(), &Theme::dark(), t0, false)
+    }
+
+    fn lerp_out_back(from: Rect, to: Rect, t: f32) -> Rect {
+        let k = Easing::OutBack(Theme::dark().overshoot).eval(t);
+        lerp_rect(from, to, k)
     }
 
     #[test]
     fn the_overshoot_never_leaves_the_surface() {
         let t0 = Instant::now();
         let m = opened(t0);
-        let tall = r(930.0, 8.0, 320.0, 544.0);
-        let got = m.rect(ms(t0, 175.0), capsule(), tall, SURFACE);
+        let tall = r(1500.0, 56.0, 420.0, 496.0);
+        let got = m.rect(ms(t0, 175.0), tall, SURFACE);
         assert!(got.y + got.h <= SURFACE.1, "{got:?}");
         assert!(got.x >= 0.0 && got.x + got.w <= SURFACE.0);
         let nan = m.rect(
             ms(t0, 175.0),
-            capsule(),
             r(f32::NAN, f32::NAN, f32::NAN, f32::NAN),
             SURFACE,
         );
@@ -324,20 +342,26 @@ mod tests {
     }
 
     #[test]
-    fn the_open_flight_starts_at_the_capsule_and_overshoots_its_target() {
+    fn opening_grows_from_the_pill_on_the_spring() {
         let t0 = Instant::now();
         let m = opened(t0);
-        assert_eq!(m.rect(t0, capsule(), target(), SURFACE), capsule());
-        let mid = m.rect(ms(t0, 175.0), capsule(), target(), SURFACE);
-        assert!(mid.w > target().w, "{mid:?}");
-        assert_eq!(
-            m.rect(ms(t0, 350.0), capsule(), target(), SURFACE),
-            target()
-        );
-        assert_eq!(
-            m.rect(ms(t0, 900.0), capsule(), target(), SURFACE),
-            target()
-        );
+        let at = |n: f32| m.rect(ms(t0, n), target(), (4000.0, 4000.0));
+        assert_eq!(at(0.0), pill());
+        assert!(near_rect(at(175.0), lerp_out_back(pill(), target(), 0.5)));
+        assert!(at(175.0).w > target().w * 0.9, "the spring is ahead");
+        assert_eq!(at(350.0), target());
+        assert_eq!(at(900.0), target());
+        // The radius goes from the pill's (half its height) to the theme's.
+        let large = Theme::dark().radius_lg;
+        assert!(near(m.radius(t0), 14.0));
+        assert!(near(m.radius(ms(t0, 350.0)), large));
+        assert!(near(m.radius(ms(t0, 900.0)), large));
+        let k = Easing::OutBack(Theme::dark().overshoot).eval(0.5);
+        assert!(near(
+            m.radius(ms(t0, 175.0)),
+            (14.0 + (large - 14.0) * k).min(large)
+        ));
+        assert!((0..=350).all(|n| m.radius(ms(t0, n as f32)) <= large + 1e-3));
     }
 
     #[test]
@@ -348,47 +372,42 @@ mod tests {
         assert!(near(m.body_opacity(ms(t0, 122.5)), 0.0));
         assert!(near(m.body_opacity(ms(t0, 175.0)), 0.2308));
         assert!(near(m.body_opacity(ms(t0, 350.0)), 1.0));
-        assert!(near(m.leaving_opacity(ms(t0, 100.0)), 0.0));
     }
 
     #[test]
-    fn closing_fades_the_body_out_over_the_first_60_percent() {
+    fn closing_folds_into_the_live_slot_in_150_ms() {
         let t0 = Instant::now();
         let mut m = opened(t0);
         let done = ms(t0, 400.0);
-        m.close(target(), done);
+        let slot = r(1000.0, 14.0, 28.0, 28.0);
+        m.close(target(), slot, done);
         assert!(m.is_closing());
+        assert!(!m.closed(ms(done, 149.0)));
+        assert!(m.closed(ms(done, 150.0)));
+        assert_eq!(m.rect(done, slot, SURFACE), target());
+        assert_eq!(m.rect(ms(done, 150.0), slot, SURFACE), slot);
+        // The end is live: a slot that moved is where it lands.
+        let moved = r(1010.0, 14.0, 40.0, 28.0);
+        assert_eq!(m.rect(ms(done, 150.0), moved, SURFACE), moved);
+        assert!(m.wants_frame(ms(done, 100.0)));
+        assert!(!m.wants_frame(ms(done, 150.0)));
+        // The radius folds from the window's to the pill's.
+        assert!(near(m.radius(done), Theme::dark().radius_lg));
+        assert!(near(m.radius(ms(done, 150.0)), 14.0));
+        // The body fades out over the first 60 %.
         assert!(near(m.body_opacity(done), 1.0));
         assert!(near(m.body_opacity(ms(done, 45.0)), 0.5));
         assert!(near(m.body_opacity(ms(done, 90.0)), 0.0));
-        assert!(!m.closed(ms(done, 149.0)));
-        assert!(m.closed(ms(done, 150.0)));
-        assert_eq!(m.rect(done, capsule(), capsule(), SURFACE), target());
-        assert_eq!(
-            m.rect(ms(done, 150.0), capsule(), capsule(), SURFACE),
-            capsule()
-        );
-        assert!(m.wants_frame(ms(done, 100.0)));
-        assert!(!m.wants_frame(ms(done, 150.0)));
     }
 
     #[test]
-    fn a_switch_fades_the_old_body_over_the_first_30_percent() {
+    fn closing_in_mid_open_starts_from_the_shown_radius() {
         let t0 = Instant::now();
         let mut m = opened(t0);
-        let done = ms(t0, 400.0);
-        let next = r(900.0, 8.0, 320.0, 200.0);
-        m.switch(target(), capsule(), done);
-        assert!(!m.is_closing());
-        assert!(near(m.leaving_opacity(done), 1.0));
-        assert!(near(m.leaving_opacity(ms(done, 52.5)), 0.5));
-        assert!(near(m.leaving_opacity(ms(done, 105.0)), 0.0));
-        assert!(near(m.body_opacity(done), 0.0));
-        assert!(near(m.body_opacity(ms(done, 175.0)), 0.2308));
-        assert!(near(m.body_opacity(ms(done, 350.0)), 1.0));
-        assert_eq!(m.rect(done, capsule(), next, SURFACE), target());
-        assert_eq!(m.rect(ms(done, 350.0), capsule(), next, SURFACE), next);
-        assert!(near(m.leaving_opacity(ms(done, 350.0)), 0.0));
+        let mid = ms(t0, 100.0);
+        let before = m.radius(mid);
+        m.close(m.rect(mid, target(), SURFACE), pill(), mid);
+        assert!(near(m.radius(mid), before));
     }
 
     #[test]
@@ -396,13 +415,13 @@ mod tests {
         let t0 = Instant::now();
         let mut m = opened(t0);
         let done = ms(t0, 400.0);
-        let taller = r(930.0, 8.0, 240.0, 376.0);
+        let taller = r(930.0, 56.0, 240.0, 336.0);
         m.resize(target(), done);
-        assert_eq!(m.rect(done, capsule(), taller, SURFACE), target());
-        let mid = m.rect(ms(done, 100.0), capsule(), taller, SURFACE);
+        assert_eq!(m.rect(done, taller, SURFACE), target());
+        let mid = m.rect(ms(done, 100.0), taller, SURFACE);
         let k = ONE_UI.eval(0.5);
-        assert!(near(mid.h, 276.0 + 100.0 * k), "{mid:?}");
-        assert_eq!(m.rect(ms(done, 200.0), capsule(), taller, SURFACE), taller);
+        assert!(near(mid.h, 236.0 + 100.0 * k), "{mid:?}");
+        assert_eq!(m.rect(ms(done, 200.0), taller, SURFACE), taller);
         assert!(m.wants_frame(ms(done, 100.0)));
         assert!(!m.wants_frame(ms(done, 200.0)));
         // The body does not fade for a resize.
@@ -414,64 +433,33 @@ mod tests {
         let t0 = Instant::now();
         let mut m = opened(t0);
         let during = ms(t0, 100.0);
-        m.resize(m.rect(during, capsule(), target(), SURFACE), during);
+        m.resize(m.rect(during, target(), SURFACE), during);
         assert!(m.wants_frame(ms(t0, 349.0)));
-        let taller = r(930.0, 8.0, 240.0, 376.0);
-        assert_eq!(m.rect(ms(t0, 350.0), capsule(), taller, SURFACE), taller);
+        let taller = r(930.0, 56.0, 240.0, 336.0);
+        assert_eq!(m.rect(ms(t0, 350.0), taller, SURFACE), taller);
         assert!(!m.wants_frame(ms(t0, 350.0)));
     }
 
     #[test]
-    fn reduced_motion_jumps_the_rect_and_still_fades_the_body() {
+    fn reduced_motion_jumps() {
         let t0 = Instant::now();
-        let mut m = SheetMotion::open(capsule(), &Theme::dark(), t0, true);
-        assert_eq!(m.rect(t0, capsule(), target(), SURFACE), target());
+        let mut m = SheetMotion::open(pill(), &Theme::dark(), t0, true);
+        assert_eq!(m.rect(t0, target(), SURFACE), target());
+        assert!(near(m.radius(t0), Theme::dark().radius_lg));
+        // The opacities still fade.
         assert!(near(m.body_opacity(t0), 0.0));
         assert!(near(m.body_opacity(ms(t0, 175.0)), 0.2308));
         assert!(near(m.body_opacity(ms(t0, 350.0)), 1.0));
         let done = ms(t0, 400.0);
         m.resize(target(), done);
-        let taller = r(930.0, 8.0, 240.0, 376.0);
-        assert_eq!(m.rect(done, capsule(), taller, SURFACE), taller);
-        m.close(taller, done);
-        assert_eq!(m.rect(done, capsule(), capsule(), SURFACE), capsule());
+        let taller = r(930.0, 56.0, 240.0, 336.0);
+        assert_eq!(m.rect(done, taller, SURFACE), taller);
+        let slot = r(1000.0, 14.0, 28.0, 28.0);
+        m.close(taller, slot, done);
+        assert_eq!(m.rect(done, slot, SURFACE), slot);
+        assert!(near(m.radius(done), 14.0));
         assert!(m.closed(done));
-    }
-
-    #[test]
-    fn an_open_follows_a_capsule_that_slides_under_it() {
-        let t0 = Instant::now();
-        let m = opened(t0);
-        // The capsule loses 38 px at its right end; a menu narrower than
-        // the capsule is the capsule, so the target is that rect.
-        let narrow = r(1000.0, 8.0, 62.0, 40.0);
-        let to = r(1000.0, 8.0, 62.0, 140.0);
-        for t in [0.0, 60.0, 175.0, 349.0] {
-            let got = m.rect(ms(t0, t), narrow, to, SURFACE);
-            assert!(near(got.x, 1000.0) && near(got.w, 62.0), "{t}: {got:?}");
-        }
-        // A capsule that moves while it does is followed on both edges.
-        let sliding = r(1010.0, 8.0, 50.0, 40.0);
-        let to = r(1010.0, 8.0, 50.0, 140.0);
-        let got = m.rect(t0, sliding, to, SURFACE);
-        assert_eq!((got.x, got.w), (1010.0, 50.0));
-        // A close starts where it was, whatever the capsule does.
-        let mut closing = opened(t0);
-        let done = ms(t0, 400.0);
-        closing.close(target(), done);
-        assert_eq!(closing.rect(done, narrow, narrow, SURFACE), target());
-    }
-
-    #[test]
-    fn a_switch_follows_the_capsule_from_where_the_sheet_was() {
-        let t0 = Instant::now();
-        let mut m = opened(t0);
-        let done = ms(t0, 400.0);
-        let shown = r(1000.0, 8.0, 100.0, 140.0);
-        m.switch(shown, capsule(), done);
-        let moved = r(1000.0, 8.0, 70.0, 40.0);
-        let got = m.rect(done, moved, moved, SURFACE);
-        assert_eq!((got.x, got.w, got.h), (1000.0, 70.0, 140.0));
+        assert!(near(m.body_opacity(ms(done, 45.0)), 0.5), "it still fades");
     }
 
     #[test]

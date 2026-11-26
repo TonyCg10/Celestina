@@ -392,6 +392,7 @@ mod tests {
 
     fn page_with(owners: &NameOwner, history: &[HistoryRow], max_size: (f32, f32)) -> View {
         Notifications.view(&PageCx {
+            content_w: None,
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             theme: &celestina_paint::Theme::dark(),
             max_size,
@@ -501,6 +502,7 @@ mod tests {
             let enabled = owners.notifications.is_none();
             for on in [false, true] {
                 let v = Notifications.view(&PageCx {
+                    content_w: None,
                     clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
                     theme: &theme,
                     max_size: MAX,
@@ -663,6 +665,7 @@ mod tests {
 
     fn wants_in(owners: &NameOwner, history: &[HistoryRow], max_size: (f32, f32)) -> (f32, f32) {
         Notifications.wants(&PageCx {
+            content_w: None,
             clipboard: &crate::island::pages::clipboard::NO_CLIPBOARD,
             theme: &celestina_paint::Theme::dark(),
             max_size,

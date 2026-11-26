@@ -1,0 +1,89 @@
+# CEL-D-009 exact change inventory
+
+Base revision	bf3ff960c44b55cd77a04e62a1e7313c5ca218dd
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows.md
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/close-mid.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/open-mid-early.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/open-mid.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/rest-bluetooth.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/rest-brightness.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/rest-energy.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/rest-notifications.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/rest-sysmon.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/switch-mid.jpg
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-009.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/island/bar_tree.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/page_sheets.rs
+Pathspec	celestina/src/island/pages/activity.rs
+Pathspec	celestina/src/island/pages/bluetooth.rs
+Pathspec	celestina/src/island/pages/clipboard.rs
+Pathspec	celestina/src/island/pages/clock.rs
+Pathspec	celestina/src/island/pages/media.rs
+Pathspec	celestina/src/island/pages/mod.rs
+Pathspec	celestina/src/island/pages/network.rs
+Pathspec	celestina/src/island/pages/notifications.rs
+Pathspec	celestina/src/island/pages/phone.rs
+Pathspec	celestina/src/island/pages/power.rs
+Pathspec	celestina/src/island/pages/sysmon.rs
+Pathspec	celestina/src/island/pages/tray.rs
+Pathspec	celestina/src/island/sheets.rs
+Pathspec	celestina/src/island/tests/flight.rs
+Pathspec	celestina/src/island/tests/page_sheets.rs
+Pathspec	celestina/src/island/tests/window.rs
+Pathspec	celestina/src/island/view.rs
+Pathspec	celestina/src/osd/popup.rs
+Pathspec	celestina/src/sheet/body.rs
+Pathspec	celestina/src/sheet/geometry.rs
+Pathspec	celestina/src/sheet/mod.rs
+Pathspec	celestina/src/sheet/motion.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	46e8efdf9b9e97f1c455c10814e19e2f06191e0e9389ee9f14edc5b87656abfa	celestina/Cargo.lock
+1	1	6c6d037df966a88debbfe89900cb761cbe35fc02a93f9afe220f4cb8d1a72bef	celestina/Cargo.toml
+27	0	5e634ae6dfb0713dcf3bebe751cb928ba05c82de3fdb26a17826a922d5116199	celestina/VALIDATION.md
+60	0	4fa88c7a822c64fc7d4d74c7bab1c3f3427a87a4600125ef5e985c2528c47661	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows.md
+-	-	9691524600cbc843d03199fc2e82db9d0fb7654804d3e50379ad204313be6aa9	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/close-mid.jpg
+-	-	45fb8594182c3502f74c4d5280f895e26568995375199948e15f418a971b8b77	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/open-mid-early.jpg
+-	-	783f6b9e8d3881dc37722f3902cae29e05824baf2a008b36e80b97644aafa16c	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/open-mid.jpg
+-	-	c4c38e3130ea818dd4efd8f7917464407f792cbf0fc13b581bbd80f052958c3d	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/rest-bluetooth.jpg
+-	-	f278cd0d2b883fb0f46587ff88954508eac3eebf1378d2e6716d7d187266e379	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/rest-brightness.jpg
+-	-	54900df82b8825008e771bc6e7c661f93f872f711e91ff2e98298cfc4353a276	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/rest-energy.jpg
+-	-	edd67eb2a60179776d12b15e18188ae5fcada8670a6b27e21e21aef40bd1a912	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/rest-notifications.jpg
+-	-	dbdcc7da9abc48d5752117e205e444ca00c3de8895a09f0a659a528d57323cec	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/rest-sysmon.jpg
+-	-	454179e72a2da145277c29e9f6e6b00af130613062214a0aa5a62c36afb24d8c	celestina/docs/evidence/2026-11-26-cel-d-009-menu-windows/switch-mid.jpg
+89	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-009.numstat.tsv
+1	0	40ac46bba82c79ac60aade4d365b57ad759899a1ab0db1200d8920851b953db2	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+137	47	4e4977e80815a9b5f4338c5f2a576c5a1a245f7078b4d6b3b695bcc319e7c384	celestina/src/island/bar_tree.rs
+168	150	5e9e2643c87d77eb21fb476d1c72aa0c375107f0d4e098ed3d85def43aca1301	celestina/src/island/mod.rs
+105	27	6d6041da23b66f5318f5763cd51951b5a895b55bacc83192945a79798a47f0bd	celestina/src/island/page_sheets.rs
+3	0	1979d0d6dbda244b9d3143f519717e7e6e3e9ab11938beea4cfccbeb70b630e0	celestina/src/island/pages/activity.rs
+1	0	d109a408cde64c7cf73dc49e82cde28fc4b6a19996899bcb075634603d7f9b28	celestina/src/island/pages/bluetooth.rs
+1	0	9fb057491089837b1aacee593559f08d0522c0dde4a098fcc7d035e820e96442	celestina/src/island/pages/clipboard.rs
+11	1	8da8d00a63f53b953758631d61762bf2955efe7d3d904b5780edba23439575fa	celestina/src/island/pages/clock.rs
+2	0	6b16abb5aa3b4d113c057875e5822b4f5b5982b9888d1323f485180eec165f04	celestina/src/island/pages/media.rs
+23	0	4be0b8664256adc315b9f357a6fcfb9f3c6895795f90f0dce6bc2d40d2695f37	celestina/src/island/pages/mod.rs
+2	0	e6b131414622eef7e8073ef0c0b93d53b29d47377c20d915e269331be4ecce47	celestina/src/island/pages/network.rs
+3	0	b7adc7530796e8ac18b59e92543baefe2b81df84d27ac9534de3c9474157b3e0	celestina/src/island/pages/notifications.rs
+1	0	23ac9d499c951446ceab9f3fe01c2e65c6c3eeca32aae9d4c8c2a711396828a5	celestina/src/island/pages/phone.rs
+1	0	b5c160661ecafda1db0fb3aa40aa6f40fcb974221034b74939e98208eb40132a	celestina/src/island/pages/power.rs
+10	1	b59e500b026c1a4611036a262935a989892dd955ca68d7c9619657e872a29723	celestina/src/island/pages/sysmon.rs
+2	0	b2ac8f66eae138156938099f8a3da73f8da0e20798ab39a98886faa324a9cef8	celestina/src/island/pages/tray.rs
+54	64	40f49e2ab1fe504fb02fd89a26779813a4d5d3d5758c1818a57e510f263a8223	celestina/src/island/sheets.rs
+31	23	e91c1922d261963131353ddd6c8233db55a38f3a0e2cf5f9f466a72f7448f5b8	celestina/src/island/tests/flight.rs
+296	44	1da97c22fc49d4727d977e72177751845972ce0751bc370ddd1b1af2e9d741be	celestina/src/island/tests/page_sheets.rs
+355	0	f46f19f47a6ec92fb22fda67512aad2d0a7a8c13b833459fdb3e3562af92a30e	celestina/src/island/tests/window.rs
+29	16	02d39232b08d615bd903d398ed3afda7166862468c4171176ac179d6f0e35ca6	celestina/src/island/view.rs
+2	3	f47bf131ce1c7f2ee5d5121836a189986ae6e8a73900d99f8a9727071de850ac	celestina/src/osd/popup.rs
+14	2	6c8069629db4838507c0386a2959a3390a06dd29ec7f58408609ee152e2759bc	celestina/src/sheet/body.rs
+151	168	34a927b3f7a573551658f42965d5192703da3c5755055802699ad695b746763e	celestina/src/sheet/geometry.rs
+196	148	54e3dcf38c308e09f99e694021d37272c27a6b652481605686471f7c16b72ca8	celestina/src/sheet/mod.rs
+155	167	f69889415890e87bf66fde4b5a7187cb874f8bb048220bad3b7154057432d33c	celestina/src/sheet/motion.rs
+1	0	901d786cd01e314d6c899aab6d5f5ffb2a96248cdea283944963e73006a73d32	docs/version-history.tsv

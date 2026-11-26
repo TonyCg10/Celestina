@@ -297,6 +297,7 @@ mod tests {
         let theme = Theme::dark();
         let owners = NameOwner::default();
         Phone.view(&PageCx {
+            content_w: None,
             theme: &theme,
             max_size: (760.0, 560.0),
             model: None,

@@ -236,6 +236,7 @@ mod tests {
     fn page(state: &ConnectivityState, max: (f32, f32)) -> View {
         let owners = NameOwner::default();
         Network.view(&PageCx {
+            content_w: None,
             theme: &Theme::dark(),
             max_size: max,
             model: None,
@@ -469,6 +470,7 @@ mod tests {
 
     fn wants_of_state(state: &ConnectivityState, max: (f32, f32)) -> (f32, f32) {
         Network.wants(&PageCx {
+            content_w: None,
             theme: &Theme::dark(),
             max_size: max,
             model: None,

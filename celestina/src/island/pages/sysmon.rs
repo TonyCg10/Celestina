@@ -38,6 +38,10 @@ pub fn open_key() -> Key {
     Key::named("sysmon-open")
 }
 
+/// The System page's width as a capsule sheet, logical px (the approved
+/// preview's).
+const SHEET_W: f32 = 360.0;
+
 /// The System page.
 #[derive(Clone, Copy, Debug)]
 pub struct Sysmon;
@@ -82,6 +86,10 @@ impl PageView for Sysmon {
             ))
             .children(reading.temp_c.map(|degrees| temperature(cx, degrees)))
             .child(open_row(cx))
+    }
+
+    fn sheet_width(&self) -> Option<f32> {
+        Some(SHEET_W)
     }
 
     /// The default size, taller when the meters need it.
@@ -130,7 +138,7 @@ fn meter(cx: &PageCx<'_>, slot: u64, label: &str, value: &str, history: &[u8]) -
 /// sample at or above the critical level is drawn in the danger colour.
 fn sparkline(cx: &PageCx<'_>, slot: u64, history: &[u8]) -> View {
     let theme = cx.theme;
-    let width = PAGE_SIZE.0 - 2.0 * theme.spacing.lg;
+    let width = cx.content_width();
     let bar_w = ((width - BAR_GAP * (HISTORY_LEN - 1) as f32) / HISTORY_LEN as f32).max(1.0);
     let shown = &history[history.len().saturating_sub(HISTORY_LEN)..];
     let mut track = view::row(Key::indexed("sysmon-spark", slot))
@@ -223,6 +231,7 @@ mod tests {
         let theme = Theme::dark();
         let owners = NameOwner::default();
         f(&PageCx {
+            content_w: None,
             theme: &theme,
             max_size: (760.0, 560.0),
             model: None,

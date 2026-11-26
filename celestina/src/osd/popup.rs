@@ -2448,9 +2448,8 @@ mod tests {
             }
             (folds, mirror.shape())
         };
-        // The sheet's viewport: the surface's room (544) under the 40 px row.
-        let viewport =
-            crate::sheet::geometry::max_height((1920.0, 560.0)) - crate::sheet::geometry::ROW_H;
+        // The window's viewport: the surface's room under the bar (496).
+        let viewport = crate::sheet::geometry::max_height((1920.0, 560.0));
         // Folded: one device each and the streams that play.
         let (_, folded) = open(&[]);
         assert_eq!(
