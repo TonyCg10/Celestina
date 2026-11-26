@@ -1,7 +1,8 @@
 # Celestina standing tracks: design and improvements
 
 - **Date:** 2026-11-24
-- **Status:** approved by the author on 2026-11-24; revised on 2026-11-25 (§2.2)
+- **Status:** approved by the author on 2026-11-24; revised on 2026-11-25 (§2.2); §6.2 to §6.5 superseded on 2026-11-25 by
+  [the capsule sheets design](2026-11-25-celestina-capsule-sheets-design.md)
 - **Project:** `celestina` (the Rust shell, 1.14.0 at `44b8cc2a` when designed, 1.15.4 on 2026-11-25; CEL-2 complete,
   the author's session runs Celestina since the cutover of 2026-11-24)
 
@@ -138,6 +139,11 @@ The facts below come from the code at `44b8cc2a` (paths under `celestina/`).
   network `wifi`, Bluetooth `bluetooth`, energy `power`.
 
 ### 6.2 Anchored panel and motion language (CEL-D-002)
+
+> Superseded on 2026-11-25, with §6.2.1 to §6.5, by
+> [the capsule sheets design](2026-11-25-celestina-capsule-sheets-design.md):
+> the author replaced panels under a piece with capsules that grow into their
+> menus. Kept for the record.
 
 - **One surface, unchanged:** panels draw on the existing `celestina-panel`
   surface (fixed 560 px tall, regions follow content). No new surface.
