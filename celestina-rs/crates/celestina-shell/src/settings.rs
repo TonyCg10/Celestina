@@ -1897,6 +1897,11 @@ mod tests {
         let layout = settings.bar_layout();
         assert_eq!(layout.start, ids(&["workspaces", "notifications"]));
         assert!(layout.centre.is_empty());
+        // The capsule shows the date and the weather: neither piece is in a
+        // default zone.
+        for zone in [&layout.start, &layout.centre, &layout.end] {
+            assert!(!zone.iter().any(|id| id == "clock" || id == "weather"));
+        }
         assert_eq!(
             layout.end,
             ids(&[

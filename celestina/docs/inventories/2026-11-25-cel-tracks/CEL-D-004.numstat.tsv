@@ -1,0 +1,43 @@
+# CEL-D-004 exact change inventory
+
+Base revision	da2f6a2a0f3ae9fcd0c0cb100d6f84a8ed3b8d46
+Pathspec	celestina-rs/crates/celestina-shell/src/settings.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/decisions/0016-weather-is-the-only-network-and-manual.md
+Pathspec	celestina/docs/decisions/README.md
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-004-centre-capsule.md
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-004-centre-capsule/01-rest-capsule-with-weather.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-004-centre-capsule/02-clock-page-after-click.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-004-centre-capsule/03-rest-capsule-author-config.jpg
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-004.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/glance.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/page_sheets.rs
+Pathspec	celestina/src/island/view.rs
+Pathspec	celestina/src/main.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+5	0	b007e47c05d4896c10e15447e45daf041e91f8a4b6b14590edcdc6141ee3fb85	celestina-rs/crates/celestina-shell/src/settings.rs
+1	1	0546fad002ee32090762a58be9222363cdaffc57bbc88791efb7aaff49aa102d	celestina/Cargo.lock
+1	1	a39a82c0eb01b70edd0072a8de0d49181ce9b6257f9d0b77093c68d2ac3a2021	celestina/Cargo.toml
+21	0	cfaef74c576da44cdb22523113e1b624bbacfa2c826e9c90c817c36a9cf7360e	celestina/VALIDATION.md
+12	0	1e7a50e9d9edb6a8a838e66c74cd39c8941dc5b394f010af43f9de7c1c5d3867	celestina/docs/decisions/0016-weather-is-the-only-network-and-manual.md
+1	1	cf9e14ec47f70d74ccc9b35ecb6652b4ed790c8bfa274c0825824c401c3fcf4e	celestina/docs/decisions/README.md
+78	0	d674fed2f0adef08f38529f2fb039b6799d50abc03dcd4d3c9c88515a5b48cae	celestina/docs/evidence/2026-11-25-cel-d-004-centre-capsule.md
+-	-	e9350035d601cf5cce094a73efc74711ef140af5bf292733aef2890c8c8c901d	celestina/docs/evidence/2026-11-25-cel-d-004-centre-capsule/01-rest-capsule-with-weather.jpg
+-	-	4fa9c50ac030b4e1ff0327b878ea3cb872b0f236d9cc5b3f24d48620ae9f2471	celestina/docs/evidence/2026-11-25-cel-d-004-centre-capsule/02-clock-page-after-click.jpg
+-	-	f23e32e251f9ebed62e0cc886425b605cb3bed8650cab1b717625e3d453ef364	celestina/docs/evidence/2026-11-25-cel-d-004-centre-capsule/03-rest-capsule-author-config.jpg
+43	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-004.numstat.tsv
+1	1	de0f05a7fea138f3df154cf55fcdd4dfdd9c6a0e8cc251ef4a74f40fe78b8164	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+29	19	931b4e861464a8b94ce1b7bf5feb674894d378f3af89bb93041275330b2f4652	celestina/src/glance.rs
+96	7	28eecd67b42120d426dd01940e42a5c0385581264599e2e92fcdd0dc023f1398	celestina/src/island/mod.rs
+1	1	393ce6e5f481d6f9f514246de7c61c4166979fa46200a31bb895f5e64c979b83	celestina/src/island/page_sheets.rs
+179	7	788225b107834accb1c3b379bef5eacd05dfb36e1be519c2460b4c562b165396	celestina/src/island/view.rs
+3	2	40ed9fa6c004f06ca13325f06f2ceb209468a4a1bf810ced93c0f250e1e3977e	celestina/src/main.rs
+1	0	bb620645d0127c06ff63a7c04a465e06d175c785335bad0353d13a256b3ce4d6	docs/version-history.tsv

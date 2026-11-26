@@ -198,7 +198,7 @@ impl Island {
     /// button and the tabs. `None` for any other node.
     fn activate_chrome(&mut self, key: Key, now: Instant) -> Option<Option<IslandAction>> {
         if key == view::capsule_key() {
-            self.open(self.state.shown_page(), now);
+            self.open(PageId::CLOCK, now);
             Some(None)
         } else if key == view::close_key() {
             self.close(now);

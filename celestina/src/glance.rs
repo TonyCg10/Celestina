@@ -1,13 +1,15 @@
-//! The glance workers (CEL-2-K): the system monitor and the weather, each
-//! running only while something placed on the bar reads it (design §4).
+//! The glance workers (CEL-2-K): the system monitor, which runs only while its
+//! piece is placed on the bar, and the weather, which runs whenever a
+//! location is set (design §4; ADR 0016, amended by CEL-D-004).
 //!
 //! [`GlanceHandle`] holds exactly the workers the settings ask for, read
 //! from the bar's layout:
 //!
 //! - the system monitor runs iff the `sysmon` piece is in a zone of the bar's
 //!   layout;
-//! - the weather worker runs iff the `weather` or the `clock` piece is in a
-//!   zone **and** `shell.json` holds a valid location. Without one it is not
+//! - the weather worker runs iff `shell.json` holds a valid location (the
+//!   Island capsule shows the weather whether or not a `weather` or `clock`
+//!   piece is placed). Without one it is not
 //!   even spawned: no thread, no request (design §3.1). A location change
 //!   reaches the running worker through its queue; a worker found gone when
 //!   one is sent is dropped, and the next apply starts another.
@@ -38,7 +40,8 @@ use crate::providers::{self, Reaper, Worker};
 pub const SYSMON_PIECE: &str = "sysmon";
 /// The id of the weather's piece.
 pub const WEATHER_PIECE: &str = "weather";
-/// The id of the clock's piece, whose page shows the weather too.
+/// The id of the clock's piece, whose page shows the weather too. It no
+/// longer gates the weather worker; the Island capsule reads the weather.
 pub const CLOCK_PIECE: &str = "clock";
 
 /// How long stopping one worker waits for it.
@@ -76,10 +79,11 @@ impl Wants {
     #[must_use]
     pub fn of(settings: &Settings) -> Self {
         let layout = settings.bar_layout();
-        let reads_weather = placed(&layout, WEATHER_PIECE) || placed(&layout, CLOCK_PIECE);
         Self {
             sysmon: placed(&layout, SYSMON_PIECE),
-            weather: settings.weather.clone().filter(|_| reads_weather),
+            // The Island capsule always shows the weather, so a location is
+            // enough; the `weather` and `clock` pieces need nothing more.
+            weather: settings.weather.clone(),
         }
     }
 }
@@ -533,14 +537,24 @@ mod tests {
             assert_eq!(handle.running(), NOTHING);
         }
         assert!(said(&log).is_empty(), "{:?}", said(&log));
-        // A location with nothing placed that reads it starts nothing either.
-        handle.apply(&with(&["tray", "sysmon"], Some("Madrid")));
-        assert!(!handle.running().weather);
-        assert!(!said(&log).iter().any(|l| l.starts_with("weather")));
     }
 
     #[test]
-    fn weather_or_clock_with_a_location_runs_the_worker_and_takes_changes() {
+    fn a_location_runs_the_weather_even_with_no_weather_or_clock_piece_placed() {
+        // The Island capsule shows the weather, so a piece is not needed.
+        let (handle, log, _) = fake();
+        handle.apply(&with(&["tray", "sysmon"], Some("Madrid")));
+        assert!(handle.running().weather);
+        assert_eq!(
+            said(&log),
+            ["sysmon spawned", "weather spawned", "weather at Madrid"]
+        );
+        assert!(Wants::of(&with(&[], Some("Madrid"))).weather.is_some());
+        assert!(Wants::of(&with(&[], None)).weather.is_none());
+    }
+
+    #[test]
+    fn a_location_runs_the_worker_and_takes_changes() {
         let (handle, log, _) = fake();
         handle.apply(&with(&["clock"], Some("Madrid")));
         assert!(handle.running().weather);
@@ -558,10 +572,6 @@ mod tests {
         handle.stop();
         assert!(said(&log).contains(&"weather stopped".to_owned()));
         assert!(!said(&log).contains(&"weather at none".to_owned()));
-        // Unplaced with the location still there: it goes as well.
-        handle.apply(&with(&["clock"], Some("Madrid")));
-        handle.apply(&with(&["tray"], Some("Madrid")));
-        assert!(!handle.running().weather);
     }
 
     #[test]
@@ -613,14 +623,14 @@ mod tests {
     }
 
     #[test]
-    fn unplacing_every_glance_piece_stops_both_workers() {
+    fn without_a_location_or_a_sysmon_piece_both_workers_stop() {
         let (handle, log, _) = fake();
-        // A location, but nothing placed that reads it, and no sysmon.
-        let bare = with(&["tray"], Some("Madrid"));
+        // No location and nothing placed: nothing runs.
+        let bare = with(&["tray"], None);
         assert_eq!(handle.apply(&bare), NOTHING);
         assert!(said(&log).is_empty(), "{:?}", said(&log));
 
-        // Placed, both start; unplaced again, both go.
+        // Placed with a location, both start; unplaced and unlocated, both go.
         let placed = with(&["sysmon", "weather", "clock"], Some("Madrid"));
         assert_eq!(
             handle.apply(&placed),

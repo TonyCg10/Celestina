@@ -44,6 +44,7 @@ use crate::{
     clipboard::{verbs::ClipboardVerb, ClipboardState},
     command::Verb,
     connectivity::state::ConnectivityState,
+    copy,
     media::{cover::Cover, MediaCommand, PlayerView},
     osd::popup as level_popup,
     pieces::{
@@ -789,8 +790,7 @@ impl Island {
             self.tray_rows = self.icons.rows(&tray.items, painter);
             seen = true;
         }
-        if weather != self.weather.as_ref() {
-            self.weather = weather.cloned();
+        if self.mirror_weather(weather) {
             seen = true;
         }
         if clipboard_on != self.clipboard_on || *clipboard != self.clipboard {
@@ -904,6 +904,17 @@ impl Island {
         [Some(minute_wait), self.tick_seconds(now, secs, nanos)]
     }
 
+    /// Takes the weather's `reading`. A change returns `true` and sets
+    /// `stale`: the capsule shows the reading, so it is rebuilt once.
+    fn mirror_weather(&mut self, reading: Option<&WeatherReading>) -> bool {
+        if reading == self.weather.as_ref() {
+            return false;
+        }
+        self.weather = reading.cloned();
+        self.stale = true;
+        true
+    }
+
     /// Today's date at wall-clock `secs` and UTC `offset`: a new day redraws
     /// what reads it.
     fn set_today(&mut self, secs: u64, offset: i64) {
@@ -913,7 +924,8 @@ impl Island {
             .and_then(|(secs, offset)| Today::from_unix(secs, offset));
         if today != self.today {
             self.today = today;
-            self.stale |= self.page_shown().is_some();
+            // The capsule shows the date: a new day is one frame.
+            self.stale = true;
             self.invalidate_bar();
         }
     }
@@ -942,8 +954,23 @@ impl Island {
         let w = self.size.0;
         let rows = view::capsule_shows_workspaces(self.bar.as_ref().map(BarTree::layout))
             .then_some(&self.rows[..]);
-        self.capsule
-            .apply(view::capsule_with(&self.theme, &self.clock, rows, w), now);
+        let date = self
+            .today
+            .map(|today| copy::short_date(today.weekday, today.day));
+        let degrees = self.weather.as_ref().map(|r| {
+            (
+                pieces::weather::condition_icon(r.code, r.daylight),
+                copy::bar_weather(r.celsius),
+            )
+        });
+        let glance = view::Glance {
+            date: date.as_deref(),
+            weather: degrees.as_ref().map(|(icon, text)| (*icon, text.as_str())),
+        };
+        self.capsule.apply(
+            view::capsule_with(&self.theme, &self.clock, glance, rows, w),
+            now,
+        );
         let shown = self.state.shown_page();
         let page = page_view(shown);
         let wants = page.wants(&self.page_cx());
@@ -2842,7 +2869,7 @@ mod tests {
     }
 
     #[test]
-    fn rows_activate_focus_requests_and_the_capsule_opens_the_last_page() {
+    fn rows_activate_focus_requests_and_the_capsule_opens_the_clock_page() {
         let t0 = Instant::now();
         let mut island = Island::new("DP-1", (760.0, 560.0));
         island.model = Some(model("DP-1", 1));
@@ -2853,13 +2880,74 @@ mod tests {
         assert_eq!(island.activate(Key::named("nothing"), t0), None);
         assert_eq!(island.page(), None);
         island.activate(view::capsule_key(), t0);
-        assert_eq!(island.page(), Some(PageId::ACTIVITY));
+        assert_eq!(island.page(), Some(PageId::CLOCK));
         island.activate(view::close_key(), t0);
         assert_eq!(island.page(), None);
+    }
+
+    #[test]
+    fn a_click_on_the_capsule_opens_the_clock_page() {
+        let t0 = Instant::now();
+        let mut island = Island::new("DP-1", (760.0, 560.0));
+        island.model = Some(model("DP-1", 1));
+        // From rest, after another page was the last one: the capsule opens
+        // the clock page, `island toggle` still reopens the last one.
         island.open(PageId::TRAY, t0);
         island.close(t0);
+        assert_eq!(island.page(), None);
         island.activate(view::capsule_key(), t0);
+        assert_eq!(island.page(), Some(PageId::CLOCK));
+        island.close(t0);
+        let t1 = t0 + Duration::from_secs(1);
+        island.open(PageId::TRAY, t1);
+        island.close(t1);
+        let t2 = t1 + Duration::from_secs(1);
+        assert!(island.command_at(&Verb::IslandToggle, t2));
         assert_eq!(island.page(), Some(PageId::TRAY));
+    }
+
+    #[test]
+    fn a_weather_reading_change_sets_stale_through_the_frames_mirror() {
+        let mut island = Island::new("DP-1", (760.0, 560.0));
+        let reading = some_weather();
+        island.stale = false;
+        assert!(island.mirror_weather(Some(&reading)));
+        assert!(island.stale, "a first reading rebuilds the capsule");
+        island.stale = false;
+        assert!(!island.mirror_weather(Some(&reading)));
+        assert!(!island.stale, "the same reading costs no frame");
+        let colder = WeatherReading {
+            celsius: 3,
+            ..reading
+        };
+        assert!(island.mirror_weather(Some(&colder)));
+        assert!(island.stale);
+        island.stale = false;
+        assert!(island.mirror_weather(None));
+        assert!(island.stale, "a withdrawn reading rebuilds it too");
+    }
+
+    #[test]
+    fn a_new_day_or_reading_rebuilds_the_capsule_once() {
+        let t0 = Instant::now();
+        let mut island = Island::new("DP-1", (760.0, 560.0));
+        island.stale = false;
+        island.set_today(1_792_281_480, 0);
+        assert!(island.stale, "a first date rebuilds the capsule");
+        island.stale = false;
+        island.set_today(1_792_281_480 + 60, 0);
+        assert!(!island.stale, "the same day costs no frame");
+        island.set_today(1_792_281_480 + 86_400, 0);
+        assert!(island.stale, "a new day rebuilds it");
+        island.apply_views(t0);
+        assert!(!island.stale);
+        island.weather = Some(some_weather());
+        island.stale = true;
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        let text =
+            |island: &Island, name: &str| island.capsule.node_by_key(Key::named(name)).is_some();
+        assert!(text(&island, "capsule-date") && text(&island, "capsule-weather-text"));
     }
 
     #[test]
@@ -5034,6 +5122,7 @@ mod tests {
         assert!(!island.state.is_open(), "still closing at +100 ms");
         step(&mut island, t0 + ms(150));
         assert!(island.state.is_open(), "the page opens at +150 ms");
+        assert_eq!(island.page(), Some(PageId::CLOCK), "the clock page");
         assert!(!island.sheets.is_shown(t0 + ms(150)));
     }
 

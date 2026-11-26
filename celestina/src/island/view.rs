@@ -27,6 +27,8 @@ pub const DOT: f32 = 6.0;
 pub const PILL_W: f32 = 14.0;
 /// Space between two dots.
 pub const DOT_GAP: f32 = 4.0;
+/// The weather's condition icon in the capsule.
+pub const WEATHER_ICON: f32 = 16.0;
 /// The page's title row.
 pub const TITLE_ROW_H: f32 = 32.0;
 /// The title row's buttons.
@@ -85,10 +87,22 @@ pub(crate) fn text_style(size: f32, weight: Weight, tabular: bool, role: Role) -
 /// The capsule on a surface `surface_w` wide: the clock in tabular figures
 /// at the row-title size, then the output's workspaces as dots with the
 /// active one a wider accent pill, or the fallback label while there are
-/// none. Centred on the top edge, [`TOP_GAP`] below it.
+/// none. Centred on the top edge, [`TOP_GAP`] below it. This one has no date
+/// and no weather.
 #[must_use]
 pub fn capsule(theme: &Theme, clock: &str, rows: &[Row], surface_w: f32) -> View {
-    capsule_with(theme, clock, Some(rows), surface_w)
+    capsule_with(theme, clock, Glance::default(), Some(rows), surface_w)
+}
+
+/// What the capsule reads besides the time: the date and the weather, each
+/// absent until the Island knows it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Glance<'a> {
+    /// The short date ("Wed 25").
+    pub date: Option<&'a str>,
+    /// The weather: the condition icon when the icon set has one, and the
+    /// degrees ("12°").
+    pub weather: Option<(Option<&'static str>, &'a str)>,
 }
 
 /// Whether the resting capsule shows the workspaces beside its clock: not
@@ -106,16 +120,43 @@ pub fn capsule_shows_workspaces(bar: Option<&BarLayout>) -> bool {
     })
 }
 
-/// [`capsule`], with `rows` `None` for the capsule that shows only the
-/// clock ([`capsule_shows_workspaces`]).
+/// [`capsule`] with the date and the weather of `glance` after the clock, and
+/// `rows` `None` for the capsule that shows no workspaces
+/// ([`capsule_shows_workspaces`]).
 #[must_use]
-pub fn capsule_with(theme: &Theme, clock: &str, rows: Option<&[Row]>, surface_w: f32) -> View {
+pub fn capsule_with(
+    theme: &Theme,
+    clock: &str,
+    glance: Glance<'_>,
+    rows: Option<&[Row]>,
+    surface_w: f32,
+) -> View {
     let clock_style = text_style(
         theme.type_scale.row_title,
         Weight::Semibold,
         true,
         Role::TextHi,
     );
+    let date = glance.date.map(|date| {
+        view::text(
+            Key::named("capsule-date"),
+            date,
+            text_style(theme.type_scale.body, Weight::Regular, false, Role::TextLo),
+        )
+    });
+    let weather = glance.weather.map(|(icon, degrees)| {
+        centred(view::row(Key::named("capsule-weather")))
+            .gap(theme.spacing.xs)
+            .children(icon.map(|name| {
+                view::icon(Key::named("capsule-weather-icon"), name, WEATHER_ICON)
+                    .tint(Role::TextLo)
+            }))
+            .child(view::text(
+                Key::named("capsule-weather-text"),
+                degrees,
+                text_style(theme.type_scale.body, Weight::Regular, true, Role::TextLo),
+            ))
+    });
     let workspaces = rows.map(|rows| {
         if rows.is_empty() {
             view::text(
@@ -144,6 +185,8 @@ pub fn capsule_with(theme: &Theme, clock: &str, rows: Option<&[Row]>, surface_w:
         .radius(theme.radius_lg)
         .interactive()
         .child(view::text(Key::named("clock"), clock, clock_style))
+        .children(date)
+        .children(weather)
         .children(workspaces);
     let mut root = centred(view::row(Key::named("capsule-root")))
         .absolute(0.0, TOP_GAP)
@@ -436,7 +479,13 @@ mod tests {
             assert!(!capsule_shows_workspaces(Some(&l)), "zone {zone}");
         }
 
-        let clock_only = laid_out(capsule_with(&theme, "12:34", None, SURFACE_W));
+        let clock_only = laid_out(capsule_with(
+            &theme,
+            "12:34",
+            Glance::default(),
+            None,
+            SURFACE_W,
+        ));
         assert!(clock_only.node_by_key(Key::named("clock")).is_some());
         for gone in ["dots", "fallback"] {
             assert!(clock_only.node_by_key(Key::named(gone)).is_none(), "{gone}");
@@ -447,8 +496,131 @@ mod tests {
         // `capsule` is the capsule with its workspaces.
         assert_eq!(
             capsule(&theme, "12:34", &rows, SURFACE_W),
-            capsule_with(&theme, "12:34", Some(&rows), SURFACE_W)
+            capsule_with(&theme, "12:34", Glance::default(), Some(&rows), SURFACE_W)
         );
+    }
+
+    fn glanced(date: Option<&str>, weather: Option<(Option<&'static str>, &str)>) -> View {
+        capsule_with(
+            &Theme::dark(),
+            "17:03",
+            Glance { date, weather },
+            None,
+            SURFACE_W,
+        )
+    }
+
+    fn text_size(v: &View, key: Key) -> f32 {
+        fn find(v: &View, key: Key) -> Option<&View> {
+            if v.key == key {
+                return Some(v);
+            }
+            v.children.iter().find_map(|c| find(c, key))
+        }
+        match find(v, key).map(|n| &n.kind) {
+            Some(celestina_ui::ViewKind::Text { style, .. }) => style.size,
+            other => panic!("no text {key:?}: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_capsule_reads_time_date_and_weather_in_that_order() {
+        let theme = Theme::dark();
+        let v = glanced(Some("Wed 25"), Some((Some("sun"), "12°")));
+        assert_eq!(
+            text_size(&v, Key::named("clock")),
+            theme.type_scale.row_title
+        );
+        assert_eq!(
+            text_size(&v, Key::named("capsule-date")),
+            theme.type_scale.body
+        );
+        assert_eq!(
+            text_size(&v, Key::named("capsule-weather-text")),
+            theme.type_scale.body
+        );
+        assert_eq!(theme.type_scale.row_title, 15.0);
+        assert_eq!(theme.type_scale.body, 13.0);
+        let tree = laid_out(v);
+        let clock = rect_of(&tree, Key::named("clock"));
+        let date = rect_of(&tree, Key::named("capsule-date"));
+        let weather = rect_of(&tree, Key::named("capsule-weather"));
+        let icon = rect_of(&tree, Key::named("capsule-weather-icon"));
+        let degrees = rect_of(&tree, Key::named("capsule-weather-text"));
+        assert!(clock.x < date.x && date.x < weather.x);
+        assert_eq!(date.x - (clock.x + clock.w), 12.0, "gap md");
+        assert_eq!(weather.x - (date.x + date.w), 12.0, "gap md");
+        assert_eq!((icon.w, icon.h), (16.0, 16.0));
+        assert_eq!(degrees.x - (icon.x + icon.w), theme.spacing.xs);
+        // Padding, "17:03", "Wed 25", the icon and "12°", two gaps and the
+        // icon's own.
+        let content = 5.0 * 7.0 + 6.0 * 7.0 + 16.0 + theme.spacing.xs + 3.0 * 7.0 + 24.0;
+        assert_eq!(
+            rect_of(&tree, capsule_key()).w,
+            content + 2.0 * CAPSULE_PADDING
+        );
+    }
+
+    #[test]
+    fn without_weather_the_capsule_shows_time_and_date() {
+        let tree = laid_out(glanced(Some("Wed 25"), None));
+        assert!(tree.node_by_key(Key::named("capsule-date")).is_some());
+        for gone in [
+            "capsule-weather",
+            "capsule-weather-icon",
+            "capsule-weather-text",
+        ] {
+            assert!(tree.node_by_key(Key::named(gone)).is_none(), "{gone}");
+        }
+        let tree = laid_out(glanced(None, Some((None, "12°"))));
+        assert!(tree.node_by_key(Key::named("capsule-date")).is_none());
+        assert!(tree.node_by_key(Key::named("capsule-weather")).is_some());
+        let tree = laid_out(glanced(None, None));
+        assert_eq!(
+            rect_of(&tree, capsule_key()).w,
+            5.0 * 7.0 + 2.0 * CAPSULE_PADDING
+        );
+    }
+
+    #[test]
+    fn a_clear_night_shows_the_degrees_without_an_icon() {
+        let tree = laid_out(glanced(Some("Wed 25"), Some((None, "-3°"))));
+        assert!(tree
+            .node_by_key(Key::named("capsule-weather-icon"))
+            .is_none());
+        let weather = rect_of(&tree, Key::named("capsule-weather"));
+        let degrees = rect_of(&tree, Key::named("capsule-weather-text"));
+        assert_eq!((weather.x, weather.w), (degrees.x, degrees.w), "text only");
+    }
+
+    #[test]
+    fn the_capsule_keeps_its_dots_only_without_a_workspaces_zone() {
+        let rows = [row(1, true), row(2, false)];
+        let glance = Glance {
+            date: Some("Wed 25"),
+            weather: Some((Some("cloud"), "9°")),
+        };
+        let theme = Theme::dark();
+        let with = laid_out(capsule_with(
+            &theme,
+            "17:03",
+            glance,
+            Some(&rows),
+            SURFACE_W,
+        ));
+        let without = laid_out(capsule_with(&theme, "17:03", glance, None, SURFACE_W));
+        assert!(with.node_by_key(Key::named("dots")).is_some());
+        assert!(without.node_by_key(Key::named("dots")).is_none());
+        // The dots come last, after the weather.
+        let weather = rect_of(&with, Key::named("capsule-weather"));
+        let dots = rect_of(&with, Key::named("dots"));
+        assert!(weather.x + weather.w < dots.x);
+        // The default layout places Workspaces, so no dots; one without it
+        // brings them back.
+        assert!(!capsule_shows_workspaces(Some(&BarLayout::default())));
+        let mut bare = BarLayout::default();
+        bare.start.retain(|id| id != "workspaces");
+        assert!(capsule_shows_workspaces(Some(&bare)));
     }
 
     fn content() -> View {

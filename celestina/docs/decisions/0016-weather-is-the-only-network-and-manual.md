@@ -51,3 +51,15 @@ parsers. The halted shell kept its own copy.
 A packet capture of a shell started with no location shows a request to the
 weather host or any other; or a second feature needs the network; or the author
 asks for a location picker or an agenda source.
+
+## Amendment (2026-11-25): the capsule reads the weather
+
+CEL-D-004, the capsule sheets design §4.5 (approved by the author). Decision 3
+is kept as written above for the `sysmon` piece and for the history of the
+rule; for the weather it reads as follows. The weather worker runs whenever
+`shell.json` holds a valid location, because the Island capsule shows the
+weather with or without a `weather` or `clock` piece placed. The `sysmon` rule
+is unchanged: its worker runs only while the `sysmon` piece is placed. With no
+location there is still no worker, no `curl` and no network, as Decision 1 and
+the first Consequence say. A user who wants no weather request removes the
+location.

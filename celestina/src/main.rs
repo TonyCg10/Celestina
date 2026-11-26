@@ -270,8 +270,9 @@ fn shell(cfg: Config) -> ExitCode {
         handle.apply(&settings_read);
         // The slot is empty: `setup` runs once.
         let _ = lock.set(handle);
-        // The system monitor and the weather run only for what is placed;
-        // the weather never without a location in `shell.json`.
+        // The system monitor runs only while its piece is placed; the
+        // weather runs whenever `shell.json` holds a location (the Island
+        // capsule shows it), and never without one.
         let handle = GlanceHandle::new(sender.clone());
         handle.apply(&settings_read);
         // The slot is empty: `setup` runs once.

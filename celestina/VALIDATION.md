@@ -1586,3 +1586,24 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-003](docs/evidence/2026-11-25-cel-d-003-menus-as-sheets.md)
+
+## VAL-CEL-D-004 — One centre capsule with time, date and weather
+
+- **Status:** pending
+- **Related implementation:** CEL-D-004 (the Island capsule shows the time,
+  the date and the weather; a click on it opens the clock page; the clock
+  and weather pieces leave the default centre;
+  [design](../docs/superpowers/specs/2026-11-25-celestina-capsule-sheets-design.md),
+  [plan](../docs/superpowers/plans/2026-11-25-celestina-capsule-sheets-plan.md))
+- **Requires:** the deployed shell after the landing of CEL-D-004, the
+  author's `~/.config/celestina/shell.json` with `"centre": []` (today
+  `["weather","clock"]`), no `weather` or `clock` piece placed in any zone,
+  and a location for the weather (the weather is read whenever a location is
+  set)
+- **Procedure:** set `"centre": []` in the shell's config and restart the
+  shell. Read the centre capsule. Press the capsule once
+- **Pass condition:** the centre reads `HH:MM`, the date and the weather (an
+  icon and the temperature); a click opens the calendar (the clock page)
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-004](docs/evidence/2026-11-25-cel-d-004-centre-capsule.md)

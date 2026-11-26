@@ -28,7 +28,7 @@ Open questions belong to the
 | [0013](0013-everything-is-a-piece.md) | accepted | Everything the bar holds is a piece behind one contract |
 | [0014](0014-lock-and-polkit-carry-over.md) | accepted | Lock and polkit carry ADR 0004 and 0005 over, with their own review |
 | [0015](0015-clock-rests-at-minutes.md) | accepted | The clock rests at minutes; seconds run only while the Island is open |
-| [0016](0016-weather-is-the-only-network-and-manual.md) | proposed | The weather is the only network use and its location is manual |
+| [0016](0016-weather-is-the-only-network-and-manual.md) | proposed | The weather is the only network use and its location is manual (Decision 3 amended 2026-11-25: a location alone starts the weather worker) |
 | [0017](0017-connectivity-popups-are-island-pages.md) | proposed | A connectivity piece opens an Island page, not a popup surface |
 | [0018](0018-connectivity-reads-state-and-offers-a-closed-action-list.md) | proposed | Connectivity state is read, and the shell sends only a closed list of actions |
 | [0019](0019-connectivity-secrets-never-pass-through-the-shell.md) | proposed | No secret passes through the shell |
