@@ -1,0 +1,17 @@
+# CEL-TRACKS-DOCS-7 exact change inventory
+
+Base revision	9af18997fab99e0a720698dae61a2a70d0b63c56
+Pathspec	docs/evidence/2026-11-26-cel-tracks-docs-7.md
+Pathspec	docs/inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-7.numstat.tsv
+Pathspec	docs/plans/active/2026-11-25-cel-tracks-docs.md
+Pathspec	docs/superpowers/plans/2026-11-26-celestina-cel-d-010-plan.md
+Pathspec	docs/superpowers/specs/2026-11-25-celestina-capsule-sheets-design.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+35	0	f0906f189cf6a966bf4b4f93df5b1890bd5f68c1e7a59fa310e25b71e89458b8	docs/evidence/2026-11-26-cel-tracks-docs-7.md
+17	0	self	docs/inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-7.numstat.tsv
+1	0	eec7f2fbfa785ba3030b4f10f6f91d7bc1a3785d6c3982794bce14849cf4321f	docs/plans/active/2026-11-25-cel-tracks-docs.md
+54	0	e2d3aeb1bbe391f60c20a7e7f5a1ed4cfcac65e7036f8155eb93d5801a2f5e64	docs/superpowers/plans/2026-11-26-celestina-cel-d-010-plan.md
+24	9	063cf3d4a30aab8f30bfc1072f9765acd5122b1cc47c7d5eceedf12f0fa4bb87	docs/superpowers/specs/2026-11-25-celestina-capsule-sheets-design.md

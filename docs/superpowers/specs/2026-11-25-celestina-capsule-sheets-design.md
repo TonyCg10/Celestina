@@ -3,7 +3,8 @@
 - **Date:** 2026-11-25
 - **Status:** approved by the author on 2026-11-25; §4.2 to §4.4 amended
   after the author's live tests (CEL-D-007 and CEL-D-008 on 2026-11-26;
-  CEL-D-009, the menu as its own window, on 2026-11-26)
+  CEL-D-009, the menu as its own window, and CEL-D-010, its close, on
+  2026-11-26)
 - **Project:** `celestina` (1.19.x on `main` at `c0052728`)
 - **Entries:** `CEL-D-002` to `CEL-D-005` of the standing tracks
 - **Supersedes:** §6.2, §6.2.1, §6.3, §6.4 and §6.5 of
@@ -124,12 +125,16 @@ cannot animate).
 - **Motion (variant B).** Open: a pill the size of the open piece (its rect
   in the bar, radius 14) grows on the open spring (350 ms, `motion.slow`,
   OutBack 1.15, `motion.overshoot`) into the window, radius 20; the body
-  fades in over the last 65 %. Close: the window folds back into a pill at
-  the piece's slot on the exit curve (150 ms, `motion.exit`) while the slot
-  reopens; the body fades out over the first 60 %, and the flight up of
-  §4.3 follows. Switching to another piece of the same capsule: the window
-  being left folds into its own piece's pill (exit, 150 ms) while the new
-  window grows out of the new piece; for those 150 ms two windows show.
+  fades in over the last 65 %. Close (`CEL-D-010`, 260 ms): the window
+  blurs out, fades and shrinks towards its piece, all at once. Its blur
+  (glass and content together) reaches 12 px within the first 150 ms
+  (`12 · min(1, t/0.6)^0.7`); its content fades as `1 − (t/0.8)^1.4` and its
+  glass as `1 − t^1.6`; its rect moves 70 % of the way to the pill at the
+  piece's live slot (`0.7 · (1 − (1 − t)²)`), corner radius 20 → 14. It never
+  folds whole into the pill, so nothing waits for it. Switching to another
+  piece of the same capsule: the window being left closes this way while the
+  new window grows out of the new piece. The approved preview of this close
+  is version 3 of the menu-close preview (2026-11-26).
   Reduced motion: geometry jumps, opacities still fade.
 - **Bodies (widths).** Volume 320 and brightness 320 (their popup contents
   today, without their own card), session menu 240, workspaces 240 (§4.6).
@@ -176,7 +181,16 @@ cannot animate).
   stays behind. When the sheet switches to
   another piece or closes, the piece that comes back reopens its slot with
   the same spring.
-- **Flight.** The piece's icon and text fly between its slot and the
+- **Crossfade (`CEL-D-010`).** The piece no longer flies. On open, the
+  piece in the bar fades out, blurs to 4 px and moves 10 px down towards
+  the bar's bottom edge (160 ms, ONE_UI) while its slot closes, and the
+  subtitle appears with the body. On close, the piece fades in at its slot
+  from 10 px below, from a 4 px blur to sharp (200 ms, ONE_UI), from the first
+  frame of the close, and the subtitle leaves with the window. Reduced
+  motion: no blur and no displacement, the opacities still fade. The author
+  asked for it on 2026-11-26 because the window used to close before the
+  subtitle came back, two steps out of order.
+- **Flight (history, CEL-D-008 to CEL-D-009).** The piece's icon and text fly between its slot and the
   subtitle: down with the open spring when it opens, up with the exit curve
   when it leaves (150 ms on a switch; on close the slot reopens first and the
   flight starts 60 ms later and takes 200 ms). The icon grows from its bar
@@ -242,7 +256,7 @@ cannot animate).
 
 Four entries, one landing each, in order; each needs its predecessor. The
 amendments after the live tests follow them: `CEL-D-008` stacked on
-`CEL-D-007`, then `CEL-D-009` from `main`.
+`CEL-D-007`, then `CEL-D-009` and `CEL-D-010` from `main`.
 
 | Entry | Delivers |
 |---|---|
@@ -253,6 +267,7 @@ amendments after the live tests follow them: `CEL-D-008` stacked on
 | `CEL-D-007` | Full opacity around an open sheet and one travelling pill (amendment of 2026-11-26) |
 | `CEL-D-008` | The capsule that never narrows, the slot that closes, the piece that flies down as the subtitle; the sheet stops cutting the row, and the painter keeps its progressive blur for later (amendment of 2026-11-26; [plan](../plans/2026-11-26-celestina-cel-d-008-plan.md)) |
 | `CEL-D-009` | Each menu its own window, as large as its content, grown out of its piece and lined up with its capsule's outer edge (amendment of 2026-11-26; [plan](../plans/2026-11-26-celestina-cel-d-009-plan.md)) |
+| `CEL-D-010` | The window's close blurs, fades and shrinks towards its piece; the piece crossfades in the bar instead of flying (amendment of 2026-11-26; [plan](../plans/2026-11-26-celestina-cel-d-010-plan.md)) |
 
 Nothing else is in flight in `osd/popup.rs` or `session_menu` (the
 coordinating session dropped `CEL-I-010` and `CEL-I-011`), so `CEL-D-002`
