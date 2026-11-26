@@ -189,6 +189,14 @@ impl Sheets {
             .map(|o| o.piece)
     }
 
+    /// The piece the row paints without hover or press: the one the sheet
+    /// is open under, until the sheet has gone (its indicator pill is that
+    /// piece's only plate).
+    #[must_use]
+    pub fn quiet_piece(&self) -> Option<Key> {
+        self.open.as_ref().map(|o| o.piece)
+    }
+
     /// The open sheet's kind, else the queued one's.
     #[must_use]
     pub fn kind(&self) -> Option<SheetKind> {
@@ -586,14 +594,14 @@ impl Sheets {
 
     /// Paints the sheet: its Haze, the row through the window (blurred where
     /// the window cuts it, under the indicator pill) and the bodies. `row`
-    /// paints the capsule's pieces, given the open piece and the opacity of
-    /// the others.
+    /// paints the capsule's pieces, given the open piece (which shows no
+    /// hover: the indicator pill is its plate).
     pub fn paint(
         &mut self,
         painter: &mut Painter,
         anchor: &Anchor,
         now: Instant,
-        row: &mut dyn FnMut(&mut Painter, Option<Key>, f32),
+        row: &mut dyn FnMut(&mut Painter, Option<Key>),
     ) {
         let Some(rect) = self.rect(anchor, now) else {
             return;
@@ -608,8 +616,7 @@ impl Sheets {
         let window = geometry::row_window(rect);
         let cuts = geometry::cuts(anchor.capsule, rect);
         let pill = self.indicator.pill(now);
-        let open = self.open.as_ref().map(|o| o.piece);
-        let dim = self.indicator.dim(now);
+        let open = self.quiet_piece();
         let mut draw = |p: &mut Painter| {
             if let Some((r, alpha)) = pill {
                 p.push_state();
@@ -617,7 +624,7 @@ impl Sheets {
                 p.fill_rounded(r, PILL_RADIUS, hover);
                 p.pop_state();
             }
-            row(p, open, dim);
+            row(p, open);
         };
         if cuts.left || cuts.right {
             let cut = CutRow {

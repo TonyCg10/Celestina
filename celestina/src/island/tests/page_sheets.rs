@@ -781,3 +781,86 @@ fn a_polkit_prompt_holds_the_keyboard_from_the_island() {
         KeyboardInteractivity::Exclusive
     );
 }
+
+/// The bar's node under the pointer, and the piece the row paints quiet.
+fn hovered_and_quiet(island: &Island) -> (Option<Key>, Option<Key>) {
+    (
+        island.bar.as_ref().and_then(|b| b.hovered_key()),
+        island.sheets.quiet_piece(),
+    )
+}
+
+/// An Island with a page sheet open under the network piece, the pointer
+/// over it, and the bluetooth piece beside it ready to be clicked.
+fn network_open() -> (Island, Instant, Key, Key) {
+    let (mut island, t0) = new_island();
+    let network = Key::named("network");
+    let bluetooth = Key::named("bluetooth");
+    let t0 = t0 + Duration::from_secs(2);
+    island.apply_views(t0);
+    lay_fake(&mut island, t0);
+    let t0 = t0 + Duration::from_secs(2);
+    lay_fake(&mut island, t0);
+    let at = centre(bar_rect(&island, network));
+    assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
+    let t = t0 + ms(400);
+    step(&mut island, t);
+    (island, t, network, bluetooth)
+}
+
+#[test]
+fn the_open_piece_shows_no_hover_pill_only_the_indicator() {
+    let (mut island, t, network, bluetooth) = network_open();
+    // The pointer is still over the open piece: the bar hovers it, and the
+    // row paints it quiet.
+    assert_eq!(hovered_and_quiet(&island), (Some(network), Some(network)));
+    // A press on it adds nothing either: it stays the quiet one.
+    let at = centre(bar_rect(&island, network));
+    feed(&mut island, press(at.0, at.1, BTN_LEFT), t);
+    assert_eq!(island.sheets.quiet_piece(), Some(network));
+    feed(&mut island, release(at.0, at.1, BTN_LEFT), t);
+    // Another piece keeps its hover: it is not the quiet one.
+    let at = centre(bar_rect(&island, bluetooth));
+    feed(
+        &mut island,
+        InputEvent::PointerMotion { x: at.0, y: at.1 },
+        t,
+    );
+    let (hovered, quiet) = hovered_and_quiet(&island);
+    assert_eq!(hovered, Some(bluetooth));
+    assert_ne!(quiet, hovered);
+}
+
+#[test]
+fn switching_to_a_hovered_piece_drops_its_hover_pill_at_once() {
+    let (mut island, t, _network, bluetooth) = network_open();
+    let at = centre(bar_rect(&island, bluetooth));
+    feed(
+        &mut island,
+        InputEvent::PointerMotion { x: at.0, y: at.1 },
+        t,
+    );
+    assert_ne!(island.sheets.quiet_piece(), Some(bluetooth));
+    // The press switches the sheet: that very frame the hovered piece is
+    // the quiet one, while the indicator travels to it.
+    feed(&mut island, press(at.0, at.1, BTN_LEFT), t);
+    feed(&mut island, release(at.0, at.1, BTN_LEFT), t);
+    assert_eq!(island.sheets.page(), Some(PageId::BLUETOOTH));
+    assert_eq!(
+        hovered_and_quiet(&island),
+        (Some(bluetooth), Some(bluetooth))
+    );
+}
+
+#[test]
+fn after_close_the_hovered_piece_shows_its_hover_again() {
+    let (mut island, t, network, _bluetooth) = network_open();
+    let at = centre(bar_rect(&island, network));
+    // The same piece again closes the sheet.
+    assert!(click_at(&mut island, at, BTN_LEFT, t).is_empty());
+    assert!(!island.sheets.is_open());
+    let t = t + ms(400);
+    step(&mut island, t);
+    // Gone: nothing is quiet and the pointer's hover paints as ever.
+    assert_eq!(hovered_and_quiet(&island), (Some(network), None));
+}

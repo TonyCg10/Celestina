@@ -1,14 +1,10 @@
 //! The clocks of a capsule sheet: the rect's flights (open, switch, close, a
-//! resize at rest), the body's opacities and the row's indicator pill and
-//! the dim of the other pieces. Pure: every method takes the instant, nothing reads a clock.
+//! resize at rest), the body's opacities and the row's indicator pill. Pure: every method takes the instant, nothing reads a clock.
 
 use std::time::{Duration, Instant};
 
 use celestina_paint::{MotionMs, Rect, Theme};
 use celestina_ui::{Animated, Easing, Motion, Reduced, EXIT, LINEAR, ONE_UI};
-
-/// The opacity of the pieces that are not the open one, while a sheet is open.
-const DIM: f32 = 0.4;
 
 /// Which flight the rect is on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -236,13 +232,12 @@ struct Params {
     reduced: bool,
 }
 
-/// The pill under the open piece and the dim of the other pieces.
+/// The pill under the open piece.
 #[derive(Clone, Debug)]
 pub struct Indicator {
     x: Animated,
     w: Animated,
     opacity: Animated,
-    dim: Animated,
     y: f32,
     h: f32,
     visible: bool,
@@ -255,7 +250,6 @@ impl Default for Indicator {
             x: Animated::new(0.0),
             w: Animated::new(0.0),
             opacity: Animated::new(0.0),
-            dim: Animated::new(1.0),
             y: 0.0,
             h: 0.0,
             visible: false,
@@ -265,8 +259,7 @@ impl Default for Indicator {
 }
 
 impl Indicator {
-    /// The pill appears under `pill` (or slides there when already shown);
-    /// the other pieces dim to 40 % (a slide keeps the dim).
+    /// The pill appears under `pill` (or slides there when already shown).
     pub fn show(&mut self, pill: Rect, theme: &Theme, now: Instant, reduced: bool) {
         let jump = !self.visible && self.opacity.value(now) <= 0.0;
         self.params = Some(Params {
@@ -280,7 +273,6 @@ impl Indicator {
             self.x.set(pill.x);
             self.w.set(pill.w);
             self.opacity.set(0.0);
-            self.dim.set(1.0);
         } else {
             self.slide_to(pill, now);
         }
@@ -291,13 +283,6 @@ impl Indicator {
             LINEAR,
             now,
             Reduced::Opacity,
-        );
-        self.dim.animate_to(
-            DIM,
-            Motion::Normal.duration(&theme.motion),
-            ONE_UI,
-            now,
-            Reduced::spatial(reduced),
         );
     }
 
@@ -321,7 +306,7 @@ impl Indicator {
         self.slide_to(pill, now);
     }
 
-    /// The pill fades out and the other pieces come back to full, in 150 ms.
+    /// The pill fades out, in 150 ms.
     pub fn hide(&mut self, now: Instant) {
         let Some(p) = self.params else { return };
         self.visible = false;
@@ -331,13 +316,6 @@ impl Indicator {
             EXIT,
             now,
             Reduced::Opacity,
-        );
-        self.dim.animate_to(
-            1.0,
-            Motion::Exit.duration(&p.ladder),
-            EXIT,
-            now,
-            Reduced::spatial(p.reduced),
         );
     }
 
@@ -357,14 +335,8 @@ impl Indicator {
         Some((rect, alpha))
     }
 
-    /// The opacity of the pieces that are not the open one: 1 at rest, 0.4
-    /// while a sheet is open.
-    pub fn dim(&self, now: Instant) -> f32 {
-        self.dim.value(now)
-    }
-
     pub fn wants_frame(&self, now: Instant) -> bool {
-        [&self.x, &self.w, &self.opacity, &self.dim]
+        [&self.x, &self.w, &self.opacity]
             .iter()
             .any(|a| a.is_animating(now))
     }
@@ -523,62 +495,21 @@ mod tests {
     }
 
     #[test]
-    fn other_pieces_dim_to_forty_percent_while_a_sheet_is_open() {
+    fn the_other_pieces_keep_full_opacity_while_a_sheet_is_open() {
+        // The indicator owns only the pill's clocks: the pill fades in over
+        // 100 ms, linear, and once it has settled nothing else animates (no
+        // dim of the other pieces is running).
         let t0 = Instant::now();
         let theme = Theme::dark();
         let mut ind = Indicator::default();
-        assert!(near(ind.dim(t0), 1.0));
         ind.show(r(1010.0, 8.0, 80.0, 40.0), &theme, t0, false);
-        assert!(near(ind.dim(t0), 1.0));
-        assert!(near(
-            ind.dim(ms(t0, 100.0)),
-            0.4 + 0.6 * (1.0 - ONE_UI.eval(0.5))
-        ));
-        assert!(near(ind.dim(ms(t0, 200.0)), 0.4));
-        // Pill fades in over 100 ms, linear.
         let (_, a) = ind.pill(ms(t0, 50.0)).unwrap();
         assert!(near(a, 0.5));
-    }
-
-    #[test]
-    fn the_dim_fades_back_on_close() {
-        let t0 = Instant::now();
-        let theme = Theme::dark();
-        let mut ind = Indicator::default();
-        ind.show(r(1010.0, 8.0, 80.0, 40.0), &theme, t0, false);
-        let later = ms(t0, 400.0);
-        assert!(near(ind.dim(later), 0.4));
-        ind.hide(later);
-        assert!(ind.dim(ms(later, 75.0)) > 0.4);
-        assert!(ind.dim(ms(later, 75.0)) < 1.0);
-        assert!(near(ind.dim(ms(later, 150.0)), 1.0));
-    }
-
-    #[test]
-    fn a_switch_keeps_the_dim() {
-        let t0 = Instant::now();
-        let theme = Theme::dark();
-        let mut ind = Indicator::default();
-        ind.show(r(1010.0, 8.0, 80.0, 40.0), &theme, t0, false);
-        let done = ms(t0, 400.0);
-        ind.slide(r(1200.0, 8.0, 120.0, 40.0), done);
-        assert!(near(ind.dim(done), 0.4));
-        assert!(near(ind.dim(ms(done, 175.0)), 0.4));
-        ind.show(r(1400.0, 8.0, 60.0, 40.0), &theme, ms(done, 500.0), false);
-        assert!(near(ind.dim(ms(done, 500.0)), 0.4));
-        assert!(near(ind.dim(ms(done, 650.0)), 0.4));
-    }
-
-    #[test]
-    fn reduced_motion_jumps_the_dim() {
-        let t0 = Instant::now();
-        let theme = Theme::dark();
-        let mut ind = Indicator::default();
-        ind.show(r(1010.0, 8.0, 80.0, 40.0), &theme, t0, true);
-        assert!(near(ind.dim(ms(t0, 1.0)), 0.4));
-        assert!(!ind.wants_frame(ms(t0, 120.0)));
-        ind.hide(ms(t0, 400.0));
-        assert!(near(ind.dim(ms(t0, 401.0)), 1.0));
+        assert!(ind.wants_frame(ms(t0, 50.0)));
+        assert!(!ind.wants_frame(ms(t0, 100.0)));
+        // A switch moves only the pill, then settles too.
+        ind.slide(r(1200.0, 8.0, 120.0, 40.0), ms(t0, 400.0));
+        assert!(!ind.wants_frame(ms(t0, 750.0)));
     }
 
     #[test]
@@ -618,8 +549,8 @@ mod tests {
         let mut ind = Indicator::default();
         assert!(!ind.wants_frame(t0));
         ind.show(r(1010.0, 8.0, 80.0, 40.0), &theme, t0, false);
-        assert!(ind.wants_frame(ms(t0, 100.0)));
-        assert!(!ind.wants_frame(ms(t0, 341.0)));
+        assert!(ind.wants_frame(ms(t0, 50.0)));
+        assert!(!ind.wants_frame(ms(t0, 141.0)));
         ind.hide(ms(t0, 400.0));
         assert!(ind.wants_frame(ms(t0, 450.0)));
         assert!(!ind.wants_frame(ms(t0, 551.0)));

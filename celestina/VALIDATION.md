@@ -1632,3 +1632,26 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-005](docs/evidence/2026-11-25-cel-d-005-workspaces-list.md)
+
+## VAL-CEL-D-007 — The open piece keeps one pill and the others stay at full opacity
+
+- **Status:** pending
+- **Related implementation:** CEL-D-007 (with a capsule sheet open, the other
+  pieces of its row are painted at their normal opacity, not dimmed; the open
+  piece shows only the sliding indicator pill and never its own hover or
+  press plate)
+- **Requires:** the deployed shell after the landing of CEL-D-007 and a bar
+  capsule with at least two pieces that open a sheet (the volume and
+  brightness pieces)
+- **Procedure:** press the volume piece. Read the other pieces of its row.
+  Move the pointer over a neighbouring piece that opens a sheet and press it,
+  then watch the switch. Leave the pointer on the open piece, then press it
+  to close the sheet
+- **Pass condition:** with a sheet open, the other pieces are at full opacity
+  (the blurred edge where the sheet's window cuts the row is unchanged);
+  switching to a hovered piece shows one pill travelling, never a fixed hover
+  pill under it as well; hovering the open piece adds nothing; after the
+  close the piece under the pointer shows its hover again
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-007](docs/evidence/2026-11-26-cel-d-007-focus-tweaks.md)

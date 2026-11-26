@@ -65,16 +65,6 @@ pub(crate) fn own_keys() -> Vec<Key> {
     keys
 }
 
-/// The opacity a piece of a row is painted at while a sheet is open under
-/// `open`: full for that piece, `dim` for the others.
-fn child_opacity(key: Key, open: Option<Key>, dim: f32) -> f32 {
-    if open == Some(key) {
-        1.0
-    } else {
-        dim
-    }
-}
-
 /// What a pointer event on the bar asked of its pieces.
 #[derive(Debug, Default, PartialEq)]
 pub struct BarInput {
@@ -297,19 +287,17 @@ impl BarTree {
     }
 
     /// Paints only the pieces of zone `zone`'s capsule: not its box or Haze.
-    /// Every piece but `open` (the one a sheet is open under) is painted at
-    /// the opacity `dim`.
+    /// The piece `open` (the one a sheet is open under) shows no hover or
+    /// press: the sheet's indicator pill is its only plate.
     pub fn paint_row(
         &mut self,
         painter: &mut Painter,
         now: Instant,
         zone: usize,
         open: Option<Key>,
-        dim: f32,
     ) {
         if let Some(id) = self.zone_node(zone) {
-            let opacity = |key: Key| child_opacity(key, open, dim);
-            self.tree.paint_children_with(painter, now, id, &opacity);
+            self.tree.paint_children_quiet(painter, now, id, open);
         }
     }
 
@@ -334,6 +322,13 @@ impl BarTree {
     #[must_use]
     pub fn is_animating(&self, now: Instant) -> bool {
         self.tree.is_animating(now)
+    }
+
+    /// The key of the node the pointer is over (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn hovered_key(&self) -> Option<Key> {
+        self.tree.highlight().hovered.map(|id| self.tree.key_of(id))
     }
 
     #[must_use]
@@ -497,15 +492,6 @@ mod tests {
 
     use super::*;
     use crate::island::pages::NameOwner;
-
-    #[test]
-    fn paint_row_dims_every_piece_but_the_open_one() {
-        let (open, other) = (Key::named("open"), Key::named("other"));
-        assert_eq!(child_opacity(open, Some(open), 0.4), 1.0);
-        assert_eq!(child_opacity(other, Some(open), 0.4), 0.4);
-        // Nothing open: every piece takes the level it is given (1 at rest).
-        assert_eq!(child_opacity(other, None, 1.0), 1.0);
-    }
 
     /// 7 px per char, 16 px tall.
     fn fake_measure(s: &str, _: &TextStyle, _: Option<f32>) -> (f32, f32) {

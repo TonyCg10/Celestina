@@ -19,7 +19,7 @@ use std::time::Instant;
 use celestina_paint::{Painter, Rect, Role, Theme};
 
 use crate::{
-    highlight::{box_fill, box_wash, focus_ring, FOCUS_WIDTH},
+    highlight::{box_fill, box_wash, focus_ring, Highlight, FOCUS_WIDTH},
     slider::{self, SliderPaint},
     tree::{NodeId, Scope, Slot, Tree, Visit},
     view::ViewKind,
@@ -42,32 +42,33 @@ impl Tree {
     /// to its subtree; a clip after its own fill; the focus ring on top of
     /// its children (a text field shows its caret instead). Leaving nodes whose fade settled are pruned first.
     pub fn paint(&mut self, painter: &mut Painter, now: Instant) {
-        self.paint_scoped(painter, now, Scope::All, &|_| 1.0);
+        self.paint_scoped(painter, now, Scope::All, None);
     }
 
     /// [`Tree::paint`] without the node `skip` and its subtree: the rest of
     /// the walk is unchanged.
     pub fn paint_except(&mut self, painter: &mut Painter, now: Instant, skip: NodeId) {
-        self.paint_scoped(painter, now, Scope::Except(skip), &|_| 1.0);
+        self.paint_scoped(painter, now, Scope::Except(skip), None);
     }
 
     /// Paints only the subtrees of `parent`'s children: not the node's own
     /// box, haze or ring. The slides of `parent` and its ancestors still
     /// shift them; their recoil scale and opacity do not apply.
     pub fn paint_children(&mut self, painter: &mut Painter, now: Instant, parent: NodeId) {
-        self.paint_scoped(painter, now, Scope::ChildrenOf(parent), &|_| 1.0);
+        self.paint_scoped(painter, now, Scope::ChildrenOf(parent), None);
     }
 
-    /// [`Tree::paint_children`] with each direct child of `parent` painted
-    /// at `opacity(key of the child)` times its own opacity, subtree and all.
-    pub fn paint_children_with(
+    /// [`Tree::paint_children`] with the subtree of the direct child `quiet`
+    /// painted without its hover and press feedback (its focus ring stays):
+    /// the piece a sheet is open under shows only the indicator pill.
+    pub fn paint_children_quiet(
         &mut self,
         painter: &mut Painter,
         now: Instant,
         parent: NodeId,
-        opacity: &dyn Fn(Key) -> f32,
+        quiet: Option<Key>,
     ) {
-        self.paint_scoped(painter, now, Scope::ChildrenOf(parent), opacity);
+        self.paint_scoped(painter, now, Scope::ChildrenOf(parent), quiet);
     }
 
     fn paint_scoped(
@@ -75,7 +76,7 @@ impl Tree {
         painter: &mut Painter,
         now: Instant,
         scope: Scope,
-        scale: &dyn Fn(Key) -> f32,
+        quiet: Option<Key>,
     ) {
         self.prune(now);
         let dpr = self.dpr;
@@ -114,35 +115,21 @@ impl Tree {
             Scope::ChildrenOf(parent) => Some(parent),
             _ => None,
         };
-        // The factor of a direct child of the scoped parent; 1 elsewhere.
-        let factor = |tree: &Tree, id: NodeId| {
-            let direct = tree.slot(id).is_some_and(|s| s.parent == owner);
-            if owner.is_some() && direct {
-                scale(tree.key_of(id)).clamp(0.0, 1.0)
-            } else {
-                1.0
-            }
-        };
+        let mut mute = Mute::new(quiet);
         for v in self.walk(scope) {
             match v {
                 Visit::Enter(id) => {
-                    let f = factor(self, id);
-                    if f < 1.0 {
-                        painter.push_state();
-                        painter.opacity(f);
-                    }
+                    let muted = mute.enter(self, id, owner);
                     let base = shifts.last().copied().unwrap_or((0.0, 0.0));
                     let own = self.offset(id, now);
                     let shift = (base.0 + own.0, base.1 + own.1);
                     shifts.push(shift);
-                    self.paint_enter(id, painter, &theme, shift, now);
+                    self.paint_enter(id, painter, &theme, shift, now, muted);
                 }
                 Visit::Leave(id) => {
                     let shift = shifts.pop().unwrap_or((0.0, 0.0));
                     self.paint_leave(id, painter, &theme, shift);
-                    if factor(self, id) < 1.0 {
-                        painter.pop_state();
-                    }
+                    mute.leave(id);
                 }
             }
         }
@@ -167,6 +154,7 @@ impl Tree {
         theme: &Theme,
         shift: (f32, f32),
         now: Instant,
+        muted: bool,
     ) {
         painter.push_state();
         let Some(slot) = self.slot(id) else {
@@ -191,7 +179,7 @@ impl Tree {
                 if *haze {
                     painter.haze(rect, *radius);
                 }
-                let h = self.highlight;
+                let h = shown_highlight(self.highlight, muted);
                 let (hovered, pressed) = (h.hovered == Some(id), h.pressed == Some(id));
                 let shown = box_fill(*fill, slot.interactive, hovered, pressed);
                 if let Some(role) = shown {
@@ -225,7 +213,7 @@ impl Tree {
             }
             ViewKind::Image { id, alpha } => painter.image(*id, rect, *alpha),
             ViewKind::Slider(s) => {
-                let h = self.highlight;
+                let h = shown_highlight(self.highlight, muted);
                 let p = SliderPaint {
                     slider: *s,
                     rect,
@@ -267,6 +255,51 @@ impl Tree {
 /// A field inside `rect`, clipped to it: the selection wash, the text (or
 /// the placeholder in the faint role while it is empty), the underline of
 /// the composition in progress, and the caret while the field has the focus.
+/// The highlight a node is painted with: a muted one shows no hover and no
+/// press.
+fn shown_highlight(h: Highlight, muted: bool) -> Highlight {
+    if muted {
+        Highlight {
+            hovered: None,
+            pressed: None,
+            ..h
+        }
+    } else {
+        h
+    }
+}
+
+/// Which nodes of a walk are muted: the subtree of the direct child of the
+/// scoped parent whose key is `key`.
+struct Mute {
+    key: Option<Key>,
+    at: Option<NodeId>,
+}
+
+impl Mute {
+    fn new(key: Option<Key>) -> Mute {
+        Mute { key, at: None }
+    }
+
+    /// Whether `id`, entered now, is muted. `owner` is the scoped parent.
+    fn enter(&mut self, tree: &Tree, id: NodeId, owner: Option<NodeId>) -> bool {
+        if self.at.is_none()
+            && owner.is_some()
+            && self.key.is_some_and(|k| k == tree.key_of(id))
+            && tree.slot(id).is_some_and(|s| s.parent == owner)
+        {
+            self.at = Some(id);
+        }
+        self.at.is_some()
+    }
+
+    fn leave(&mut self, id: NodeId) {
+        if self.at == Some(id) {
+            self.at = None;
+        }
+    }
+}
+
 fn paint_field(slot: &Slot, painter: &mut Painter, theme: &Theme, rect: Rect, focused: bool) {
     let (ViewKind::Field { style, .. }, Some(field)) = (&slot.kind, &slot.field) else {
         return;
@@ -395,6 +428,55 @@ mod tests {
         assert_eq!(radius, 9.5);
         let (_, radius) = stroke_edge(R, 0.0);
         assert_eq!(radius, 0.0);
+    }
+
+    /// The nodes a walk of `card`'s children paints muted for `quiet`.
+    fn muted(tree: &Tree, card: NodeId, quiet: Option<Key>) -> Vec<NodeId> {
+        let mut mute = Mute::new(quiet);
+        let mut out = Vec::new();
+        for v in tree.walk(Scope::ChildrenOf(card)) {
+            match v {
+                Visit::Enter(id) => {
+                    if mute.enter(tree, id, Some(card)) {
+                        out.push(id);
+                    }
+                }
+                Visit::Leave(id) => mute.leave(id),
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn only_the_quiet_child_is_muted() {
+        let (tree, card, rows) = crate::testing::card_with_rows();
+        assert_eq!(
+            muted(&tree, card, Some(crate::testing::row_key(1))),
+            vec![rows[1]]
+        );
+        assert_eq!(muted(&tree, card, None), Vec::<NodeId>::new());
+        assert_eq!(
+            muted(&tree, card, Some(Key::named("nope"))),
+            Vec::<NodeId>::new()
+        );
+    }
+
+    #[test]
+    fn a_muted_node_shows_no_hover_or_press_but_keeps_its_focus() {
+        let h = Highlight {
+            hovered: Some(1),
+            pressed: Some(1),
+            focused: Some(2),
+        };
+        assert_eq!(shown_highlight(h, false), h);
+        assert_eq!(
+            shown_highlight(h, true),
+            Highlight {
+                hovered: None,
+                pressed: None,
+                focused: Some(2)
+            }
+        );
     }
 
     #[test]

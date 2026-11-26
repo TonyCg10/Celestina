@@ -381,9 +381,9 @@ impl Island {
             return;
         };
         let mut bar = self.bar.as_mut();
-        let mut row = |p: &mut Painter, open: Option<Key>, dim: f32| {
+        let mut row = |p: &mut Painter, open: Option<Key>| {
             if let Some(bar) = bar.as_deref_mut() {
-                bar.paint_row(p, now, zone, open, dim);
+                bar.paint_row(p, now, zone, open);
             }
         };
         self.sheets.paint(painter, &anchor, now, &mut row);

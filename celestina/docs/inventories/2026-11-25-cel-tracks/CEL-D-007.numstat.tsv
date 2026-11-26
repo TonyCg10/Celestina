@@ -1,0 +1,39 @@
+# CEL-D-007 exact change inventory
+
+Base revision	e8d111faa32205874eda0225f92fd7f7bada7c8c
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-ui/src/paint.rs
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-007-focus-tweaks.md
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-007-focus-tweaks/hover-stack.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-007-focus-tweaks/open-volume.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-007-focus-tweaks/switched.jpg
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-007.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/island/bar_tree.rs
+Pathspec	celestina/src/island/sheets.rs
+Pathspec	celestina/src/island/tests/page_sheets.rs
+Pathspec	celestina/src/sheet/mod.rs
+Pathspec	celestina/src/sheet/motion.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	01227f469550146c1aeb44c2551e4b245ed0f6bf9db44013e945391d806c54b1	celestina/Cargo.lock
+1	1	32e8bb64daef21d50ad0294115887661482b8d5622c908f3c8af5eaecc39ea53	celestina/Cargo.toml
+23	0	35d89950019177c2f0cc5952c657a52f75f8da8fccca0fcd83efa1e7748525d7	celestina/VALIDATION.md
+112	30	4e58442838eab85f2f2a091b793b29f6cbed2587ad8dc55c736e1a8c3dc79cb4	celestina/crates/celestina-ui/src/paint.rs
+44	0	0268450f8647c08aaccf37ac8c5a0885f54152e9658cfcae828bc961203a34ae	celestina/docs/evidence/2026-11-26-cel-d-007-focus-tweaks.md
+-	-	d8db93656c62260c7ad5ad682e48c08f68da5b356172558597ed79adbfbbe731	celestina/docs/evidence/2026-11-26-cel-d-007-focus-tweaks/hover-stack.jpg
+-	-	60555eda610741b9fd563f5a7cbcf0984e21016dbb4fad1f718ba3349a424eee	celestina/docs/evidence/2026-11-26-cel-d-007-focus-tweaks/open-volume.jpg
+-	-	888d52eaf80ad7de98b9d73dbf76058b5941283f03ab2cc452acf8621e8690dc	celestina/docs/evidence/2026-11-26-cel-d-007-focus-tweaks/switched.jpg
+39	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-007.numstat.tsv
+1	0	e57a00fe8613fdf6cb47ae5ba90086e66ccc25b635ee91ba7c2038ce00bbd894	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+10	24	9ba89a290542f353ba5c7dfa9cb3fa9bf661f1b1aaafdf6dee51cf4123ee53c6	celestina/src/island/bar_tree.rs
+2	2	ab8a3929c80a5caaa8802e1bf99991371ac8621c83438386f55a4f19b0ffba40	celestina/src/island/sheets.rs
+83	0	575ebd16f0bee2977fb6ffeacfe0e0cb58348ab6fecdd6345051063e9893f74c	celestina/src/island/tests/page_sheets.rs
+13	6	8b21ddb92b04612eaf4fd19529f56e9111ee248a83149dcaf2f1bb677d2a36a5	celestina/src/sheet/mod.rs
+16	85	a50457698296eeb174552379ba1cdc016d0aa4b3a465a324131a89e474cddc29	celestina/src/sheet/motion.rs
+1	0	f6ef0e9e7c9b63993f7ab12d84ea59916925fa20f13ffa21ecacbc2148ded439	docs/version-history.tsv
