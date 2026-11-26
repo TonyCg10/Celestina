@@ -348,6 +348,28 @@ pub enum PieceAction {
     Media(MediaCommand),
 }
 
+/// What a piece shows of itself when its sheet opens: the icon and the text
+/// that become the sheet's subtitle (CEL-D-008). The text is the very string
+/// the piece's bar view shows (one function per piece builds both); a piece
+/// with none leaves it `None` and the subtitle shows the menu's name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Face {
+    pub icon: &'static str,
+    pub text: Option<String>,
+}
+
+impl Face {
+    /// The face of the page `page`: its tab icon, with `text`.
+    #[must_use]
+    pub fn of_page(page: PageId, text: Option<String>) -> Option<Face> {
+        let entry = page_entry(page)?;
+        Some(Face {
+            icon: entry.view.icon(),
+            text,
+        })
+    }
+}
+
 /// One thing the bar can hold.
 pub trait Piece: Sync {
     /// The piece's layout key.
@@ -361,6 +383,16 @@ pub trait Piece: Sync {
     fn page(&self) -> Option<PageEntry>;
     /// What `input` on its widget asks for.
     fn activate(&self, input: &PieceInput<'_>) -> PieceAction;
+    /// The icon and text its sheet's subtitle shows, for a piece that opens
+    /// a sheet; `None` for one that does not. The default is the page's icon
+    /// and no text (the subtitle then shows the page's title); a piece with
+    /// text, or with no page of its own, says so.
+    fn face(&self, _cx: &BarCx<'_>) -> Option<Face> {
+        self.page().map(|entry| Face {
+            icon: entry.view.icon(),
+            text: None,
+        })
+    }
 }
 
 /// Every piece. The order of those with a page is the tab order.
@@ -749,6 +781,110 @@ mod key_tests {
             }
         }
         (absent, clashes)
+    }
+
+    /// The nodes of `view` and everything under it.
+    fn nodes(view: &View, out: &mut Vec<Key>) {
+        out.push(view.key);
+        for child in &view.children {
+            nodes(child, out);
+        }
+    }
+
+    /// Whether a left click on some node of `piece`'s widget grows a sheet
+    /// (a page's or a menu's): the real set the faces are for.
+    fn opens_a_sheet(piece: &dyn Piece, cx: &BarCx<'_>) -> bool {
+        let Some(view) = piece.bar(cx) else {
+            return false;
+        };
+        let mut keys = Vec::new();
+        nodes(&view, &mut keys);
+        keys.into_iter().any(|key| {
+            matches!(
+                piece.activate(&PieceInput {
+                    key,
+                    gesture: Gesture::Primary,
+                    cx,
+                }),
+                PieceAction::OpenPage(_) | PieceAction::Sheet(_)
+            )
+        })
+    }
+
+    #[test]
+    fn every_piece_that_opens_a_sheet_has_a_face() {
+        let everything = tests_support::Everything::new();
+        everything.with(|cx| {
+            let mut with_face = Vec::new();
+            for p in PIECES {
+                let opens = opens_a_sheet(*p, cx);
+                let face = p.face(cx);
+                assert_eq!(
+                    face.is_some(),
+                    opens,
+                    "{:?}: a face exactly when its click opens a sheet",
+                    p.id()
+                );
+                if let Some(face) = face {
+                    assert!(!face.icon.is_empty(), "{:?}", p.id());
+                    with_face.push(p.id().as_str());
+                }
+            }
+            // The set is what the bar's clicks open today: the tray and the
+            // bubbles open none.
+            assert_eq!(
+                with_face,
+                [
+                    "workspaces",
+                    "notifications",
+                    "sysmon",
+                    "clock",
+                    "weather",
+                    "clipboard",
+                    "network",
+                    "bluetooth",
+                    "battery",
+                    "power-profile",
+                    "volume",
+                    "brightness",
+                    "phone",
+                    "media",
+                    "session"
+                ]
+            );
+        });
+    }
+
+    #[test]
+    fn a_face_text_is_the_string_the_bar_shows() {
+        let everything = tests_support::Everything::new();
+        everything.with(|cx| {
+            for p in PIECES {
+                let Some(Face {
+                    text: Some(text), ..
+                }) = p.face(cx)
+                else {
+                    continue;
+                };
+                let view = p.bar(cx).expect("a piece with text is drawn");
+                let mut shown = Vec::new();
+                texts(&view, &mut shown);
+                assert!(
+                    shown.contains(&text),
+                    "{:?}: {text:?} is not among {shown:?}",
+                    p.id()
+                );
+            }
+        });
+    }
+
+    fn texts(view: &View, out: &mut Vec<String>) {
+        if let celestina_ui::ViewKind::Text { text, .. } = &view.kind {
+            out.push(text.clone());
+        }
+        for child in &view.children {
+            texts(child, out);
+        }
     }
 
     /// The bar hands a node's input to the piece that owns its key, the

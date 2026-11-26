@@ -7,7 +7,7 @@ use celestina_paint::{Role, Weight};
 use celestina_shell::glance::Load;
 use celestina_ui::{view, Key, View};
 
-use super::{BarCx, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
+use super::{BarCx, Face, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
 use crate::{
     copy, glance,
     island::{
@@ -39,6 +39,11 @@ pub fn load_role(load: Load) -> Role {
     }
 }
 
+/// The readout the bar shows and the sheet's subtitle repeats.
+fn text_of(reading: &crate::providers::sysmon::SysReading) -> String {
+    copy::bar_sysmon(reading.cpu, reading.ram)
+}
+
 impl Piece for Sysmon {
     fn id(&self) -> PieceId {
         PieceId(glance::SYSMON_PIECE)
@@ -59,10 +64,14 @@ impl Piece for Sysmon {
                 .focusable()
                 .child(view::text(
                     Key::named("sysmon-text"),
-                    &copy::bar_sysmon(reading.cpu, reading.ram),
+                    &text_of(reading),
                     text_style(cx.theme.type_scale.body, Weight::Regular, true, role),
                 )),
         )
+    }
+
+    fn face(&self, cx: &BarCx<'_>) -> Option<Face> {
+        Face::of_page(PageId::SYSMON, cx.sysmon.map(text_of))
     }
 
     fn page(&self) -> Option<PageEntry> {

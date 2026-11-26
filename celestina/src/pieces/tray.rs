@@ -7,7 +7,9 @@
 use celestina_paint::IconKey;
 use celestina_ui::{view, Key, View, ViewKind};
 
-use super::{Axis, BarCx, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
+use super::{
+    Axis, BarCx, Face, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput,
+};
 use crate::{
     copy,
     island::{
@@ -116,6 +118,12 @@ impl Piece for Tray {
                 .gap(GAP)
                 .children(icons),
         )
+    }
+
+    /// The tray opens no sheet: its items act on their own and their menus
+    /// are popups.
+    fn face(&self, _cx: &BarCx<'_>) -> Option<Face> {
+        None
     }
 
     fn page(&self) -> Option<PageEntry> {

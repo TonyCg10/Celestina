@@ -11,8 +11,8 @@ use celestina_shell::osd::{Kind, Reading, Shown};
 use celestina_ui::{Key, View};
 
 use super::{
-    level, wheel, AudioAction, Axis, BarCx, Gesture, PageEntry, Piece, PieceAction, PieceId,
-    PieceInput, SheetKind,
+    level, wheel, AudioAction, Axis, BarCx, Face, Gesture, Levels, PageEntry, Piece, PieceAction,
+    PieceId, PieceInput, SheetKind,
 };
 use crate::{copy, osd::view::icon_of};
 
@@ -37,6 +37,35 @@ impl Volume {
     }
 }
 
+/// The icon the piece shows for `level`: the muted one while muted.
+fn icon_for(level: super::Level) -> &'static str {
+    icon_of(Shown {
+        kind: Kind::Volume,
+        reading: Reading {
+            percent: level.percent,
+            muted: level.muted,
+        },
+    })
+}
+
+impl Volume {
+    /// What the piece shows for `levels`; with no reading the plain icon and
+    /// no text (the sheet's subtitle then names the menu).
+    #[must_use]
+    pub fn face_of(levels: Levels) -> Face {
+        match levels.audio.output {
+            Some(level) => Face {
+                icon: icon_for(level),
+                text: Some(level::percent_text(level.percent)),
+            },
+            None => Face {
+                icon: "media-volume",
+                text: None,
+            },
+        }
+    }
+}
+
 impl Piece for Volume {
     fn id(&self) -> PieceId {
         PieceId(ID)
@@ -50,14 +79,17 @@ impl Piece for Volume {
     /// the output has no reading.
     fn bar(&self, cx: &BarCx<'_>) -> Option<View> {
         let level = cx.levels.audio.output?;
-        let icon = icon_of(Shown {
-            kind: Kind::Volume,
-            reading: Reading {
-                percent: level.percent,
-                muted: level.muted,
-            },
-        });
-        Some(level::widget(cx, ID, icon, level.percent, level.muted))
+        Some(level::widget(
+            cx,
+            ID,
+            icon_for(level),
+            level.percent,
+            level.muted,
+        ))
+    }
+
+    fn face(&self, cx: &BarCx<'_>) -> Option<Face> {
+        Some(Volume::face_of(cx.levels))
     }
 
     fn page(&self) -> Option<PageEntry> {

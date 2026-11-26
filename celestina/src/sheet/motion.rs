@@ -1,10 +1,11 @@
 //! The clocks of a capsule sheet: the rect's flights (open, switch, close, a
-//! resize at rest), the body's opacities and the row's indicator pill. Pure: every method takes the instant, nothing reads a clock.
+//! resize at rest) and the body's opacities. Pure: every method takes the
+//! instant, nothing reads a clock.
 
 use std::time::{Duration, Instant};
 
 use celestina_paint::{MotionMs, Rect, Theme};
-use celestina_ui::{Animated, Easing, Motion, Reduced, EXIT, LINEAR, ONE_UI};
+use celestina_ui::{Easing, Motion, EXIT, ONE_UI};
 
 /// Which flight the rect is on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -19,6 +20,10 @@ enum Kind {
 pub struct SheetMotion {
     kind: Kind,
     from: Rect,
+    /// The capsule when the flight began: an open or a switch starts from
+    /// `from` moved by how far the capsule's edges have moved since, so a
+    /// capsule that slides under the flight carries the sheet with it.
+    capsule: Rect,
     start: Instant,
     duration: Duration,
     easing: Easing,
@@ -38,11 +43,11 @@ fn finite(v: f32) -> f32 {
     }
 }
 
-fn lerp(a: f32, b: f32, k: f32) -> f32 {
+pub(super) fn lerp(a: f32, b: f32, k: f32) -> f32 {
     a + (b - a) * k
 }
 
-fn lerp_rect(a: Rect, b: Rect, k: f32) -> Rect {
+pub(super) fn lerp_rect(a: Rect, b: Rect, k: f32) -> Rect {
     Rect {
         x: lerp(a.x, b.x, k),
         y: lerp(a.y, b.y, k),
@@ -71,6 +76,7 @@ impl SheetMotion {
     fn flight(
         kind: Kind,
         from: Rect,
+        capsule: Rect,
         now: Instant,
         ladder: MotionMs,
         overshoot: f32,
@@ -83,6 +89,7 @@ impl SheetMotion {
         SheetMotion {
             kind,
             from,
+            capsule,
             start: now,
             duration: step.duration(&ladder),
             easing,
@@ -98,6 +105,7 @@ impl SheetMotion {
         SheetMotion::flight(
             Kind::Open,
             capsule,
+            capsule,
             now,
             theme.motion,
             theme.overshoot,
@@ -106,12 +114,13 @@ impl SheetMotion {
     }
 
     /// The body is replaced while the sheet stays: the rect flies from
-    /// `shown` to the new target.
-    pub fn switch(&mut self, shown: Rect, now: Instant) {
+    /// `shown` to the new target. `capsule` is the capsule's extent now.
+    pub fn switch(&mut self, shown: Rect, capsule: Rect, now: Instant) {
         let reduced = self.reduced;
         *self = SheetMotion::flight(
             Kind::Switch,
             shown,
+            capsule,
             now,
             self.ladder,
             self.overshoot,
@@ -137,6 +146,7 @@ impl SheetMotion {
         let reduced = self.reduced;
         *self = SheetMotion::flight(
             Kind::Close,
+            shown,
             shown,
             now,
             self.ladder,
@@ -167,13 +177,37 @@ impl SheetMotion {
         (elapsed < duration).then(|| elapsed.as_secs_f32() / duration.as_secs_f32())
     }
 
-    /// The rect at `now`. `to` is the live target (the capsule while
-    /// closing). The OutBack overshoot is cut to `surface`.
-    pub fn rect(&self, now: Instant, to: Rect, surface: (f32, f32)) -> Rect {
+    /// Where the flight starts at `now`: `from`, its edges moved as far as
+    /// the capsule's (`capsule` is the capsule's extent now) since the flight
+    /// began, so a capsule that shrinks or grows under an open carries the
+    /// sheet with it and the two stay one shape. A close starts where it was.
+    fn start_at(&self, capsule: Rect) -> Rect {
+        if self.kind == Kind::Close {
+            return self.from;
+        }
+        let left = self.from.x + (capsule.x - self.capsule.x);
+        let right = self.from.x
+            + self.from.w
+            + ((capsule.x + capsule.w) - (self.capsule.x + self.capsule.w));
+        Rect {
+            x: left,
+            w: (right - left).max(0.0),
+            ..self.from
+        }
+    }
+
+    /// The rect at `now`. `capsule` is the capsule's extent now and `to` the
+    /// live target (the capsule while closing). The OutBack overshoot is cut
+    /// to `surface`.
+    pub fn rect(&self, now: Instant, capsule: Rect, to: Rect, surface: (f32, f32)) -> Rect {
         let rect = if self.reduced {
             to
         } else if self.flying(now) {
-            lerp_rect(self.from, to, self.easing.eval(self.fraction(now)))
+            lerp_rect(
+                self.start_at(capsule),
+                to,
+                self.easing.eval(self.fraction(now)),
+            )
         } else if let Some((from, start)) = self.resize.filter(|_| self.kind != Kind::Close) {
             match self.resize_fraction(start, now) {
                 Some(x) => lerp_rect(from, to, ONE_UI.eval(x)),
@@ -203,6 +237,24 @@ impl SheetMotion {
         }
     }
 
+    /// The duration ladder the flights run on.
+    #[must_use]
+    pub fn ladder(&self) -> MotionMs {
+        self.ladder
+    }
+
+    /// The open spring's overshoot.
+    #[must_use]
+    pub fn overshoot(&self) -> f32 {
+        self.overshoot
+    }
+
+    /// Reduced motion: nothing flies.
+    #[must_use]
+    pub fn reduced(&self) -> bool {
+        self.reduced
+    }
+
     pub fn is_closing(&self) -> bool {
         self.kind == Kind::Close
     }
@@ -221,124 +273,6 @@ impl SheetMotion {
             && self
                 .resize
                 .is_some_and(|(_, start)| self.resize_fraction(start, now).is_some())
-    }
-}
-
-/// What the indicator was shown with.
-#[derive(Clone, Copy, Debug)]
-struct Params {
-    ladder: MotionMs,
-    overshoot: f32,
-    reduced: bool,
-}
-
-/// The pill under the open piece.
-#[derive(Clone, Debug)]
-pub struct Indicator {
-    x: Animated,
-    w: Animated,
-    opacity: Animated,
-    y: f32,
-    h: f32,
-    visible: bool,
-    params: Option<Params>,
-}
-
-impl Default for Indicator {
-    fn default() -> Indicator {
-        Indicator {
-            x: Animated::new(0.0),
-            w: Animated::new(0.0),
-            opacity: Animated::new(0.0),
-            y: 0.0,
-            h: 0.0,
-            visible: false,
-            params: None,
-        }
-    }
-}
-
-impl Indicator {
-    /// The pill appears under `pill` (or slides there when already shown).
-    pub fn show(&mut self, pill: Rect, theme: &Theme, now: Instant, reduced: bool) {
-        let jump = !self.visible && self.opacity.value(now) <= 0.0;
-        self.params = Some(Params {
-            ladder: theme.motion,
-            overshoot: theme.overshoot,
-            reduced,
-        });
-        self.y = finite(pill.y);
-        self.h = finite(pill.h).max(0.0);
-        if jump {
-            self.x.set(pill.x);
-            self.w.set(pill.w);
-            self.opacity.set(0.0);
-        } else {
-            self.slide_to(pill, now);
-        }
-        self.visible = true;
-        self.opacity.animate_to(
-            1.0,
-            Motion::Fast.duration(&theme.motion),
-            LINEAR,
-            now,
-            Reduced::Opacity,
-        );
-    }
-
-    fn slide_to(&mut self, pill: Rect, now: Instant) {
-        let Some(p) = self.params else { return };
-        let duration = Motion::Slow.duration(&p.ladder);
-        let reduced = Reduced::spatial(p.reduced);
-        self.x
-            .animate_to(pill.x, duration, Easing::OutBack(p.overshoot), now, reduced);
-        self.w
-            .animate_to(pill.w, duration, Easing::OutBack(p.overshoot), now, reduced);
-    }
-
-    /// The pill moves to `pill` on the open spring.
-    pub fn slide(&mut self, pill: Rect, now: Instant) {
-        if !self.visible {
-            return;
-        }
-        self.y = finite(pill.y);
-        self.h = finite(pill.h).max(0.0);
-        self.slide_to(pill, now);
-    }
-
-    /// The pill fades out, in 150 ms.
-    pub fn hide(&mut self, now: Instant) {
-        let Some(p) = self.params else { return };
-        self.visible = false;
-        self.opacity.animate_to(
-            0.0,
-            Motion::Exit.duration(&p.ladder),
-            EXIT,
-            now,
-            Reduced::Opacity,
-        );
-    }
-
-    /// The pill's rect and alpha, or `None` once it is gone.
-    pub fn pill(&self, now: Instant) -> Option<(Rect, f32)> {
-        self.params?;
-        let alpha = self.opacity.value(now);
-        if !self.visible && alpha <= 0.0 {
-            return None;
-        }
-        let rect = Rect {
-            x: self.x.value(now),
-            y: self.y,
-            w: self.w.value(now).max(0.0),
-            h: self.h,
-        };
-        Some((rect, alpha))
-    }
-
-    pub fn wants_frame(&self, now: Instant) -> bool {
-        [&self.x, &self.w, &self.opacity]
-            .iter()
-            .any(|a| a.is_animating(now))
     }
 }
 
@@ -377,11 +311,12 @@ mod tests {
         let t0 = Instant::now();
         let m = opened(t0);
         let tall = r(930.0, 8.0, 320.0, 544.0);
-        let got = m.rect(ms(t0, 175.0), tall, SURFACE);
+        let got = m.rect(ms(t0, 175.0), capsule(), tall, SURFACE);
         assert!(got.y + got.h <= SURFACE.1, "{got:?}");
         assert!(got.x >= 0.0 && got.x + got.w <= SURFACE.0);
         let nan = m.rect(
             ms(t0, 175.0),
+            capsule(),
             r(f32::NAN, f32::NAN, f32::NAN, f32::NAN),
             SURFACE,
         );
@@ -392,11 +327,17 @@ mod tests {
     fn the_open_flight_starts_at_the_capsule_and_overshoots_its_target() {
         let t0 = Instant::now();
         let m = opened(t0);
-        assert_eq!(m.rect(t0, target(), SURFACE), capsule());
-        let mid = m.rect(ms(t0, 175.0), target(), SURFACE);
+        assert_eq!(m.rect(t0, capsule(), target(), SURFACE), capsule());
+        let mid = m.rect(ms(t0, 175.0), capsule(), target(), SURFACE);
         assert!(mid.w > target().w, "{mid:?}");
-        assert_eq!(m.rect(ms(t0, 350.0), target(), SURFACE), target());
-        assert_eq!(m.rect(ms(t0, 900.0), target(), SURFACE), target());
+        assert_eq!(
+            m.rect(ms(t0, 350.0), capsule(), target(), SURFACE),
+            target()
+        );
+        assert_eq!(
+            m.rect(ms(t0, 900.0), capsule(), target(), SURFACE),
+            target()
+        );
     }
 
     #[test]
@@ -422,8 +363,11 @@ mod tests {
         assert!(near(m.body_opacity(ms(done, 90.0)), 0.0));
         assert!(!m.closed(ms(done, 149.0)));
         assert!(m.closed(ms(done, 150.0)));
-        assert_eq!(m.rect(done, capsule(), SURFACE), target());
-        assert_eq!(m.rect(ms(done, 150.0), capsule(), SURFACE), capsule());
+        assert_eq!(m.rect(done, capsule(), capsule(), SURFACE), target());
+        assert_eq!(
+            m.rect(ms(done, 150.0), capsule(), capsule(), SURFACE),
+            capsule()
+        );
         assert!(m.wants_frame(ms(done, 100.0)));
         assert!(!m.wants_frame(ms(done, 150.0)));
     }
@@ -434,7 +378,7 @@ mod tests {
         let mut m = opened(t0);
         let done = ms(t0, 400.0);
         let next = r(900.0, 8.0, 320.0, 200.0);
-        m.switch(target(), done);
+        m.switch(target(), capsule(), done);
         assert!(!m.is_closing());
         assert!(near(m.leaving_opacity(done), 1.0));
         assert!(near(m.leaving_opacity(ms(done, 52.5)), 0.5));
@@ -442,8 +386,8 @@ mod tests {
         assert!(near(m.body_opacity(done), 0.0));
         assert!(near(m.body_opacity(ms(done, 175.0)), 0.2308));
         assert!(near(m.body_opacity(ms(done, 350.0)), 1.0));
-        assert_eq!(m.rect(done, next, SURFACE), target());
-        assert_eq!(m.rect(ms(done, 350.0), next, SURFACE), next);
+        assert_eq!(m.rect(done, capsule(), next, SURFACE), target());
+        assert_eq!(m.rect(ms(done, 350.0), capsule(), next, SURFACE), next);
         assert!(near(m.leaving_opacity(ms(done, 350.0)), 0.0));
     }
 
@@ -454,11 +398,11 @@ mod tests {
         let done = ms(t0, 400.0);
         let taller = r(930.0, 8.0, 240.0, 376.0);
         m.resize(target(), done);
-        assert_eq!(m.rect(done, taller, SURFACE), target());
-        let mid = m.rect(ms(done, 100.0), taller, SURFACE);
+        assert_eq!(m.rect(done, capsule(), taller, SURFACE), target());
+        let mid = m.rect(ms(done, 100.0), capsule(), taller, SURFACE);
         let k = ONE_UI.eval(0.5);
         assert!(near(mid.h, 276.0 + 100.0 * k), "{mid:?}");
-        assert_eq!(m.rect(ms(done, 200.0), taller, SURFACE), taller);
+        assert_eq!(m.rect(ms(done, 200.0), capsule(), taller, SURFACE), taller);
         assert!(m.wants_frame(ms(done, 100.0)));
         assert!(!m.wants_frame(ms(done, 200.0)));
         // The body does not fade for a resize.
@@ -470,10 +414,10 @@ mod tests {
         let t0 = Instant::now();
         let mut m = opened(t0);
         let during = ms(t0, 100.0);
-        m.resize(m.rect(during, target(), SURFACE), during);
+        m.resize(m.rect(during, capsule(), target(), SURFACE), during);
         assert!(m.wants_frame(ms(t0, 349.0)));
         let taller = r(930.0, 8.0, 240.0, 376.0);
-        assert_eq!(m.rect(ms(t0, 350.0), taller, SURFACE), taller);
+        assert_eq!(m.rect(ms(t0, 350.0), capsule(), taller, SURFACE), taller);
         assert!(!m.wants_frame(ms(t0, 350.0)));
     }
 
@@ -481,78 +425,60 @@ mod tests {
     fn reduced_motion_jumps_the_rect_and_still_fades_the_body() {
         let t0 = Instant::now();
         let mut m = SheetMotion::open(capsule(), &Theme::dark(), t0, true);
-        assert_eq!(m.rect(t0, target(), SURFACE), target());
+        assert_eq!(m.rect(t0, capsule(), target(), SURFACE), target());
         assert!(near(m.body_opacity(t0), 0.0));
         assert!(near(m.body_opacity(ms(t0, 175.0)), 0.2308));
         assert!(near(m.body_opacity(ms(t0, 350.0)), 1.0));
         let done = ms(t0, 400.0);
         m.resize(target(), done);
         let taller = r(930.0, 8.0, 240.0, 376.0);
-        assert_eq!(m.rect(done, taller, SURFACE), taller);
+        assert_eq!(m.rect(done, capsule(), taller, SURFACE), taller);
         m.close(taller, done);
-        assert_eq!(m.rect(done, capsule(), SURFACE), capsule());
+        assert_eq!(m.rect(done, capsule(), capsule(), SURFACE), capsule());
         assert!(m.closed(done));
     }
 
     #[test]
-    fn the_other_pieces_keep_full_opacity_while_a_sheet_is_open() {
-        // The indicator owns only the pill's clocks: the pill fades in over
-        // 100 ms, linear, and once it has settled nothing else animates (no
-        // dim of the other pieces is running).
+    fn an_open_follows_a_capsule_that_slides_under_it() {
         let t0 = Instant::now();
-        let theme = Theme::dark();
-        let mut ind = Indicator::default();
-        ind.show(r(1010.0, 8.0, 80.0, 40.0), &theme, t0, false);
-        let (_, a) = ind.pill(ms(t0, 50.0)).unwrap();
-        assert!(near(a, 0.5));
-        assert!(ind.wants_frame(ms(t0, 50.0)));
-        assert!(!ind.wants_frame(ms(t0, 100.0)));
-        // A switch moves only the pill, then settles too.
-        ind.slide(r(1200.0, 8.0, 120.0, 40.0), ms(t0, 400.0));
-        assert!(!ind.wants_frame(ms(t0, 750.0)));
+        let m = opened(t0);
+        // The capsule loses 38 px at its right end; a menu narrower than
+        // the capsule is the capsule, so the target is that rect.
+        let narrow = r(1000.0, 8.0, 62.0, 40.0);
+        let to = r(1000.0, 8.0, 62.0, 140.0);
+        for t in [0.0, 60.0, 175.0, 349.0] {
+            let got = m.rect(ms(t0, t), narrow, to, SURFACE);
+            assert!(near(got.x, 1000.0) && near(got.w, 62.0), "{t}: {got:?}");
+        }
+        // A capsule that moves while it does is followed on both edges.
+        let sliding = r(1010.0, 8.0, 50.0, 40.0);
+        let to = r(1010.0, 8.0, 50.0, 140.0);
+        let got = m.rect(t0, sliding, to, SURFACE);
+        assert_eq!((got.x, got.w), (1010.0, 50.0));
+        // A close starts where it was, whatever the capsule does.
+        let mut closing = opened(t0);
+        let done = ms(t0, 400.0);
+        closing.close(target(), done);
+        assert_eq!(closing.rect(done, narrow, narrow, SURFACE), target());
     }
 
     #[test]
-    fn the_pill_slides_with_the_open_spring() {
+    fn a_switch_follows_the_capsule_from_where_the_sheet_was() {
         let t0 = Instant::now();
-        let theme = Theme::dark();
-        let mut ind = Indicator::default();
-        let a = r(1010.0, 8.0, 80.0, 40.0);
-        let b = r(1200.0, 8.0, 120.0, 40.0);
-        ind.show(a, &theme, t0, false);
+        let mut m = opened(t0);
         let done = ms(t0, 400.0);
-        assert_eq!(ind.pill(done).unwrap().0, a);
-        ind.slide(b, done);
-        let (mid, _) = ind.pill(ms(done, 175.0)).unwrap();
-        let k = Easing::OutBack(theme.overshoot).eval(0.5);
-        assert!(near(mid.x, 1010.0 + 190.0 * k), "{mid:?}");
-        assert!(near(mid.w, 80.0 + 40.0 * k));
-        assert_eq!(ind.pill(ms(done, 350.0)).unwrap().0, b);
-        // Hiding fades the pill out in 150 ms.
-        let later = ms(done, 500.0);
-        ind.hide(later);
-        assert!(ind.pill(ms(later, 75.0)).unwrap().1 < 1.0);
-        assert!(ind.pill(ms(later, 150.0)).is_none());
-        let mut reduced = Indicator::default();
-        reduced.show(a, &theme, t0, true);
-        reduced.slide(b, done);
-        assert_eq!(reduced.pill(done).unwrap().0, b);
+        let shown = r(1000.0, 8.0, 100.0, 140.0);
+        m.switch(shown, capsule(), done);
+        let moved = r(1000.0, 8.0, 70.0, 40.0);
+        let got = m.rect(done, moved, moved, SURFACE);
+        assert_eq!((got.x, got.w, got.h), (1000.0, 70.0, 140.0));
     }
 
     #[test]
     fn nothing_wants_a_frame_once_every_clock_has_settled() {
         let t0 = Instant::now();
-        let theme = Theme::dark();
         let m = opened(t0);
         assert!(m.wants_frame(t0));
         assert!(!m.wants_frame(ms(t0, 350.0)));
-        let mut ind = Indicator::default();
-        assert!(!ind.wants_frame(t0));
-        ind.show(r(1010.0, 8.0, 80.0, 40.0), &theme, t0, false);
-        assert!(ind.wants_frame(ms(t0, 50.0)));
-        assert!(!ind.wants_frame(ms(t0, 141.0)));
-        ind.hide(ms(t0, 400.0));
-        assert!(ind.wants_frame(ms(t0, 450.0)));
-        assert!(!ind.wants_frame(ms(t0, 551.0)));
     }
 }

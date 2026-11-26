@@ -1,6 +1,6 @@
 //! The monitor list of the brightness sheet (CEL-I-003): with two monitors or
-//! more, an "All" heading with the mean level and a slider that sets every
-//! monitor with a reading, a divider, and one compact row per monitor (its
+//! more, the sheet's subtitle (CEL-D-008), a slider at the mean level that
+//! sets every monitor with a reading, a divider, and one compact row per monitor (its
 //! name, its slider, its percent). With one monitor the sheet is the single
 //! slider of old and none of this is built.
 //!
@@ -22,11 +22,13 @@ use celestina_ui::{view, Key, View};
 
 use super::audio_rows::{compact_h, fixed};
 use super::popup::{
-    card_key, heading, heading_h, level_slider, slider_h, slider_key, Control, SHEET_W,
+    card_key, level_slider, level_subtitle, slider_h, slider_key, Control, Kind, SHEET_W,
 };
+use crate::sheet::subtitle::SUBTITLE_H;
 use crate::{
     copy,
     island::view::{centred, text_style},
+    pieces::Levels,
 };
 
 /// The width of a monitor's name column, logical px.
@@ -73,7 +75,7 @@ pub fn monitors_size(theme: &Theme, rows: usize) -> (f32, f32) {
         SHEET_W,
         theme.spacing.xs
             + theme.spacing.md
-            + heading_h(theme)
+            + SUBTITLE_H
             + slider_h(theme)
             + DIVIDER_H
             + rows as f32 * compact_h(theme)
@@ -231,7 +233,7 @@ impl MonitorMirror {
         self.shown.get(at).copied().flatten()
     }
 
-    /// The mean shown, for the All heading.
+    /// The mean shown, for the slider that sets every monitor.
     #[must_use]
     pub fn mean(&self) -> Option<u8> {
         mean_level(&self.shown)
@@ -284,7 +286,7 @@ fn monitor_row(theme: &Theme, at: usize, row: &MonitorRow, label: &str, level: O
 
 /// The body of a sheet that lists several monitors.
 #[must_use]
-pub fn monitors_card(theme: &Theme, mirror: &MonitorMirror) -> View {
+pub fn monitors_card(theme: &Theme, mirror: &MonitorMirror, levels: Levels) -> View {
     let (w, h) = monitors_size(theme, mirror.rows.len());
     let mean = mirror.mean();
     let rows = mirror
@@ -296,13 +298,7 @@ pub fn monitors_card(theme: &Theme, mirror: &MonitorMirror) -> View {
         .size(w, h)
         .padding_sides(theme.spacing.xs, theme.spacing.md, theme.spacing.md)
         .gap(theme.spacing.sm)
-        .child(heading(
-            theme,
-            "level-heading-all",
-            "sun",
-            copy::BRIGHTNESS_ALL,
-            mean.unwrap_or(0),
-        ))
+        .child(level_subtitle(theme, Kind::Brightness, levels))
         .child(level_slider(Control::AllMonitors, mean, false))
         .child(
             view::row(Key::named("level-monitors-divider"))

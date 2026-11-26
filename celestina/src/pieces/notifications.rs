@@ -4,7 +4,7 @@
 use celestina_paint::Role;
 use celestina_ui::{view, Key, View};
 
-use super::{BarCx, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
+use super::{BarCx, Face, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
 use crate::{
     copy,
     island::{pages::notifications::Notifications as Page, view::centred},
@@ -38,6 +38,15 @@ fn unread(cx: &BarCx<'_>) -> bool {
     cx.history.iter().any(|row| !row.read)
 }
 
+/// The bell's glyph: one function for the bar and the subtitle.
+fn bell_icon(cx: &BarCx<'_>) -> &'static str {
+    if cx.do_not_disturb {
+        "bell-off"
+    } else {
+        "bell"
+    }
+}
+
 impl Piece for Notifications {
     fn id(&self) -> PieceId {
         PieceId("notifications")
@@ -50,11 +59,7 @@ impl Piece for Notifications {
     /// The bell (crossed out while do-not-disturb is on), with the accent
     /// mark at its corner while a notification is unread. Always present.
     fn bar(&self, cx: &BarCx<'_>) -> Option<View> {
-        let name = if cx.do_not_disturb {
-            "bell-off"
-        } else {
-            "bell"
-        };
+        let name = bell_icon(cx);
         let icon = view::icon(Key::named("bell-icon"), name, BELL).tint(Role::TextHi);
         let mark = unread(cx).then(|| {
             view::row(Key::named("bell-unread"))
@@ -72,6 +77,14 @@ impl Piece for Notifications {
                 .child(icon)
                 .children(mark),
         )
+    }
+
+    /// The glyph the bell shows, crossed out while do-not-disturb is on.
+    fn face(&self, cx: &BarCx<'_>) -> Option<Face> {
+        Some(Face {
+            icon: bell_icon(cx),
+            text: None,
+        })
     }
 
     fn page(&self) -> Option<PageEntry> {
@@ -226,5 +239,12 @@ mod tests {
             Notifications.page().map(|e| e.id),
             Some(PageId::NOTIFICATIONS)
         );
+    }
+
+    #[test]
+    fn the_face_shows_the_glyph_the_bar_shows() {
+        let icon = |dnd| with(&[], dnd, |cx| Notifications.face(cx)).map(|f| f.icon);
+        assert_eq!(icon(false), Some("bell"));
+        assert_eq!(icon(true), Some("bell-off"));
     }
 }

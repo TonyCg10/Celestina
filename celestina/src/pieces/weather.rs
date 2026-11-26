@@ -6,7 +6,7 @@
 use celestina_paint::{Role, Weight};
 use celestina_ui::{view, Key, View};
 
-use super::{BarCx, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
+use super::{BarCx, Face, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
 use crate::{
     copy, glance,
     island::view::{centred, text_style},
@@ -37,6 +37,12 @@ pub fn condition_icon(code: u8, daylight: bool) -> Option<&'static str> {
     }
 }
 
+/// The reading's text, as the bar shows it and the sheet's subtitle repeats
+/// it.
+fn text_of(reading: &crate::providers::weather::WeatherReading) -> String {
+    copy::bar_weather(reading.celsius)
+}
+
 impl Piece for Weather {
     fn id(&self) -> PieceId {
         PieceId(glance::WEATHER_PIECE)
@@ -60,7 +66,7 @@ impl Piece for Weather {
                 .children(icon)
                 .child(view::text(
                     Key::named("weather-text"),
-                    &copy::bar_weather(reading.celsius),
+                    &text_of(reading),
                     text_style(
                         cx.theme.type_scale.body,
                         Weight::Regular,
@@ -69,6 +75,17 @@ impl Piece for Weather {
                     ),
                 )),
         )
+    }
+
+    /// The condition icon (the Clock page's own while the set has none) and
+    /// the reading; a click opens the Clock page as a sheet.
+    fn face(&self, cx: &BarCx<'_>) -> Option<Face> {
+        let reading = cx.weather;
+        let face = Face::of_page(PageId::CLOCK, reading.map(text_of))?;
+        let icon = reading
+            .and_then(|r| condition_icon(r.code, r.daylight))
+            .unwrap_or(face.icon);
+        Some(Face { icon, ..face })
     }
 
     /// The Clock page shows the reading; the piece has no tab of its own.

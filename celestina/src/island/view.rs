@@ -16,7 +16,8 @@ use super::{
 };
 use crate::{
     copy,
-    pieces::{workspaces::Workspaces, PageId, Piece},
+    pieces::{workspaces::Workspaces, Face, PageId, Piece},
+    sheet::subtitle::{subtitle, SUBTITLE_H},
 };
 
 /// Space between the capsule's edge and its content.
@@ -347,43 +348,27 @@ pub fn page(
 pub const PAGE_SHEET_W: f32 = 420.0;
 
 /// The size of a page sheet's body whose page content is `content_h` tall:
-/// the top padding, the header, the gap, the content and the bottom padding.
+/// the top padding, the subtitle, the gap, the content and the bottom
+/// padding.
 #[must_use]
 pub fn page_sheet_size(theme: &Theme, content_h: f32) -> (f32, f32) {
     (
         PAGE_SHEET_W,
-        theme.spacing.xs + TITLE_ROW_H + theme.spacing.sm + content_h + theme.spacing.lg,
+        theme.spacing.xs + SUBTITLE_H + theme.spacing.sm + content_h + theme.spacing.lg,
     )
 }
 
-/// The body of a page sheet (CEL-D-003): a header row with the page's
-/// `title` and the overflow button, then the page's `content` in a clipped
-/// box `content_h` tall. No clock, no close button and no tabs: the sheet is
-/// closed by the way it was opened, and the Island's tabs stay on the Island.
+/// The body of a page sheet (CEL-D-003, CEL-D-008): the subtitle of the
+/// piece that opened it (`face`, or the page's `title` when the piece has no
+/// text) with the overflow button at its right, then the page's `content` in
+/// a clipped box `content_h` tall. No clock, no close button and no tabs: the
+/// sheet is closed by the way it was opened, and the Island's tabs stay on
+/// the Island.
 #[must_use]
-pub fn page_sheet(theme: &Theme, title: &str, content: View, content_h: f32) -> View {
+pub fn page_sheet(theme: &Theme, face: &Face, title: &str, content: View, content_h: f32) -> View {
     let size = page_sheet_size(theme, content_h);
-    let title = view::text(
-        Key::named("sheet-title"),
-        title,
-        text_style(
-            theme.type_scale.title,
-            Weight::Semibold,
-            false,
-            Role::TextHi,
-        ),
-    )
-    .grow();
-    let header = centred(view::row(Key::named("sheet-header")))
-        .height(TITLE_ROW_H)
-        .gap(theme.spacing.sm)
-        .child(title)
-        .child(button(
-            theme,
-            sheet_more_key(),
-            "sheet-more-label",
-            copy::MORE,
-        ));
+    let more = button(theme, sheet_more_key(), "sheet-more-label", copy::MORE);
+    let header = subtitle(theme, face, title, Some(more));
     let body_w = (size.0 - 2.0 * theme.spacing.lg).max(0.0);
     let body = view::col(Key::named("sheet-content"))
         .size(body_w, content_h)
@@ -401,7 +386,7 @@ pub fn page_sheet(theme: &Theme, title: &str, content: View, content_h: f32) -> 
 mod tests {
     use std::time::Instant;
 
-    use celestina_ui::Tree;
+    use celestina_ui::{Tree, ViewKind};
 
     use super::*;
 
@@ -706,21 +691,29 @@ mod tests {
     }
 
     #[test]
-    fn a_page_sheet_is_a_header_and_the_content_in_a_clipped_box() {
+    fn a_page_sheet_is_a_subtitle_and_the_content_in_a_clipped_box() {
         let theme = Theme::dark();
         let content_h = 120.0;
-        let tree = laid_out(page_sheet(&theme, "Red", content(), content_h));
+        let face = Face {
+            icon: "link",
+            text: None,
+        };
+        let tree = laid_out(page_sheet(&theme, &face, "Red", content(), content_h));
         let (w, h) = page_sheet_size(&theme, content_h);
         assert_eq!(w, PAGE_SHEET_W);
         let root = rect_of(&tree, Key::named("page-sheet"));
         assert_eq!((root.x, root.y, root.w, root.h), (0.0, 0.0, w, h));
-        let header = rect_of(&tree, Key::named("sheet-header"));
-        assert_eq!(header.h, TITLE_ROW_H);
+        let header = rect_of(&tree, crate::sheet::subtitle::row_key());
+        assert_eq!(header.h, SUBTITLE_H, "the 32 px header became the subtitle");
         assert_eq!(header.y, theme.spacing.xs);
         assert_eq!(header.x, theme.spacing.lg);
         let more = rect_of(&tree, sheet_more_key());
-        assert_eq!(more.x + more.w, w - theme.spacing.lg, "at the right");
-        let title = rect_of(&tree, Key::named("sheet-title"));
+        assert_eq!(
+            more.x + more.w,
+            w - theme.spacing.lg - theme.spacing.xs,
+            "at the right"
+        );
+        let title = rect_of(&tree, crate::sheet::subtitle::text_key());
         assert!(title.x + title.w <= more.x);
         let body = rect_of(&tree, Key::named("sheet-content"));
         assert_eq!(body.y, header.y + header.h + theme.spacing.sm);
@@ -738,10 +731,47 @@ mod tests {
             more_key(),
             Key::named("tabs"),
             tabs::tab_key(PageId::ACTIVITY),
+            Key::named("sheet-title"),
+            Key::named("sheet-header"),
         ] {
             assert!(tree.node_by_key(key).is_none(), "{key:?}");
         }
         assert_ne!(sheet_more_key(), more_key());
+    }
+
+    #[test]
+    fn a_page_sheet_keeps_more_at_the_subtitle_right_and_the_pages_title_without_text() {
+        let theme = Theme::dark();
+        let face = Face {
+            icon: "link",
+            text: None,
+        };
+        let v = page_sheet(&theme, &face, "Red", content(), 100.0);
+        let sub = &v.children[0];
+        assert_eq!(sub.key, crate::sheet::subtitle::row_key());
+        let kinds: Vec<Key> = sub.children.iter().map(|c| c.key).collect();
+        assert_eq!(
+            kinds,
+            [
+                crate::sheet::subtitle::icon_key(),
+                crate::sheet::subtitle::text_key(),
+                sheet_more_key()
+            ]
+        );
+        let ViewKind::Text { text, .. } = &sub.children[1].kind else {
+            panic!("the subtitle's second node is its text");
+        };
+        assert_eq!(text, "Red");
+        // With text, the piece's text takes the title's place.
+        let face = Face {
+            icon: "gauge",
+            text: Some("CPU 23% · RAM 41%".to_owned()),
+        };
+        let v = page_sheet(&theme, &face, "Sistema", content(), 100.0);
+        let ViewKind::Text { text, .. } = &v.children[0].children[1].kind else {
+            panic!("the subtitle's second node is its text");
+        };
+        assert_eq!(text, "CPU 23% · RAM 41%");
     }
 
     #[test]

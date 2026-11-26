@@ -11,8 +11,8 @@
 use celestina_ui::{Key, View};
 
 use super::{
-    level, wheel, Axis, BarCx, BrightnessAction, Gesture, PageEntry, Piece, PieceAction, PieceId,
-    PieceInput, SheetKind,
+    level, wheel, Axis, BarCx, BrightnessAction, Face, Gesture, Levels, PageEntry, Piece,
+    PieceAction, PieceId, PieceInput, SheetKind,
 };
 use crate::copy;
 
@@ -39,6 +39,18 @@ impl Brightness {
     }
 }
 
+impl Brightness {
+    /// What the piece shows for `levels`: the sun and, when the monitor has
+    /// a reading, the level.
+    #[must_use]
+    pub fn face_of(levels: Levels) -> Face {
+        Face {
+            icon: ICON,
+            text: levels.brightness.map(level::percent_text),
+        }
+    }
+}
+
 impl Piece for Brightness {
     fn id(&self) -> PieceId {
         PieceId(ID)
@@ -56,6 +68,10 @@ impl Piece for Brightness {
 
     fn page(&self) -> Option<PageEntry> {
         None
+    }
+
+    fn face(&self, cx: &BarCx<'_>) -> Option<Face> {
+        Some(Brightness::face_of(cx.levels))
     }
 
     fn activate(&self, input: &PieceInput<'_>) -> PieceAction {

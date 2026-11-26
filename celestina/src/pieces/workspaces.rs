@@ -8,7 +8,8 @@ use celestina_paint::Role;
 use celestina_ui::{view, Key, View};
 
 use super::{
-    Axis, BarCx, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput, SheetKind,
+    Axis, BarCx, Face, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput,
+    SheetKind,
 };
 use crate::{
     copy,
@@ -99,6 +100,15 @@ fn dot(row: &Row) -> View {
         .child(mark)
 }
 
+/// What the piece shows, and what the list's subtitle repeats.
+#[must_use]
+pub fn face() -> Face {
+    Face {
+        icon: "view-grid",
+        text: None,
+    }
+}
+
 impl Piece for Workspaces {
     fn id(&self) -> PieceId {
         PieceId("workspaces")
@@ -130,6 +140,13 @@ impl Piece for Workspaces {
             id: PageId::ACTIVITY,
             view: &Activity,
         })
+    }
+
+    /// The piece is a row of dots, with no icon or text of its own: the
+    /// subtitle shows the grid glyph (Lucide `layout-grid`, which the icon
+    /// set calls `view-grid`) and the list's name.
+    fn face(&self, _cx: &BarCx<'_>) -> Option<Face> {
+        Some(face())
     }
 
     /// A click opens the workspaces sheet; the wheel steps to the

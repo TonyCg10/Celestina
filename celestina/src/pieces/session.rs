@@ -6,12 +6,24 @@ use celestina_paint::Role;
 use celestina_ui::{view, Key, View};
 
 use super::{
-    conn_glyph, BarCx, Gesture, PageEntry, Piece, PieceAction, PieceId, PieceInput, SheetKind,
+    conn_glyph, BarCx, Face, Gesture, PageEntry, Piece, PieceAction, PieceId, PieceInput, SheetKind,
 };
 use crate::copy;
 
 /// The glyph's size, logical px.
 const GLYPH: f32 = 16.0;
+/// The glyph's icon.
+const ICON: &str = "power";
+
+/// What the piece shows, and what its menu's subtitle repeats: the power
+/// glyph and no text (the subtitle then names the menu).
+#[must_use]
+pub fn face() -> Face {
+    Face {
+        icon: ICON,
+        text: None,
+    }
+}
 
 /// The Session piece.
 #[derive(Clone, Copy, Debug)]
@@ -34,12 +46,17 @@ impl Piece for Session {
         Some(conn_glyph::tap(
             cx.theme,
             node_key(),
-            [view::icon(Key::named("session-icon"), "power", GLYPH).tint(Role::TextHi)],
+            [view::icon(Key::named("session-icon"), ICON, GLYPH).tint(Role::TextHi)],
         ))
     }
 
     fn page(&self) -> Option<PageEntry> {
         None
+    }
+
+    /// The power glyph and no text: the subtitle names the menu.
+    fn face(&self, _cx: &BarCx<'_>) -> Option<Face> {
+        Some(face())
     }
 
     fn activate(&self, input: &PieceInput<'_>) -> PieceAction {

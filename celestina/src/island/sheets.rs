@@ -13,7 +13,7 @@ use celestina_wayland::{InputEvent, KeyboardInteractivity, SurfaceCtl};
 use super::{workspaces::rows_for, Island, IslandAction, Measure};
 use crate::{
     osd::popup::{Kind, LevelCore},
-    pieces::{PageId, SheetKind},
+    pieces::{workspaces as workspaces_piece, Gesture, PageId, PieceAction, SheetKind},
     session_menu::SessionCore,
     sheet::{
         geometry::{self, Hit},
@@ -77,7 +77,7 @@ impl Island {
         let Some(zone) = self.bar.as_ref().and_then(|bar| bar.zone_of(piece)) else {
             return false;
         };
-        let Some(anchor) = self.live_anchor(zone, piece) else {
+        let Some(anchor) = self.live_anchor(zone, piece, now) else {
             return false;
         };
         let request = Request {
@@ -98,10 +98,30 @@ impl Island {
         } else {
             // A page sheet switched away from takes its state with it.
             self.page_sheet_ends();
+            let piece = request.piece;
             self.sheets
                 .open(request, &anchor, &self.theme, now, self.reduced);
+            self.start_flight(piece, now);
         }
         true
+    }
+
+    /// The icon and text of `piece` start to fly from the bar to the
+    /// subtitle of the sheet that just opened on it (none under reduced
+    /// motion; a piece with no icon in the bar flies nothing).
+    fn start_flight(&mut self, piece: Key, now: Instant) {
+        if self.reduced {
+            return;
+        }
+        let text = self.sheets.subtitle_text();
+        let Some((keys, from)) = self
+            .bar
+            .as_ref()
+            .and_then(|bar| bar.flyers_of(piece, text.as_deref(), now))
+        else {
+            return;
+        };
+        self.sheets.fly_down(keys, from, now);
     }
 
     /// Whether a level sheet is open or waits to open.
@@ -176,44 +196,55 @@ impl Island {
         self.bar.as_ref().and_then(|bar| bar.node_rect(key))
     }
 
-    /// The anchor of the sheet held: its capsule and piece as the bar has
-    /// them, else the last it knew (a piece that vanished).
-    pub(super) fn sheet_anchor(&self) -> Option<Anchor> {
+    /// The anchor of the sheet held: its capsule and the piece's slot as the
+    /// bar has them, else the last it knew (a piece that vanished). A sheet
+    /// on its way out keeps the slot it had, so its body does not move while
+    /// the piece comes back into the row.
+    pub(super) fn sheet_anchor(&self, now: Instant) -> Option<Anchor> {
         let (zone, piece) = self.sheets.anchor_ids()?;
-        self.live_anchor(zone, piece)
-            .or_else(|| self.sheets.last_anchor())
+        let last = self.sheets.last_anchor();
+        match (self.live_anchor(zone, piece, now), last) {
+            (Some(live), Some(last)) if !self.sheets.is_open() => Some(Anchor {
+                piece: last.piece,
+                ..live
+            }),
+            (Some(live), _) => Some(live),
+            (None, last) => last,
+        }
     }
 
     /// Whether [`Island::open_level_sheet`] would find `piece` on the bar.
     #[must_use]
     pub fn can_open_level_sheet(&self, piece: Key) -> bool {
+        let now = Instant::now();
         self.bar
             .as_ref()
             .and_then(|bar| bar.zone_of(piece))
-            .and_then(|zone| self.live_anchor(zone, piece))
+            .and_then(|zone| self.live_anchor(zone, piece, now))
             .is_some()
     }
 
-    /// The anchor the bar gives now for `piece` in `zone`: `None` when either
-    /// is gone.
-    pub(super) fn live_anchor(&self, zone: usize, piece: Key) -> Option<Anchor> {
+    /// The anchor the bar gives at `now` for `piece` in `zone`: the capsule
+    /// as it is painted (the pieces beside the open one may be sliding) and
+    /// the piece's slot. `None` when either is gone.
+    pub(super) fn live_anchor(&self, zone: usize, piece: Key, now: Instant) -> Option<Anchor> {
         let bar = self.bar.as_ref()?;
         Some(Anchor {
-            capsule: bar.zone_rect(zone)?,
-            piece: bar.piece_rect(piece)?,
+            capsule: bar.capsule_extent(zone, now)?,
+            piece: bar.slot_rect(piece, now)?,
             surface: self.size,
         })
     }
 
     /// The sheet's rect at `now`, when one is shown.
     pub(super) fn sheet_rect(&self, now: Instant) -> Option<Rect> {
-        self.sheets.rect(&self.sheet_anchor()?, now)
+        self.sheets.rect(&self.sheet_anchor(now)?, now)
     }
 
     /// Starts the sheet's close.
     pub(super) fn close_sheet(&mut self, now: Instant) {
         self.page_sheet_ends();
-        if let Some(anchor) = self.sheet_anchor() {
+        if let Some(anchor) = self.sheet_anchor(now) {
             self.sheets.close(&anchor, now);
         }
     }
@@ -339,7 +370,7 @@ impl Island {
             tracing::info!("island: a waiting phone sheet; the phone duty is off; not opened");
             return;
         }
-        let Some(anchor) = self.live_anchor(request.zone, request.piece) else {
+        let Some(anchor) = self.live_anchor(request.zone, request.piece, now) else {
             tracing::debug!("island: a waiting sheet's piece is gone; not opened");
             return;
         };
@@ -348,8 +379,10 @@ impl Island {
         if matches!(request.kind, SheetKind::Page(_) | SheetKind::Workspaces) {
             self.stale = true;
         }
+        let piece = request.piece;
         self.sheets
             .open(request, &anchor, &self.theme, now, self.reduced);
+        self.start_flight(piece, now);
     }
 
     /// The frame's part after the layout: the sheet follows its capsule and
@@ -358,8 +391,14 @@ impl Island {
         let Some((zone, piece)) = self.sheets.anchor_ids() else {
             return;
         };
-        match self.live_anchor(zone, piece) {
-            Some(anchor) => self.sheets.follow(&anchor, now),
+        match self.live_anchor(zone, piece, now) {
+            Some(anchor) => {
+                let sliding = self
+                    .bar
+                    .as_ref()
+                    .is_some_and(|bar| bar.is_sliding(zone, now));
+                self.sheets.follow(&anchor, sliding, now);
+            }
             None if self.sheets.is_open() => {
                 tracing::debug!(output = %self.output, "island: the sheet's piece left the bar; closing");
                 self.page_sheet_ends();
@@ -372,21 +411,41 @@ impl Island {
     }
 
     /// Paints the sheet over the Island's capsule and page: its glass, its
-    /// row (the capsule's pieces) and its body.
+    /// row (the capsule's pieces but the open one) and its body.
     pub(super) fn paint_sheet(&mut self, painter: &mut Painter, now: Instant) {
-        let Some(anchor) = self.sheet_anchor() else {
+        let Some(anchor) = self.sheet_anchor(now) else {
             return;
         };
         let Some((zone, _)) = self.sheets.anchor_ids() else {
             return;
         };
         let mut bar = self.bar.as_mut();
-        let mut row = |p: &mut Painter, open: Option<Key>| {
+        let mut row = |p: &mut Painter, hidden: &[Key]| {
             if let Some(bar) = bar.as_deref_mut() {
-                bar.paint_row(p, now, zone, open);
+                bar.paint_row(p, now, zone, hidden);
             }
         };
         self.sheets.paint(painter, &anchor, now, &mut row);
+    }
+
+    /// Paints the flyers (the icons and texts of the pieces on their way
+    /// between the bar and a sheet's subtitle) over everything.
+    pub(super) fn paint_flights(&mut self, painter: &mut Painter, now: Instant) {
+        if !self.sheets.is_flying(now) {
+            return;
+        }
+        self.sheets.paint_flights(painter, self.dpr, now);
+    }
+
+    /// Points the flyers at their live ends: the subtitle, or the piece's
+    /// place in the bar.
+    pub(super) fn resolve_flights(&mut self, now: Instant) {
+        let anchor = self.sheet_anchor(now);
+        let bar = self.bar.as_ref();
+        self.sheets
+            .resolve_flights(anchor.as_ref(), now, &mut |keys| {
+                bar.and_then(|bar| bar.parts_at(keys, now))
+            });
     }
 
     /// Escape and the keyboard leaving drop what waited behind a closing
@@ -417,7 +476,7 @@ impl Island {
         now: Instant,
         measure: &mut Measure<'_>,
     ) -> Option<Vec<IslandAction>> {
-        let anchor = self.sheet_anchor()?;
+        let anchor = self.sheet_anchor(now)?;
         let rect = self.sheets.rect(&anchor, now)?;
         match *ev {
             InputEvent::FocusLost => {
@@ -469,6 +528,24 @@ impl Island {
                     let outcome = self.sheets.input(ev, &anchor, now, measure);
                     return Some(self.apply_outcome(outcome, now));
                 }
+                let gesture = matches!(
+                    ev,
+                    InputEvent::Axis { .. }
+                        | InputEvent::PointerPress { .. }
+                        | InputEvent::PointerRelease { .. }
+                );
+                // Whatever it lands on, a release ends a press on the
+                // subtitle.
+                let pressed = match ev {
+                    InputEvent::PointerRelease { .. } => self.subtitle_press.take(),
+                    _ => None,
+                };
+                if gesture && self.sheets.on_subtitle(&anchor, now, x, y) {
+                    if let Some(out) = self.subtitle_gesture(ev, pressed, now) {
+                        self.pointer_is_the_sheets(true, now);
+                        return Some(out);
+                    }
+                }
                 match geometry::hit(rect, x, y) {
                     Hit::Body => {
                         self.pointer_is_the_sheets(true, now);
@@ -502,6 +579,52 @@ impl Island {
             }
             _ => None,
         }
+    }
+
+    /// A press, release or wheel turn on the subtitle of the open sheet: it
+    /// answers as the piece the sheet is open on, through the very gestures
+    /// and actions the bar's input uses (the wheel steps the workspaces or the
+    /// level, a right click mutes, a plain click closes the sheet). A press
+    /// is only the start of a click: a release makes one only when the press
+    /// (`pressed`, its button) began on the subtitle. A gesture the piece has
+    /// no action for does nothing and closes nothing. The subtitle shows no
+    /// hover or press plate of its own. `None` hands the event on to the
+    /// body: a wheel over the subtitle of a piece without a wheel action
+    /// scrolls the body, and a release whose press began elsewhere is the
+    /// body's.
+    fn subtitle_gesture(
+        &mut self,
+        ev: &InputEvent,
+        pressed: Option<u32>,
+        now: Instant,
+    ) -> Option<Vec<IslandAction>> {
+        let piece = self.sheets.piece()?;
+        match *ev {
+            InputEvent::PointerPress { button, .. } => {
+                self.subtitle_press = Some(button);
+                return Some(Vec::new());
+            }
+            InputEvent::PointerRelease { button, .. } if pressed != Some(button) => return None,
+            InputEvent::Axis { .. } => {
+                let wheel = piece == workspaces_piece::key()
+                    || self
+                        .with_bar(|bar, cx| bar.takes_wheel(piece, cx))
+                        .unwrap_or(false);
+                if !wheel {
+                    return None;
+                }
+            }
+            _ => {}
+        }
+        let asked = self
+            .with_bar(|bar, cx| bar.ask_for(piece, ev, cx))
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(_, gesture, action)| {
+                matches!(gesture, Gesture::Scroll(..)) || *action != PieceAction::None
+            })
+            .collect();
+        Some(self.apply_asked(asked, false, now))
     }
 
     /// The pointer is the sheet's: the Island's capsule ends its hover, and

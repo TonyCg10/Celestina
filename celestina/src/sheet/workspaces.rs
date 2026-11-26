@@ -11,15 +11,19 @@ use crate::{
         view::{centred, text_style},
         workspaces::Row,
     },
+    pieces::workspaces,
     providers::niri::Window,
+    sheet::subtitle::{subtitle, SUBTITLE_H},
 };
 
 /// The list's width, logical px.
 pub const LIST_W: f32 = 240.0;
 /// A row's height.
 pub const ROW_H: f32 = 40.0;
-/// The padding around the rows (the session menu's `sm`).
+/// The padding around the rows (the session menu's `sm`), and above the
+/// subtitle (its `xs`).
 const PAD: f32 = 8.0;
+const TOP_PAD: f32 = 4.0;
 /// The gap between rows.
 const ROW_GAP: f32 = 2.0;
 /// A row's horizontal padding and the gap between its parts.
@@ -70,12 +74,12 @@ pub fn window_order(windows: &[Window], workspace: u64) -> Vec<&Window> {
     on
 }
 
-/// The list's size for `rows` workspaces, logical px.
+/// The list's size for `rows` workspaces, logical px: the subtitle, the
+/// rows, the gap after each of them and the padding.
 #[must_use]
 pub fn list_size(rows: usize) -> (f32, f32) {
     let n = rows as f32;
-    let gaps = (n - 1.0).max(0.0) * ROW_GAP;
-    (LIST_W, 2.0 * PAD + n * ROW_H + gaps)
+    (LIST_W, TOP_PAD + PAD + SUBTITLE_H + n * ROW_H + n * ROW_GAP)
 }
 
 /// The list: one row per entry of `rows`, in the order given.
@@ -83,8 +87,14 @@ pub fn list_size(rows: usize) -> (f32, f32) {
 pub fn workspaces_view(theme: &Theme, rows: &[Row], windows: &[Window]) -> View {
     let mut list = view::col(list_key())
         .width(LIST_W)
-        .padding(PAD)
-        .gap(ROW_GAP);
+        .padding_sides(TOP_PAD, PAD, PAD)
+        .gap(ROW_GAP)
+        .child(subtitle(
+            theme,
+            &workspaces::face(),
+            copy::WORKSPACES_FALLBACK,
+            None,
+        ));
     for row in rows {
         list = list.child(row_view(theme, row, windows));
     }
@@ -266,7 +276,15 @@ mod tests {
         ];
         let v = workspaces_view(&theme, &rows, &[]);
         let keys: Vec<Key> = v.children.iter().map(|c| c.key).collect();
-        assert_eq!(keys, [row_key(7), row_key(3), row_key(9)]);
+        assert_eq!(
+            keys,
+            [
+                crate::sheet::subtitle::row_key(),
+                row_key(7),
+                row_key(3),
+                row_key(9)
+            ]
+        );
         let mut tree = Tree::new(false, &theme);
         tree.apply(v, Instant::now());
         tree.layout_measured((LIST_W, 560.0), |s: &str, _: &TextStyle, _| {
@@ -275,7 +293,10 @@ mod tests {
         let rect = |k| tree.rect(tree.node_by_key(k).expect("node"));
         let root = rect(list_key());
         assert_eq!(root.w, 240.0);
-        assert_eq!(root.h, 3.0 * 40.0 + 2.0 * 2.0 + 2.0 * 8.0);
+        assert_eq!(root.h, list_size(3).1);
+        let sub = rect(crate::sheet::subtitle::row_key());
+        assert_eq!((sub.y, sub.h), (4.0, SUBTITLE_H));
+        assert_eq!(rect(row_key(7)).y, sub.y + sub.h + ROW_GAP);
         for id in [7, 3, 9] {
             let r = rect(row_key(id));
             assert_eq!((r.w, r.h), (224.0, 40.0), "row {id}");

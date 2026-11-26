@@ -8,7 +8,7 @@ use celestina_ui::{Key, View};
 
 use super::{
     conn_glyph::{self, ICON},
-    BarCx, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput,
+    BarCx, Face, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput,
 };
 use crate::{
     copy,
@@ -67,6 +67,16 @@ fn glance_of(section: &NetSection) -> Glance {
     }
 }
 
+/// The icon the glance is drawn with, and the subtitle repeats.
+fn glance_icon(glance: Glance) -> &'static str {
+    match glance {
+        Glance::Wifi(_) | Glance::Connecting | Glance::Idle => "wifi",
+        Glance::Ethernet => "link",
+        Glance::Vpn => "cloud",
+        Glance::WifiOff => "unplug",
+    }
+}
+
 impl Piece for Network {
     fn id(&self) -> PieceId {
         PieceId("network")
@@ -84,13 +94,31 @@ impl Piece for Network {
                 glyph,
                 signal_bars("network", signal, ICON * 0.7, Role::TextHi, Role::TextFaint),
             ),
-            Glance::Ethernet => conn_glyph::icon(glyph, "link", Role::TextHi),
-            Glance::Vpn => conn_glyph::icon(glyph, "cloud", Role::TextHi),
-            Glance::Connecting => conn_glyph::icon(glyph, "wifi", Role::Accent),
-            Glance::Idle => conn_glyph::icon(glyph, "wifi", Role::TextFaint),
-            Glance::WifiOff => conn_glyph::icon(glyph, "unplug", Role::TextFaint),
+            Glance::Ethernet => {
+                conn_glyph::icon(glyph, glance_icon(Glance::Ethernet), Role::TextHi)
+            }
+            Glance::Vpn => conn_glyph::icon(glyph, glance_icon(Glance::Vpn), Role::TextHi),
+            Glance::Connecting => {
+                conn_glyph::icon(glyph, glance_icon(Glance::Connecting), Role::Accent)
+            }
+            Glance::Idle => conn_glyph::icon(glyph, glance_icon(Glance::Idle), Role::TextFaint),
+            Glance::WifiOff => {
+                conn_glyph::icon(glyph, glance_icon(Glance::WifiOff), Role::TextFaint)
+            }
         };
         Some(conn_glyph::tap(cx.theme, node_key(), [child]))
+    }
+
+    /// The glyph the bar shows (the Wi-Fi bars, drawn from boxes, read as the
+    /// `wifi` icon); the page's icon while the service has no reading.
+    fn face(&self, cx: &BarCx<'_>) -> Option<Face> {
+        let icon = cx
+            .connectivity
+            .network()
+            .ready()
+            .copied()
+            .map_or("wifi", |section| glance_icon(glance_of(section)));
+        Some(Face { icon, text: None })
     }
 
     fn page(&self) -> Option<PageEntry> {
@@ -271,5 +299,22 @@ mod tests {
     fn the_piece_opens_the_network_page() {
         assert_eq!(Network.page().map(|e| e.id), Some(PageId::NETWORK));
         assert_eq!(Network.id().as_str(), "network");
+    }
+
+    #[test]
+    fn the_face_shows_the_glyph_the_bar_shows() {
+        let section = NetSection::new(
+            true,
+            false,
+            [row(NetKind::Ethernet, NetState::Connected, "WIRED")],
+        );
+        let state = state_with(section);
+        let icon = with_state(&state, |cx| Network.face(cx).map(|f| f.icon));
+        assert_eq!(icon, Some("link"));
+        // No reading yet: the page's own icon.
+        let none = with_state(&ConnectivityState::default(), |cx| {
+            Network.face(cx).map(|f| f.icon)
+        });
+        assert_eq!(none, Some("wifi"));
     }
 }

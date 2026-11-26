@@ -155,7 +155,12 @@ impl Tree {
     fn start_slides(&mut self) {
         let at = self.applied_at;
         let reduced = self.spatial();
-        let normal = self.duration(Motion::Normal);
+        let next = self.slide_next.take();
+        let (normal, easing) = match &next {
+            Some(n) => (n.duration, n.easing),
+            None => (self.duration(Motion::Normal), ONE_UI.into()),
+        };
+        let still = next.map(|n| n.still).unwrap_or_default();
         let mut stack: Vec<(NodeId, (f32, f32))> =
             self.roots.iter().map(|&r| (r, (0.0, 0.0))).collect();
         while let Some((id, parent_moved)) = stack.pop() {
@@ -166,15 +171,22 @@ impl Tree {
                 // Out of layout: its frozen rects did not move.
                 continue;
             }
+            let jumps = still.contains(&slot.key);
             let moved = slot.moved_from.take().map_or(parent_moved, |old| {
                 (old.x - slot.rect.x, old.y - slot.rect.y)
             });
-            let own = (moved.0 - parent_moved.0, moved.1 - parent_moved.1);
+            // A node that jumps carries nothing: its children slide from
+            // where they were drawn, measured from its new place.
+            let (moved, own) = if jumps {
+                ((0.0, 0.0), (0.0, 0.0))
+            } else {
+                (moved, (moved.0 - parent_moved.0, moved.1 - parent_moved.1))
+            };
             for (axis, d) in [(&mut slot.offset_x, own.0), (&mut slot.offset_y, own.1)] {
                 if d != 0.0 && d.is_finite() {
                     let from = axis.value(at) + d;
                     axis.set(from);
-                    axis.animate_to(0.0, normal, ONE_UI, at, reduced);
+                    axis.animate_to(0.0, normal, easing, at, reduced);
                 }
             }
             stack.extend(slot.children.iter().map(|&c| (c, moved)));
@@ -218,7 +230,10 @@ impl Tree {
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::Cell, time::Instant};
+    use std::{
+        cell::Cell,
+        time::{Duration, Instant},
+    };
 
     use celestina_paint::TextStyle;
 
@@ -226,9 +241,11 @@ mod tests {
 
     use super::*;
     use crate::{
+        curve::Easing,
         key::Key,
         testing::{body, card, card_with_rows, fake_measure, id, row_key, row_view, AVAILABLE},
         view,
+        view::View,
     };
 
     fn assert_rect(got: Rect, want: (f32, f32, f32, f32)) {
@@ -461,6 +478,94 @@ mod tests {
         tree.apply(with_last(true), t0);
         tree.layout_measured(AVAILABLE, fake_measure);
         tree.apply(with_last(false), t0);
+        tree.layout_measured(AVAILABLE, fake_measure);
+        assert_eq!(tree.offset(id(&tree, row_key(2)), t0), (0.0, 0.0));
+        assert!(!tree.is_animating(t0));
+    }
+
+    /// A capsule of three 30 px pieces (10 px padding, 8 px gap) at `x`,
+    /// the one `hide` hidden, as wide as what it holds.
+    fn capsule(hide: Option<u64>, x: f32) -> View {
+        let shown = if hide.is_some() { 2.0 } else { 3.0 };
+        let w = 20.0 + 30.0 * shown + 8.0 * (shown - 1.0);
+        view::row(Key::named("root")).size(760.0, 560.0).child(
+            view::row(Key::named("cap"))
+                .absolute(x, 8.0)
+                .width(w)
+                .height(40.0)
+                .padding_xy(10.0, 0.0)
+                .gap(8.0)
+                .children((0..3).map(|i| {
+                    view::row(row_key(i))
+                        .size(30.0, 40.0)
+                        .hidden(hide == Some(i))
+                })),
+        )
+    }
+
+    #[test]
+    fn slide_with_runs_the_next_slides_on_its_own_curve_once() {
+        let t0 = Instant::now();
+        let spring = Duration::from_millis(350);
+        let mut tree = Tree::new(false, &Theme::dark());
+        tree.apply(capsule(None, 100.0), t0);
+        tree.layout_measured(AVAILABLE, fake_measure);
+        tree.slide_with(spring, Easing::OutBack(1.15), &[]);
+        tree.apply(capsule(Some(1), 100.0), t0);
+        tree.layout_measured(AVAILABLE, fake_measure);
+        let last = id(&tree, row_key(2));
+        // The piece after the hidden one moves 38 px left (width and gap).
+        assert_eq!(tree.offset(last, t0), (38.0, 0.0));
+        let half = t0 + spring / 2;
+        let k = Easing::OutBack(1.15).eval(0.5);
+        let (x, _) = tree.offset(last, half);
+        assert!((x - 38.0 * (1.0 - k)).abs() < 0.01, "{x} vs {k}");
+        assert!(tree.is_animating(t0 + Duration::from_millis(349)));
+        assert!(!tree.is_animating(t0 + spring));
+        // The override was taken: the next slide is the usual one.
+        let t1 = t0 + spring;
+        tree.apply(capsule(None, 100.0), t1);
+        tree.layout_measured(AVAILABLE, fake_measure);
+        let normal = Motion::Normal.duration(&Theme::dark().motion);
+        assert!(tree.is_animating(t1 + normal - Duration::from_millis(1)));
+        assert!(!tree.is_animating(t1 + normal));
+    }
+
+    #[test]
+    fn a_still_node_jumps_and_its_children_slide_from_where_they_were() {
+        let t0 = Instant::now();
+        let spring = Duration::from_millis(350);
+        let cap = Key::named("cap");
+        let mut tree = Tree::new(false, &Theme::dark());
+        tree.apply(capsule(None, 100.0), t0);
+        tree.layout_measured(AVAILABLE, fake_measure);
+        // The capsule narrows and moves right (an end capsule): it jumps.
+        tree.slide_with(spring, Easing::OutBack(1.15), &[cap]);
+        tree.apply(capsule(Some(0), 138.0), t0);
+        tree.layout_measured(AVAILABLE, fake_measure);
+        assert_eq!(tree.offset(id(&tree, cap), t0), (0.0, 0.0));
+        // Piece 1 was at 118 and is at 148 + 10 - 38 + ... : it is drawn
+        // where it was.
+        let moved = id(&tree, row_key(1));
+        let rect = tree.rect(moved);
+        assert_eq!(rect.x + tree.offset(moved, t0).0, 100.0 + 10.0 + 38.0);
+        // Without `still` the capsule would slide too.
+        let mut plain = Tree::new(false, &Theme::dark());
+        plain.apply(capsule(None, 100.0), t0);
+        plain.layout_measured(AVAILABLE, fake_measure);
+        plain.apply(capsule(Some(0), 138.0), t0);
+        plain.layout_measured(AVAILABLE, fake_measure);
+        assert_eq!(plain.offset(id(&plain, cap), t0), (-38.0, 0.0));
+    }
+
+    #[test]
+    fn reduced_motion_makes_a_slide_with_a_step() {
+        let t0 = Instant::now();
+        let mut tree = Tree::new(true, &Theme::dark());
+        tree.apply(capsule(None, 100.0), t0);
+        tree.layout_measured(AVAILABLE, fake_measure);
+        tree.slide_with(Duration::from_millis(350), Easing::OutBack(1.15), &[]);
+        tree.apply(capsule(Some(1), 100.0), t0);
         tree.layout_measured(AVAILABLE, fake_measure);
         assert_eq!(tree.offset(id(&tree, row_key(2)), t0), (0.0, 0.0));
         assert!(!tree.is_animating(t0));

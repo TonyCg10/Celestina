@@ -884,9 +884,6 @@ pub const PIECE_VOLUME: &str = "Volumen";
 /// ("Brightness").
 pub const PIECE_BRIGHTNESS: &str = "Brillo";
 
-/// The brightness sheet's heading for every monitor at once ("All").
-pub const BRIGHTNESS_ALL: &str = "Todos";
-
 /// The name of a monitor that shares its model with another, with its
 /// connector to tell them apart ("LG ULTRAGEAR+ (DP-1)").
 #[must_use]

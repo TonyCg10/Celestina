@@ -9,7 +9,7 @@ use celestina_shell::connectivity::Action;
 use celestina_ui::{Key, View};
 
 use super::{
-    conn_glyph, BarCx, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput,
+    conn_glyph, BarCx, Face, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput,
 };
 use crate::{copy, island::pages::power::profile_icon};
 
@@ -19,6 +19,12 @@ pub struct PowerProfile;
 
 fn node_key() -> Key {
     Key::named("power-profile")
+}
+
+/// The glyph of the active profile, when the daemon names one.
+fn active_icon(cx: &BarCx<'_>) -> Option<&'static str> {
+    let section = cx.connectivity.profiles().ready().copied()?;
+    Some(profile_icon(section.active()?.as_str()))
 }
 
 impl Piece for PowerProfile {
@@ -33,17 +39,26 @@ impl Piece for PowerProfile {
     /// Absent while the daemon is, and while it names no valid active
     /// profile (there is nothing to show).
     fn bar(&self, cx: &BarCx<'_>) -> Option<View> {
-        let section = cx.connectivity.profiles().ready().copied()?;
-        let active = section.active()?;
+        let icon = active_icon(cx)?;
         Some(conn_glyph::tap(
             cx.theme,
             node_key(),
             [conn_glyph::icon(
                 Key::named("power-profile-glyph"),
-                profile_icon(active.as_str()),
+                icon,
                 Role::TextHi,
             )],
         ))
+    }
+
+    /// The active profile's glyph (the Power page's own while there is
+    /// none) and no text: a click opens the Power page as a sheet.
+    fn face(&self, cx: &BarCx<'_>) -> Option<Face> {
+        let face = Face::of_page(PageId::POWER, None)?;
+        Some(Face {
+            icon: active_icon(cx).unwrap_or(face.icon),
+            ..face
+        })
     }
 
     /// No page of its own: the Power page is the battery piece's.

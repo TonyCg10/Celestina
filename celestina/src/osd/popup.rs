@@ -46,10 +46,11 @@ use super::monitor_rows::{
 };
 use super::readings::Target;
 use crate::island::menu::SharedPainter;
+use crate::sheet::subtitle::{subtitle, SUBTITLE_H};
 use crate::{
     copy,
     island::view::{centred, switch, text_style},
-    pieces::Levels,
+    pieces::{brightness::Brightness, volume::Volume, Levels},
     providers::{
         audio::{AudioCommand, Device},
         brightness::{BrightnessCommand, Change},
@@ -228,6 +229,17 @@ pub(super) fn heading_h(theme: &Theme) -> f32 {
     theme.row_height
 }
 
+/// The subtitle row that starts a level body (CEL-D-008): the piece's icon
+/// and level, as the bar shows them. It replaces the output's (and the
+/// brightness') heading row.
+pub(super) fn level_subtitle(theme: &Theme, kind: Kind, levels: Levels) -> View {
+    let (face, name) = match kind {
+        Kind::Volume => (Volume::face_of(levels), copy::PIECE_VOLUME),
+        Kind::Brightness => (Brightness::face_of(levels), copy::PIECE_BRIGHTNESS),
+    };
+    subtitle(theme, &face, name, None)
+}
+
 pub(super) fn slider_h(theme: &Theme) -> f32 {
     theme.slider_handle_size + 2.0 * slider::MARGIN
 }
@@ -237,7 +249,7 @@ pub(super) fn slider_h(theme: &Theme) -> f32 {
 /// section the same way; then the applications' list.
 fn children_h(theme: &Theme, kind: Kind, microphone: bool, shape: Shape) -> Vec<f32> {
     let lists = Lists::of(kind, microphone, shape);
-    let mut heights = vec![heading_h(theme), slider_h(theme)];
+    let mut heights = vec![SUBTITLE_H, slider_h(theme)];
     if kind == Kind::Volume {
         heights.push(theme.row_height);
         if lists.outputs > 0 {
@@ -363,17 +375,7 @@ pub fn card(
         Kind::Volume => {
             let out = levels.audio.output;
             card = card
-                .child(heading(
-                    theme,
-                    "level-heading-output",
-                    if out.is_some_and(|l| l.muted) {
-                        "media-volume-muted"
-                    } else {
-                        "media-volume"
-                    },
-                    copy::PIECE_VOLUME,
-                    out.map_or(0, |l| l.percent),
-                ))
+                .child(level_subtitle(theme, kind, levels))
                 .child(level_slider(
                     Control::Output,
                     out.map(|l| l.percent),
@@ -441,13 +443,7 @@ pub fn card(
         }
         Kind::Brightness => {
             card = card
-                .child(heading(
-                    theme,
-                    "level-heading-brightness",
-                    "sun",
-                    copy::PIECE_BRIGHTNESS,
-                    levels.brightness.unwrap_or(0),
-                ))
+                .child(level_subtitle(theme, kind, levels))
                 .child(level_slider(Control::Brightness, levels.brightness, false));
         }
     }
@@ -608,7 +604,7 @@ impl LevelCore {
         let mut tree = Tree::new(reduced, theme);
         tree.apply(
             if monitors.is_multi() {
-                monitors_card(theme, &monitors)
+                monitors_card(theme, &monitors, shown)
             } else {
                 card(
                     theme,
@@ -700,7 +696,7 @@ impl LevelCore {
 
     fn rebuild(&mut self, now: Instant) {
         let view = if self.monitors.is_multi() {
-            monitors_card(&self.theme, &self.monitors)
+            monitors_card(&self.theme, &self.monitors, self.shown)
         } else {
             card(
                 &self.theme,
@@ -820,8 +816,14 @@ impl LevelCore {
     }
 
     /// Paints the card at its own coordinates.
-    pub fn paint(&mut self, painter: &mut celestina_paint::Painter, now: Instant) {
-        self.tree.paint(painter, now);
+    pub fn paint(&mut self, painter: &mut celestina_paint::Painter, now: Instant, hidden: &[Key]) {
+        self.tree.paint_hiding(painter, now, hidden);
+    }
+
+    /// The card's tree (the sheet reads its subtitle's place from it).
+    #[must_use]
+    pub fn tree(&self) -> &Tree {
+        &self.tree
     }
 
     /// Whether the card's own animations (hover, a handle) still run.
@@ -1421,7 +1423,7 @@ mod tests {
         assert_eq!(rig.core.size(), single);
         let card = rect_of(&rig.core, card_key());
         assert_eq!((card.w, card.h), single);
-        let first = rect_of(&rig.core, Key::named("level-heading-brightness"));
+        let first = rect_of(&rig.core, crate::sheet::subtitle::row_key());
         assert_eq!(first.y, theme.spacing.xs);
         // Several monitors: the list is the same 320 wide, padded the same.
         let feed = MonitorFeed {
@@ -1445,7 +1447,7 @@ mod tests {
         assert_eq!(listed.core.size(), size);
         let card = rect_of(&listed.core, card_key());
         assert_eq!((card.w, card.h), size);
-        let first = rect_of(&listed.core, Key::named("level-heading-all"));
+        let first = rect_of(&listed.core, crate::sheet::subtitle::row_key());
         assert_eq!(first.y, theme.spacing.xs);
         let rows = rect_of(&listed.core, Key::named("level-monitors"));
         assert_eq!(rows.y + rows.h + theme.spacing.md, size.1);
@@ -1468,7 +1470,7 @@ mod tests {
             assert_eq!((card.x, card.y, card.w, card.h), (0.0, 0.0, size.0, size.1));
             // The rows: the space above is `xs`, the space below `md`, and
             // the first row starts at the top padding.
-            let first = rect_of(&rig.core, Key::named("level-heading-output"));
+            let first = rect_of(&rig.core, crate::sheet::subtitle::row_key());
             assert_eq!(first.y, theme.spacing.xs);
             assert_eq!(first.x, theme.spacing.md);
             let last = [Key::named("level-mute-output"), mute_key(Control::Input)]
@@ -1492,6 +1494,70 @@ mod tests {
         assert!(
             body_size(&theme, Kind::Volume, true, shape).1
                 > body_size(&theme, Kind::Volume, false, shape).1
+        );
+    }
+
+    /// The text of the node `key` of `view`.
+    fn text_in(view: &View, key: Key) -> Option<String> {
+        if view.key == key {
+            if let celestina_ui::ViewKind::Text { text, .. } = &view.kind {
+                return Some(text.clone());
+            }
+        }
+        view.children.iter().find_map(|c| text_in(c, key))
+    }
+
+    #[test]
+    fn the_level_body_has_a_subtitle_and_no_heading_row_for_its_own_level() {
+        use crate::sheet::subtitle::{row_key, text_key, SUBTITLE_H};
+        let theme = Theme::dark();
+        let mic = rig_with(
+            Kind::Volume,
+            audio(Some((30, false)), Some((80, false))),
+            full_graph(),
+        );
+        let single = rig(Kind::Brightness, brightness(Some(60)));
+        for rig in [&mic, &single] {
+            let first = rect_of(&rig.core, row_key());
+            assert_eq!((first.y, first.h), (theme.spacing.xs, SUBTITLE_H));
+            for gone in ["level-heading-output", "level-heading-brightness"] {
+                assert!(rig.core.tree.node_by_key(Key::named(gone)).is_none());
+            }
+        }
+        // The microphone keeps its own heading, under the output's rows.
+        assert!(mic
+            .core
+            .tree
+            .node_by_key(Key::named("level-heading-input"))
+            .is_some());
+        // The height is the subtitle, the rows and the gaps, as before.
+        let heights = children_h(&theme, Kind::Brightness, false, Shape::default());
+        assert_eq!(heights[0], SUBTITLE_H);
+        assert_eq!(
+            single.core.size().1,
+            theme.spacing.xs + SUBTITLE_H + theme.spacing.sm + slider_h(&theme) + theme.spacing.md
+        );
+        assert_eq!(
+            text_in(&shown_card(&single.core), text_key()).as_deref(),
+            Some(copy::osd_percent(60).as_str())
+        );
+    }
+
+    #[test]
+    fn the_volume_subtitle_shows_the_live_percent() {
+        use crate::sheet::subtitle::text_key;
+        let mut rig = rig(Kind::Volume, audio(Some((30, false)), None));
+        let shown = |rig: &Rig| text_in(&shown_card(&rig.core), text_key());
+        assert_eq!(shown(&rig).as_deref(), Some(copy::osd_percent(30).as_str()));
+        // The volume moves while the sheet is open.
+        rig.cell.set(audio(Some((64, false)), None));
+        assert!(rig.core.sync(&Theme::dark(), Instant::now(), cut));
+        assert_eq!(shown(&rig).as_deref(), Some(copy::osd_percent(64).as_str()));
+        // No reading: the menu's name.
+        let none = rig_with(Kind::Volume, audio(None, None), AudioGraph::default());
+        assert_eq!(
+            text_in(&shown_card(&none.core), text_key()).as_deref(),
+            Some(copy::PIECE_VOLUME)
         );
     }
 
@@ -2718,7 +2784,7 @@ mod tests {
         assert_eq!((card.x, card.y, card.w, card.h), (0.0, 0.0, size.0, size.1));
         // All, the divider, then the rows in order, each inside the card.
         let ys = [
-            y_of(&rig.core, Key::named("level-heading-all")),
+            y_of(&rig.core, crate::sheet::subtitle::row_key()),
             y_of(&rig.core, slider_key(Control::AllMonitors)),
             y_of(&rig.core, Key::named("level-monitors-divider")),
             y_of(&rig.core, Key::indexed("level-monitor-row", 0)),

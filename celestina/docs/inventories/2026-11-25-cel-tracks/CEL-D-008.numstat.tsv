@@ -1,0 +1,117 @@
+# CEL-D-008 exact change inventory
+
+Base revision	acaa31b1f17994a025e068bb0cf4f06603e10608
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-ui/src/input.rs
+Pathspec	celestina/crates/celestina-ui/src/layout.rs
+Pathspec	celestina/crates/celestina-ui/src/paint.rs
+Pathspec	celestina/crates/celestina-ui/src/tree.rs
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row.md
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/bar-rest.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/close-mid.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/open-mid.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/open-volume.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/session-close-mid.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/session-rest.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/switch-to-session.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/sysmon-open-mid.jpg
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/sysmon-switch-to-session.jpg
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-008.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/bar/view.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/island/bar_tree.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/page_sheets.rs
+Pathspec	celestina/src/island/sheets.rs
+Pathspec	celestina/src/island/tests/flight.rs
+Pathspec	celestina/src/island/tests/page_sheets.rs
+Pathspec	celestina/src/island/view.rs
+Pathspec	celestina/src/osd/monitor_rows.rs
+Pathspec	celestina/src/osd/popup.rs
+Pathspec	celestina/src/pieces/brightness.rs
+Pathspec	celestina/src/pieces/clock.rs
+Pathspec	celestina/src/pieces/level.rs
+Pathspec	celestina/src/pieces/media.rs
+Pathspec	celestina/src/pieces/mod.rs
+Pathspec	celestina/src/pieces/network.rs
+Pathspec	celestina/src/pieces/notifications.rs
+Pathspec	celestina/src/pieces/phone.rs
+Pathspec	celestina/src/pieces/power_profile.rs
+Pathspec	celestina/src/pieces/session.rs
+Pathspec	celestina/src/pieces/sysmon.rs
+Pathspec	celestina/src/pieces/tray.rs
+Pathspec	celestina/src/pieces/volume.rs
+Pathspec	celestina/src/pieces/weather.rs
+Pathspec	celestina/src/pieces/workspaces.rs
+Pathspec	celestina/src/session_menu/mod.rs
+Pathspec	celestina/src/session_menu/view.rs
+Pathspec	celestina/src/sheet/body.rs
+Pathspec	celestina/src/sheet/flight.rs
+Pathspec	celestina/src/sheet/geometry.rs
+Pathspec	celestina/src/sheet/mod.rs
+Pathspec	celestina/src/sheet/motion.rs
+Pathspec	celestina/src/sheet/subtitle.rs
+Pathspec	celestina/src/sheet/workspaces.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	5d74957284745ee4a6e5d6e72034829fb3715f66d5974fc96f089e3c188353a5	celestina/Cargo.lock
+1	1	481537d7976f2f27480dcc7dc3c713c162d231b710f880097396b25977ab4757	celestina/Cargo.toml
+36	0	93a4211a937726e0bda9f7db45c68fb1bc2914f07e6d82f68bac223ebcd5dd28	celestina/VALIDATION.md
+24	3	a278e6829a405976b13b74a89a5b9a91a9e5ac822bfa7241584cd6b0c6152bf9	celestina/crates/celestina-ui/src/input.rs
+109	4	b05de54ebec3c900df1e90a6955db7a23a6554c97f8c6aa6b8e929157a0fd553	celestina/crates/celestina-ui/src/layout.rs
+220	117	4c14acb3990b3a100819761202b4629a273b0219730ec47de196485a03080192	celestina/crates/celestina-ui/src/paint.rs
+58	1	fa318e0ce69e9a67a8f479df45bfc5fc2674b0e6ec60d0e00c74f4e5618d3819	celestina/crates/celestina-ui/src/tree.rs
+65	0	eee373c34283bf9579e7199b666d8ab8fd84db837192f97965c7f8b22b2bc342	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row.md
+-	-	cf7404e1ff58bebc02e776952e406758a5212493ba7e033f9cc5d2927ddd1075	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/bar-rest.jpg
+-	-	acd806a050fbf2b1b9cd12aff324fecebc64b75f49608fe2565263955af500f1	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/close-mid.jpg
+-	-	8ad502b8461f0632f476f939eab46c02f6c56d5825c4f0f536efc5cd4acaa942	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/open-mid.jpg
+-	-	103a2ab688e5ec453e71f2594aa818160b828e9e754a940c782298751f0d9f13	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/open-volume.jpg
+-	-	39552128dbb5bfa5ae23c0af6cd9893ce716ac36fe12e3e46bf78e52cce33d1e	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/session-close-mid.jpg
+-	-	274cf49fed149eaa49b34608684e83597c04b50d9b82e5049fbe6cefe77e7e9a	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/session-rest.jpg
+-	-	33a025056c412c6edc178d191c345c13fc02e774c7282c4f5a406bec4d5a73f8	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/switch-to-session.jpg
+-	-	38947c3eedd3efd9b497384d9d8ae0e117c17dcf596751dddb220200f4baeca8	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/sysmon-open-mid.jpg
+-	-	744fa15305a3b5149a7892d9d6c3518322236420946b8672c3cfa472cd82b3d6	celestina/docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row/sysmon-switch-to-session.jpg
+117	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-008.numstat.tsv
+1	0	0aa41b63b1eca34b58433be10f091f85048df92103001450a1399ef64553c3d1	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+29	0	63e00692fa7ba0af482fddbc2f4bf5b5d86c65cff3e1a031a067975395ad4562	celestina/src/bar/view.rs
+0	3	3fd79b33b345abe4948bbc4c5c592149752ebd08e10cc280cc74a444b6d058c3	celestina/src/copy.rs
+752	63	c3803b2a9f26c4df419d48b4a6b8d8881a03bd04105679bc071cbb1316d6a4eb	celestina/src/island/bar_tree.rs
+237	61	b4c568d33c7c27be2209bc54be8041b37e7884304f36490a0777594043e4554c	celestina/src/island/mod.rs
+34	11	38f5fa649849635351fe6780c1a9721e4092bbb1b73d83234d1a609f70c399f0	celestina/src/island/page_sheets.rs
+146	23	f08e231090e41a81546bc5ed74e305c7ece22a2c9b6defee59adad12e4a518e4	celestina/src/island/sheets.rs
+541	0	dd5a69bcb12caf34b43a4d270aa0ef2b4d6bf13e0b528bc28858d43b68011b2b	celestina/src/island/tests/flight.rs
+58	40	5478ce8a5ae3b880b08bfd374cf73078df589cf1d7934f2b38cf38e1a338e9b2	celestina/src/island/tests/page_sheets.rs
+66	36	2827348600b8ac3c28632bac3bbe8f802275658e94c7752f589a3e794c5662e5	celestina/src/island/view.rs
+9	13	ae07d29ed67bc5df14f6685cb7de1a5accae18bd1ba91f2d77dc985fda01aa56	celestina/src/osd/monitor_rows.rs
+94	28	6e80a05decaf62283fe260d43841a6c0d9d97d0f02219ffe9eee2d3f0ef775a8	celestina/src/osd/popup.rs
+18	2	01d62f1db4ae79e840613cfe8d6225e621fcb93d86ab08b6d0d73650e225bf3f	celestina/src/pieces/brightness.rs
+11	2	9e4095c1dae8bbe5b20a7f7876bfbfef1745ef9ec77bcb5c3ad5ebbc7a24966f	celestina/src/pieces/clock.rs
+7	1	773c9c2e29876e34a3c7daeee9e284ad99511ad86fdf2a6d252317ebb3ee3762	celestina/src/pieces/level.rs
+22	2	b383fb7711c639f7560af50b57ddb26d3b5d84e8e06b7ff35c33a1d2b1159522	celestina/src/pieces/media.rs
+136	0	d0766900a7519b0d9ebb8c2b0dba8fd95762d4e37bc8718ad4e6a0fa5617df65	celestina/src/pieces/mod.rs
+51	6	b2967e1e3ee32b38827641e73fe87a6cd21fffcab307011ad349fe71f20fca10	celestina/src/pieces/network.rs
+26	6	0affd75d90a365510490d51f31306f013ab93050b2a30b97e30723f2cc94568c	celestina/src/pieces/notifications.rs
+21	2	bbc4ef4dbda80cb287649d70f19385be6cfab61ef0ba67013f8f157a32ab5782	celestina/src/pieces/phone.rs
+19	4	fe2b63caf014e3e913146e434d4ec99f0c13d2476382ddb56f93a445ccc77ed8	celestina/src/pieces/power_profile.rs
+19	2	f5aaf63a6de201e6f01cdebc16683ae90c00c7e038062792e2af7c8609198714	celestina/src/pieces/session.rs
+11	2	b1766586122c88796f79610e67051ee24d42443241b5cd5ca64d011c0e98125e	celestina/src/pieces/sysmon.rs
+9	1	498b46c748b7ae8a0abd888015994a73db5ba48c2ffceb162474ffb69e016f38	celestina/src/pieces/tray.rs
+42	10	8d1bb4f3c2a16a43543fc43baa89f2e0341eaedc79b93e0a2bf68d04c690b3c3	celestina/src/pieces/volume.rs
+19	2	2279dfe30ccaa35ae9e3af077a104c3ad2d5dcd0b83db96ef36f2475efa13b0b	celestina/src/pieces/weather.rs
+18	1	92d791b1a0d368ed2d801182a24b14363948a463d5c320dd4cc7d718b86aab3d	celestina/src/pieces/workspaces.rs
+14	3	573d743f1c272fa04cdb2ac3cd78a297491023a3f4589712af80403bbcc7fde1	celestina/src/session_menu/mod.rs
+7	3	653c1d5d296d53e8d96528b8125aaac35ff2fe9f9ccde39c55ea31ee29138575	celestina/src/session_menu/view.rs
+19	7	bcc20f7eb514e946351574d139949e1559913d91fdddcbb3734eb37a765c7f08	celestina/src/sheet/body.rs
+516	0	7eb077e19a61fd17a2a467f70c702c5a73d14e82149d402e3403dbc97beb9343	celestina/src/sheet/flight.rs
+79	87	c4062bd948613782d269f3453c0cf6dcf76c8133dee66ed505fa388f0f756183	celestina/src/sheet/geometry.rs
+409	72	e5876f854d2a73b5b0272a535395d642d81bbc3b42b59f2edde5ef8ac8235292	celestina/src/sheet/mod.rs
+117	191	f879594df84df986a3f5d112ca476caf99a0c37775550f14c176455c02688552	celestina/src/sheet/motion.rs
+181	0	3d6155933503b361c70e9fd25d8aeb0c9a58a9c1028df088d128d99a6e3a74b9	celestina/src/sheet/subtitle.rs
+29	8	2cba38d113df1c06d95dc6c70254e5aff180fe586389870c35ea024e6f557d6d	celestina/src/sheet/workspaces.rs
+1	0	828aabdff20d624b18496c2781d0ed4ff80796ecba09c22a6c340c887ce1e6d3	docs/version-history.tsv

@@ -449,7 +449,8 @@ pub(crate) fn focus_order(tree: &Tree) -> Vec<NodeId> {
 /// The topmost interactive node under (`x`, `y`): the last in paint order
 /// whose laid-out rect holds the point, inside every ancestor's clip, drawn
 /// with an effective opacity above 0 at `now`, and neither hidden nor in a
-/// leaving subtree. Slides and the recoil scale are visual only.
+/// leaving subtree. Slides and the recoil scale are visual only, unless the
+/// tree asks to hit what is painted ([`Tree::set_hit_painted`]).
 pub(crate) fn hit(tree: &Tree, x: f32, y: f32, now: Instant) -> Option<NodeId> {
     let mut found = None;
     let mut stack: Vec<(NodeId, Option<Rect>, f32)> =
@@ -463,11 +464,16 @@ pub(crate) fn hit(tree: &Tree, x: f32, y: f32, now: Instant) -> Option<NodeId> {
         }
         let opacity = parent_opacity * slot.opacity.value(now);
         let inside_clip = clip.is_none_or(|c| c.contains(x, y));
-        if slot.interactive && opacity > 0.0 && inside_clip && slot.rect.contains(x, y) {
+        let rect = if tree.hit_painted {
+            tree.painted_rect(id, now)
+        } else {
+            slot.rect
+        };
+        if slot.interactive && opacity > 0.0 && inside_clip && rect.contains(x, y) {
             found = Some(id);
         }
         let child_clip = if slot.clip && matches!(slot.kind, ViewKind::Box { .. }) {
-            Some(clip.map_or(slot.rect, |c| intersect(c, slot.rect)))
+            Some(clip.map_or(rect, |c| intersect(c, rect)))
         } else {
             clip
         };
@@ -563,6 +569,21 @@ mod tests {
 
     fn hover(i: u64, on: bool) -> UiEvent {
         UiEvent::HoverChanged(row_key(i), on)
+    }
+
+    #[test]
+    fn a_tree_that_hits_what_is_painted_follows_the_slides() {
+        let (mut tree, _, rows) = card_with_rows();
+        let t0 = Instant::now();
+        if let Some(slot) = tree.slot_mut(rows[0]) {
+            slot.offset_y = crate::anim::Animated::new(130.0);
+        }
+        // Slides are visual only by default.
+        assert_eq!(hit(&tree, 100.0, 25.0, t0), Some(rows[0]));
+        assert_eq!(hit(&tree, 100.0, 170.0, t0), None);
+        tree.set_hit_painted(true);
+        assert_eq!(hit(&tree, 100.0, 25.0, t0), None);
+        assert_eq!(hit(&tree, 100.0, 170.0, t0), Some(rows[0]));
     }
 
     // Rows are at y 20..60, 60..100, 100..140 and x 20..280.

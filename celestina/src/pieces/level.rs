@@ -18,6 +18,12 @@ const HIT_PAD: f32 = 5.0;
 /// The space between the icon and the percentage.
 const GAP: f32 = 4.0;
 
+/// The level as the bar writes it and the sheet's subtitle repeats it: one
+/// function, so the two never differ.
+pub(super) fn percent_text(percent: u8) -> String {
+    copy::osd_percent(percent.min(100))
+}
+
 /// The widget of the piece `id`: `icon` and `percent`, the text faint while
 /// `muted` (the level is the one the device remembers). Every node is keyed
 /// from `id`, the widget's own node as `id` itself: two pieces share this
@@ -40,7 +46,7 @@ pub(super) fn widget(
         .child(view::icon(Key::named(&format!("{id}-icon")), icon, ICON).tint(role))
         .child(view::text(
             Key::named(&format!("{id}-percent")),
-            &copy::osd_percent(percent.min(100)),
+            &percent_text(percent),
             text_style(cx.theme.type_scale.body, Weight::Regular, true, role),
         ))
 }

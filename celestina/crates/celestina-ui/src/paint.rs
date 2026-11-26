@@ -19,7 +19,7 @@ use std::time::Instant;
 use celestina_paint::{Painter, Rect, Role, Theme};
 
 use crate::{
-    highlight::{box_fill, box_wash, focus_ring, Highlight, FOCUS_WIDTH},
+    highlight::{box_fill, box_wash, focus_ring, FOCUS_WIDTH},
     slider::{self, SliderPaint},
     tree::{NodeId, Scope, Slot, Tree, Visit},
     view::ViewKind,
@@ -42,42 +42,113 @@ impl Tree {
     /// to its subtree; a clip after its own fill; the focus ring on top of
     /// its children (a text field shows its caret instead). Leaving nodes whose fade settled are pruned first.
     pub fn paint(&mut self, painter: &mut Painter, now: Instant) {
-        self.paint_scoped(painter, now, Scope::All, None);
+        self.paint_scoped(painter, now, Scope::All, &[]);
     }
 
-    /// [`Tree::paint`] without the node `skip` and its subtree: the rest of
-    /// the walk is unchanged.
-    pub fn paint_except(&mut self, painter: &mut Painter, now: Instant, skip: NodeId) {
-        self.paint_scoped(painter, now, Scope::Except(skip), None);
+    /// [`Tree::paint`] with the subtrees of the nodes keyed in `hidden` painted
+    /// by nobody (pieces that fly elsewhere): the rest of the walk is
+    /// unchanged and the node keeps its place in the layout.
+    pub fn paint_hiding(&mut self, painter: &mut Painter, now: Instant, hidden: &[Key]) {
+        self.paint_scoped(painter, now, Scope::All, hidden);
     }
 
-    /// Paints only the subtrees of `parent`'s children: not the node's own
-    /// box, haze or ring. The slides of `parent` and its ancestors still
-    /// shift them; their recoil scale and opacity do not apply.
-    pub fn paint_children(&mut self, painter: &mut Painter, now: Instant, parent: NodeId) {
-        self.paint_scoped(painter, now, Scope::ChildrenOf(parent), None);
+    /// [`Tree::paint_hiding`] without the node `skip` and its subtree (a
+    /// sheet draws that one itself): the rest of the walk is unchanged.
+    pub fn paint_except_hiding(
+        &mut self,
+        painter: &mut Painter,
+        now: Instant,
+        skip: NodeId,
+        hidden: &[Key],
+    ) {
+        self.paint_scoped(painter, now, Scope::Except(skip), hidden);
     }
 
-    /// [`Tree::paint_children`] with the subtree of the direct child `quiet`
-    /// painted without its hover and press feedback (its focus ring stays):
-    /// the piece a sheet is open under shows only the indicator pill.
-    pub fn paint_children_quiet(
+    /// [`Tree::paint_hiding`] for the subtrees of `parent`'s children only:
+    /// not the node's own box, haze or ring. The slides of `parent` and its
+    /// ancestors still shift them; their recoil scale and opacity do not
+    /// apply.
+    pub fn paint_children_hiding(
         &mut self,
         painter: &mut Painter,
         now: Instant,
         parent: NodeId,
-        quiet: Option<Key>,
+        hidden: &[Key],
     ) {
-        self.paint_scoped(painter, now, Scope::ChildrenOf(parent), quiet);
+        self.paint_scoped(painter, now, Scope::ChildrenOf(parent), hidden);
     }
 
-    fn paint_scoped(
-        &mut self,
-        painter: &mut Painter,
-        now: Instant,
-        scope: Scope,
-        quiet: Option<Key>,
-    ) {
+    /// The node `id`'s rect as it is painted at `now`: its layout rect moved
+    /// by its slide and its ancestors', or the rect [`Tree::set_extent`] gave
+    /// it. An empty rect for a stale id.
+    #[must_use]
+    pub fn painted_rect(&self, id: NodeId, now: Instant) -> Rect {
+        let Some(slot) = self.slot(id) else {
+            return Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 0.0,
+                h: 0.0,
+            };
+        };
+        self.extent_of(slot.key)
+            .unwrap_or_else(|| translated(slot.rect, self.slide_of(id, now)))
+    }
+
+    /// The nodes under `id` (not `id` itself) that are drawn: not hidden and
+    /// not leaving, in paint order.
+    #[must_use]
+    pub fn descendants_of(&self, id: NodeId) -> Vec<NodeId> {
+        let mut out = Vec::new();
+        let mut stack: Vec<NodeId> = self
+            .slot(id)
+            .map(|s| s.children.iter().rev().copied().collect())
+            .unwrap_or_default();
+        while let Some(n) = stack.pop() {
+            let Some(slot) = self.slot(n).filter(|s| !s.hidden() && !s.leaving) else {
+                continue;
+            };
+            out.push(n);
+            stack.extend(slot.children.iter().rev());
+        }
+        out
+    }
+
+    /// What the node `id` is, or `None` for a stale id.
+    #[must_use]
+    pub fn kind_of(&self, id: NodeId) -> Option<&ViewKind> {
+        self.slot(id).map(|s| &s.kind)
+    }
+
+    /// The rect set for the box `key`, if one is.
+    fn extent_of(&self, key: Key) -> Option<Rect> {
+        self.extents
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, r)| *r)
+    }
+
+    /// The children of `id` that are not leaving, in order, each with its
+    /// key, the rect it is painted at `now` and whether it is hidden (out of
+    /// the layout: the rect is then where it was, not where it is drawn).
+    #[must_use]
+    pub fn painted_children(&self, id: NodeId, now: Instant) -> Vec<(Key, Rect, bool)> {
+        let Some(slot) = self.slot(id) else {
+            return Vec::new();
+        };
+        let base = self.slide_of(id, now);
+        slot.children
+            .iter()
+            .filter_map(|&c| self.slot(c).filter(|s| !s.leaving).map(|s| (c, s)))
+            .map(|(c, s)| {
+                let own = self.offset(c, now);
+                let shift = (base.0 + own.0, base.1 + own.1);
+                (s.key, translated(s.rect, shift), s.hidden())
+            })
+            .collect()
+    }
+
+    fn paint_scoped(&mut self, painter: &mut Painter, now: Instant, scope: Scope, hidden: &[Key]) {
         self.prune(now);
         let dpr = self.dpr;
         for slot in self.slots.iter_mut().flatten() {
@@ -111,28 +182,50 @@ impl Tree {
             _ => (0.0, 0.0),
         };
         let mut shifts: Vec<(f32, f32)> = vec![base];
-        let owner = match scope {
-            Scope::ChildrenOf(parent) => Some(parent),
-            _ => None,
-        };
-        let mut mute = Mute::new(quiet);
-        for v in self.walk(scope) {
+        for v in self.without(self.walk(scope), hidden) {
             match v {
                 Visit::Enter(id) => {
-                    let muted = mute.enter(self, id, owner);
                     let base = shifts.last().copied().unwrap_or((0.0, 0.0));
                     let own = self.offset(id, now);
                     let shift = (base.0 + own.0, base.1 + own.1);
                     shifts.push(shift);
-                    self.paint_enter(id, painter, &theme, shift, now, muted);
+                    self.paint_enter(id, painter, &theme, shift, now);
                 }
                 Visit::Leave(id) => {
                     let shift = shifts.pop().unwrap_or((0.0, 0.0));
                     self.paint_leave(id, painter, &theme, shift);
-                    mute.leave(id);
                 }
             }
         }
+    }
+
+    /// `visits` without the subtrees of the nodes keyed in `hidden`.
+    fn without(&self, visits: Vec<Visit>, hidden: &[Key]) -> Vec<Visit> {
+        if hidden.is_empty() {
+            return visits;
+        }
+        let mut inside: Option<NodeId> = None;
+        let mut out = Vec::with_capacity(visits.len());
+        for v in visits {
+            match v {
+                Visit::Enter(id) => {
+                    if inside.is_none() && self.slot(id).is_some_and(|s| hidden.contains(&s.key)) {
+                        inside = Some(id);
+                    }
+                    if inside.is_none() {
+                        out.push(v);
+                    }
+                }
+                Visit::Leave(id) => {
+                    if inside == Some(id) {
+                        inside = None;
+                    } else if inside.is_none() {
+                        out.push(v);
+                    }
+                }
+            }
+        }
+        out
     }
 
     /// The accumulated slide of `id` and its ancestors.
@@ -154,13 +247,14 @@ impl Tree {
         theme: &Theme,
         shift: (f32, f32),
         now: Instant,
-        muted: bool,
     ) {
         painter.push_state();
         let Some(slot) = self.slot(id) else {
             return;
         };
-        let rect = translated(slot.rect, shift);
+        let rect = self
+            .extent_of(slot.key)
+            .unwrap_or_else(|| translated(slot.rect, shift));
         let scale = slot.scale.value(now);
         if scale != 1.0 {
             painter.scale_about(rect.x + rect.w / 2.0, rect.y + rect.h / 2.0, scale);
@@ -179,7 +273,7 @@ impl Tree {
                 if *haze {
                     painter.haze(rect, *radius);
                 }
-                let h = shown_highlight(self.highlight, muted);
+                let h = self.highlight;
                 let (hovered, pressed) = (h.hovered == Some(id), h.pressed == Some(id));
                 let shown = box_fill(*fill, slot.interactive, hovered, pressed);
                 if let Some(role) = shown {
@@ -213,7 +307,7 @@ impl Tree {
             }
             ViewKind::Image { id, alpha } => painter.image(*id, rect, *alpha),
             ViewKind::Slider(s) => {
-                let h = shown_highlight(self.highlight, muted);
+                let h = self.highlight;
                 let p = SliderPaint {
                     slider: *s,
                     rect,
@@ -255,51 +349,6 @@ impl Tree {
 /// A field inside `rect`, clipped to it: the selection wash, the text (or
 /// the placeholder in the faint role while it is empty), the underline of
 /// the composition in progress, and the caret while the field has the focus.
-/// The highlight a node is painted with: a muted one shows no hover and no
-/// press.
-fn shown_highlight(h: Highlight, muted: bool) -> Highlight {
-    if muted {
-        Highlight {
-            hovered: None,
-            pressed: None,
-            ..h
-        }
-    } else {
-        h
-    }
-}
-
-/// Which nodes of a walk are muted: the subtree of the direct child of the
-/// scoped parent whose key is `key`.
-struct Mute {
-    key: Option<Key>,
-    at: Option<NodeId>,
-}
-
-impl Mute {
-    fn new(key: Option<Key>) -> Mute {
-        Mute { key, at: None }
-    }
-
-    /// Whether `id`, entered now, is muted. `owner` is the scoped parent.
-    fn enter(&mut self, tree: &Tree, id: NodeId, owner: Option<NodeId>) -> bool {
-        if self.at.is_none()
-            && owner.is_some()
-            && self.key.is_some_and(|k| k == tree.key_of(id))
-            && tree.slot(id).is_some_and(|s| s.parent == owner)
-        {
-            self.at = Some(id);
-        }
-        self.at.is_some()
-    }
-
-    fn leave(&mut self, id: NodeId) {
-        if self.at == Some(id) {
-            self.at = None;
-        }
-    }
-}
-
 fn paint_field(slot: &Slot, painter: &mut Painter, theme: &Theme, rect: Rect, focused: bool) {
     let (ViewKind::Field { style, .. }, Some(field)) = (&slot.kind, &slot.field) else {
         return;
@@ -430,53 +479,107 @@ mod tests {
         assert_eq!(radius, 0.0);
     }
 
-    /// The nodes a walk of `card`'s children paints muted for `quiet`.
-    fn muted(tree: &Tree, card: NodeId, quiet: Option<Key>) -> Vec<NodeId> {
-        let mut mute = Mute::new(quiet);
-        let mut out = Vec::new();
-        for v in tree.walk(Scope::ChildrenOf(card)) {
-            match v {
-                Visit::Enter(id) => {
-                    if mute.enter(tree, id, Some(card)) {
-                        out.push(id);
-                    }
-                }
-                Visit::Leave(id) => mute.leave(id),
-            }
-        }
-        out
+    /// The capsule of `layout.rs`'s tests: three 30 px pieces, 10 px
+    /// padding, 8 px gap, the one `hide` hidden, hugging as `cap`.
+    fn capsule(hide: Option<u64>) -> crate::view::View {
+        let shown = if hide.is_some() { 2.0 } else { 3.0 };
+        crate::view::row(Key::named("cap"))
+            .absolute(100.0, 8.0)
+            .width(20.0 + 30.0 * shown + 8.0 * (shown - 1.0))
+            .height(40.0)
+            .padding_xy(10.0, 0.0)
+            .gap(8.0)
+            .children((0..3).map(|i| {
+                crate::view::row(crate::testing::row_key(i))
+                    .size(30.0, 40.0)
+                    .hidden(hide == Some(i))
+            }))
+    }
+
+    fn lifted_capsule() -> (Tree, NodeId, Instant) {
+        use crate::testing::{fake_measure, id, AVAILABLE};
+        let t0 = Instant::now();
+        let mut tree = Tree::new(false, &Theme::dark());
+        tree.apply(capsule(None), t0);
+        tree.layout_measured(AVAILABLE, fake_measure);
+        tree.slide_with(
+            std::time::Duration::from_millis(350),
+            crate::Easing::OutBack(1.15),
+            &[Key::named("cap")],
+        );
+        tree.apply(capsule(Some(1)), t0);
+        tree.layout_measured(AVAILABLE, fake_measure);
+        let cap = id(&tree, Key::named("cap"));
+        (tree, cap, t0)
     }
 
     #[test]
-    fn only_the_quiet_child_is_muted() {
-        let (tree, card, rows) = crate::testing::card_with_rows();
-        assert_eq!(
-            muted(&tree, card, Some(crate::testing::row_key(1))),
-            vec![rows[1]]
-        );
-        assert_eq!(muted(&tree, card, None), Vec::<NodeId>::new());
-        assert_eq!(
-            muted(&tree, card, Some(Key::named("nope"))),
-            Vec::<NodeId>::new()
-        );
-    }
-
-    #[test]
-    fn a_muted_node_shows_no_hover_or_press_but_keeps_its_focus() {
-        let h = Highlight {
-            hovered: Some(1),
-            pressed: Some(1),
-            focused: Some(2),
+    fn a_box_with_an_extent_is_painted_and_reported_there() {
+        let (mut tree, cap, t0) = lifted_capsule();
+        // At its layout rect: placed at 100, 88 wide.
+        let rect = tree.painted_rect(cap, t0);
+        assert_eq!((rect.x, rect.w, rect.y, rect.h), (100.0, 88.0, 8.0, 40.0));
+        let wider = Rect {
+            x: 100.0,
+            y: 8.0,
+            w: 126.0,
+            h: 40.0,
         };
-        assert_eq!(shown_highlight(h, false), h);
+        tree.set_extent(Key::named("cap"), Some(wider));
+        assert_eq!(tree.painted_rect(cap, t0), wider);
+        // Only the box keyed so, and until it is put back.
+        let kid = crate::testing::id(&tree, crate::testing::row_key(0));
+        assert_ne!(tree.painted_rect(kid, t0), wider);
+        tree.set_extent(Key::named("cap"), None);
+        assert_eq!(tree.painted_rect(cap, t0), rect);
+        assert_eq!(tree.painted_rect(usize::MAX, t0).w, 0.0);
+    }
+
+    #[test]
+    fn painted_children_name_hidden_ones_and_skip_leaving_ones() {
+        let (tree, cap, t0) = lifted_capsule();
+        let kids = tree.painted_children(cap, t0);
+        assert_eq!(kids.len(), 3);
         assert_eq!(
-            shown_highlight(h, true),
-            Highlight {
-                hovered: None,
-                pressed: None,
-                focused: Some(2)
-            }
+            kids.iter().map(|k| k.2).collect::<Vec<_>>(),
+            [false, true, false]
         );
+        assert_eq!(kids[0].0, crate::testing::row_key(0));
+        assert_eq!(
+            tree.painted_children(usize::MAX, t0),
+            Vec::<(Key, Rect, bool)>::new()
+        );
+    }
+
+    #[test]
+    fn a_hidden_key_takes_its_subtree_out_of_the_walk_only() {
+        let (tree, card, rows) = crate::testing::card_with_rows();
+        let all = tree.walk(Scope::ChildrenOf(card));
+        let kept = tree.without(all.clone(), &[crate::testing::row_key(1)]);
+        assert_eq!(kept.len(), all.len() - 2);
+        assert!(!kept.contains(&Visit::Enter(rows[1])));
+        assert!(!kept.contains(&Visit::Leave(rows[1])));
+        assert!(kept.contains(&Visit::Enter(rows[0])) && kept.contains(&Visit::Leave(rows[2])));
+        assert_eq!(tree.without(all.clone(), &[]), all);
+        assert_eq!(tree.without(all.clone(), &[Key::named("nope")]), all);
+        // Several keys leave several subtrees out.
+        let two = tree.without(
+            all.clone(),
+            &[crate::testing::row_key(0), crate::testing::row_key(2)],
+        );
+        assert_eq!(two.len(), all.len() - 4);
+        assert!(two.contains(&Visit::Enter(rows[1])));
+    }
+
+    #[test]
+    fn the_nodes_under_a_node_are_listed_in_paint_order_with_their_kinds() {
+        let (tree, card, rows) = crate::testing::card_with_rows();
+        let under = tree.descendants_of(card);
+        assert_eq!(&under[..rows.len().min(under.len())][..1], &rows[..1]);
+        assert!(under.contains(&rows[2]));
+        assert!(!under.contains(&card));
+        assert!(matches!(tree.kind_of(card), Some(ViewKind::Box { .. })));
+        assert!(tree.kind_of(usize::MAX).is_none());
     }
 
     #[test]

@@ -1,8 +1,7 @@
-//! The pure rect rules of a capsule sheet: where it lands, which part of the
-//! row its window shows, what a press hits. Every clamp is panic-free
+//! The pure rect rules of a capsule sheet: where it lands, where its body
+//! sits under the row, what a press hits. Every clamp is panic-free
 //! (`f32::clamp` panics when min > max) and every result is finite.
 
-use celestina_paint::soft_edge::Cuts;
 use celestina_paint::Rect;
 
 use crate::island::state::{CAPSULE_H, PAGE_MARGIN, TOP_GAP};
@@ -11,11 +10,6 @@ use crate::island::state::{CAPSULE_H, PAGE_MARGIN, TOP_GAP};
 pub const SIDE_MARGIN: f32 = 16.0;
 /// The height of the row (the capsule's own row) at the top of a sheet.
 pub const ROW_H: f32 = CAPSULE_H;
-/// How far the blurred row image reaches past the capsule: three sigmas of
-/// the widest blur (6).
-const ROW_IMAGE_PAD: f32 = 3.0 * 6.0;
-/// The tolerance when deciding whether the window cuts the capsule.
-const CUT_TOLERANCE: f32 = 0.5;
 
 /// What a press lands on while a sheet is open.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,24 +50,26 @@ pub fn max_height(surface: (f32, f32)) -> f32 {
     (finite(surface.1) - TOP_GAP - PAGE_MARGIN).max(0.0)
 }
 
-/// Where the sheet lands: `body` is the body box size, `piece` the opening
-/// piece and `capsule` its capsule. The sheet is centred on the piece, then
-/// held by the capsule's ends (a menu narrower than the capsule is a window
-/// over it; a wider one keeps the capsule inside) and by the side margins
-/// when the surface has room for them.
+/// Where the sheet lands: `body` is the body box size, `piece` the slot of
+/// the opening piece (its centre is what counts) and `capsule` the capsule's
+/// extent without that piece. The sheet is never narrower than the capsule,
+/// so every other piece of the row stays visible: a menu at least as wide as
+/// the capsule is centred on the slot and held so that the capsule stays
+/// inside it; a narrower one takes the capsule's width and place (its body
+/// box sits under the row, see [`body_box`]). The side margins hold when the
+/// surface has room for them.
 pub fn target(capsule: Rect, piece: Rect, body: (f32, f32), surface: (f32, f32)) -> Rect {
     let capsule = sane(capsule);
     let piece = sane(piece);
-    let w = finite(body.0).max(0.0);
+    let menu_w = finite(body.0).max(0.0);
     let surface_w = finite(surface.0).max(0.0);
     let left = capsule.x;
     let right = capsule.x + capsule.w;
     let centre = piece.x + piece.w / 2.0;
-    let wanted = centre - w / 2.0;
-    let x = if w >= capsule.w {
-        clamp(wanted, right - w, left)
+    let (x, w) = if menu_w >= capsule.w {
+        (clamp(centre - menu_w / 2.0, right - menu_w, left), menu_w)
     } else {
-        clamp(wanted, left, right - w)
+        (left, capsule.w)
     };
     let x = clamp(x, SIDE_MARGIN, surface_w - SIDE_MARGIN - w);
     let h = (ROW_H + finite(body.1).max(0.0)).min(max_height(surface));
@@ -85,17 +81,19 @@ pub fn target(capsule: Rect, piece: Rect, body: (f32, f32), surface: (f32, f32))
     }
 }
 
-/// Which ends of the capsule's row the sheet's window cuts: a side is cut
-/// only where the window's edge lies strictly inside the capsule (0.5 px
-/// tolerance), never at the capsule's own end.
-pub fn cuts(capsule: Rect, sheet: Rect) -> Cuts {
-    let capsule = sane(capsule);
-    let sheet = sane(sheet);
-    let (cl, cr) = (capsule.x, capsule.x + capsule.w);
-    let (sl, sr) = (sheet.x, sheet.x + sheet.w);
-    Cuts {
-        left: sl > cl + CUT_TOLERANCE && sl < cr,
-        right: sr < cr - CUT_TOLERANCE && sr > cl,
+/// Where the body box sits: under the row of `sheet`, `body_w` wide, centred
+/// on the slot `piece` and held inside the sheet. A body as wide as the sheet
+/// fills it.
+pub fn body_box(sheet: Rect, piece: Rect, body_w: f32) -> Rect {
+    let s = sane(sheet);
+    let piece = sane(piece);
+    let w = finite(body_w).max(0.0);
+    let centre = piece.x + piece.w / 2.0;
+    Rect {
+        x: clamp(centre - w / 2.0, s.x, s.x + s.w - w),
+        y: s.y + ROW_H,
+        w,
+        h: (s.h - ROW_H).max(0.0),
     }
 }
 
@@ -121,27 +119,9 @@ pub fn viewport(sheet: Rect) -> Rect {
     }
 }
 
-/// The capsule inflated by 18 px (three sigmas of the widest blur) and cut
-/// to the surface: the area the blurred row image covers.
-pub fn row_image(capsule: Rect, surface: (f32, f32)) -> Rect {
-    let c = sane(capsule);
-    let (sw, sh) = (finite(surface.0).max(0.0), finite(surface.1).max(0.0));
-    let x0 = clamp(c.x - ROW_IMAGE_PAD, 0.0, sw);
-    let y0 = clamp(c.y - ROW_IMAGE_PAD, 0.0, sh);
-    let x1 = clamp(c.x + c.w + ROW_IMAGE_PAD, x0, sw);
-    let y1 = clamp(c.y + c.h + ROW_IMAGE_PAD, y0, sh);
-    Rect {
-        x: x0,
-        y: y0,
-        w: x1 - x0,
-        h: y1 - y0,
-    }
-}
-
-/// What the point lands on: the row window, the body viewport, or neither.
-/// Everything else is `Outside`, including the sheet's own capsule beyond the
-/// window: its pieces are not drawn there, so a press on them closes the
-/// sheet and never reaches the bar.
+/// What the point lands on: the row window (the sheet's top 40 px, which
+/// holds the capsule's row and always contains its capsule), the body
+/// viewport, or neither. Everything else is `Outside`.
 pub fn hit(sheet: Rect, x: f32, y: f32) -> Hit {
     if row_window(sheet).contains(x, y) {
         Hit::Row
@@ -180,13 +160,53 @@ mod tests {
     }
 
     #[test]
-    fn a_narrower_menu_is_a_window_over_the_capsule() {
+    fn a_menu_narrower_than_its_capsule_takes_the_capsule_width() {
+        let capsule = r(1000.0, 8.0, 400.0, 40.0);
+        let slot = r(1300.0, 8.0, 0.0, 40.0);
+        let t = target(capsule, slot, (240.0, 100.0), BAR);
+        assert_eq!((t.x, t.w), (1000.0, 400.0));
+        // Wherever the slot is, the sheet stays on the capsule.
+        for x in [1000.0, 1100.0, 1399.0] {
+            let t = target(capsule, r(x, 8.0, 0.0, 40.0), (240.0, 100.0), BAR);
+            assert_eq!((t.x, t.w), (1000.0, 400.0));
+        }
+        // The body box sits under the slot, held inside the sheet.
+        let sheet = r(1000.0, 8.0, 400.0, 140.0);
+        assert_eq!(
+            body_box(sheet, r(1250.0, 8.0, 0.0, 40.0), 240.0),
+            r(1130.0, 48.0, 240.0, 100.0)
+        );
+        // Past the end it is held at the sheet's right.
+        assert_eq!(body_box(sheet, slot, 240.0).x, 1160.0);
+        assert_eq!(body_box(sheet, r(1010.0, 8.0, 0.0, 40.0), 240.0).x, 1000.0);
+        assert_eq!(body_box(sheet, r(1390.0, 8.0, 0.0, 40.0), 240.0).x, 1160.0);
+        let full = body_box(sheet, slot, 400.0);
+        assert_eq!((full.x, full.w), (1000.0, 400.0));
+    }
+
+    #[test]
+    fn a_wider_menu_still_contains_the_capsule() {
         let capsule = r(1300.0, 8.0, 604.0, 40.0);
-        let t = target(capsule, r(1590.0, 8.0, 20.0, 40.0), (320.0, 100.0), BAR);
-        assert_eq!(t.x, 1440.0);
-        let t = target(capsule, r(1870.0, 8.0, 20.0, 40.0), (320.0, 100.0), BAR);
-        assert_eq!(t.x, 1584.0);
+        let t = target(capsule, r(1590.0, 8.0, 0.0, 40.0), (700.0, 100.0), BAR);
+        assert_eq!(t.w, 700.0);
+        assert!(t.x <= capsule.x && t.x + t.w >= capsule.x + capsule.w);
+        let at_the_end = target(capsule, r(1900.0, 8.0, 0.0, 40.0), (700.0, 100.0), BAR);
+        assert_eq!(at_the_end.x + at_the_end.w, 1904.0);
+        // Equal widths: the menu is the capsule.
+        let same = target(capsule, r(1590.0, 8.0, 0.0, 40.0), (604.0, 100.0), BAR);
+        assert_eq!((same.x, same.w), (1300.0, 604.0));
+    }
+
+    #[test]
+    fn the_side_margins_still_clamp() {
+        // A wide menu at the end of the surface.
+        let end = r(1700.0, 8.0, 200.0, 40.0);
+        let t = target(end, r(1890.0, 8.0, 0.0, 40.0), (320.0, 100.0), BAR);
         assert_eq!(t.x + t.w, 1904.0);
+        // A narrow one over a capsule that sits inside the margin.
+        let edge = r(5.0, 8.0, 400.0, 40.0);
+        let t = target(edge, r(100.0, 8.0, 0.0, 40.0), (240.0, 100.0), BAR);
+        assert_eq!((t.x, t.w), (16.0, 400.0));
     }
 
     #[test]
@@ -211,37 +231,19 @@ mod tests {
         assert!([t.x, t.y, t.w, t.h].iter().all(|v| v.is_finite()));
         // Room for the margins: they hold.
         let t = target(
-            r(0.0, 8.0, 1920.0, 40.0),
-            r(2.0, 8.0, 10.0, 40.0),
+            r(16.0, 8.0, 1888.0, 40.0),
+            r(18.0, 8.0, 10.0, 40.0),
             (320.0, 100.0),
             BAR,
         );
         assert_eq!(t.x, 16.0);
         let t = target(
-            r(0.0, 8.0, 1920.0, 40.0),
-            r(1910.0, 8.0, 10.0, 40.0),
+            r(16.0, 8.0, 1888.0, 40.0),
+            r(1890.0, 8.0, 10.0, 40.0),
             (320.0, 100.0),
             BAR,
         );
         assert_eq!(t.x + t.w, 1904.0);
-    }
-
-    #[test]
-    fn cuts_appear_only_where_the_window_is_inside_the_capsule() {
-        let capsule = r(1300.0, 8.0, 604.0, 40.0);
-        let both = cuts(capsule, r(1440.0, 8.0, 320.0, 100.0));
-        assert_eq!((both.left, both.right), (true, true));
-        let flush_right = cuts(capsule, r(1584.0, 8.0, 320.0, 100.0));
-        assert_eq!((flush_right.left, flush_right.right), (true, false));
-        let flush_left = cuts(capsule, r(1300.0, 8.0, 320.0, 100.0));
-        assert_eq!((flush_left.left, flush_left.right), (false, true));
-        let wider = cuts(capsule, r(1200.0, 8.0, 800.0, 100.0));
-        assert_eq!((wider.left, wider.right), (false, false));
-        let within_tolerance = cuts(capsule, r(1300.4, 8.0, 603.2, 100.0));
-        assert_eq!(
-            (within_tolerance.left, within_tolerance.right),
-            (false, false)
-        );
     }
 
     #[test]
@@ -254,15 +256,5 @@ mod tests {
         assert_eq!(row_window(sheet), r(930.0, 8.0, 240.0, 40.0));
         assert_eq!(viewport(sheet), r(930.0, 48.0, 240.0, 236.0));
         assert_eq!(viewport(r(0.0, 8.0, 10.0, 20.0)).h, 0.0);
-    }
-
-    #[test]
-    fn the_row_image_extends_eighteen_px_past_the_capsule_within_the_surface() {
-        let img = row_image(r(1000.0, 8.0, 100.0, 40.0), BAR);
-        assert_eq!(img, r(982.0, 0.0, 136.0, 66.0));
-        let edge = row_image(r(0.0, 8.0, 1920.0, 40.0), BAR);
-        assert_eq!((edge.x, edge.w), (0.0, 1920.0));
-        let nan = row_image(r(f32::NAN, 8.0, 10.0, 40.0), BAR);
-        assert!(nan.w.is_finite() && nan.h.is_finite());
     }
 }

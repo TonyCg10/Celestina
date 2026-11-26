@@ -6,7 +6,7 @@
 use celestina_paint::{Role, Weight};
 use celestina_ui::{view, Key, View};
 
-use super::{BarCx, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
+use super::{BarCx, Face, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
 use crate::{
     copy, glance,
     island::{
@@ -24,6 +24,11 @@ pub struct Clock;
 
 fn widget_key() -> Key {
     Key::named("clock-date")
+}
+
+/// The date the bar shows and the sheet's subtitle repeats.
+fn text_of(today: celestina_shell::glance::Today) -> String {
+    copy::short_date(today.weekday, today.day)
 }
 
 impl Piece for Clock {
@@ -45,7 +50,7 @@ impl Piece for Clock {
                 .focusable()
                 .child(view::text(
                     Key::named("clock-date-text"),
-                    &copy::short_date(today.weekday, today.day),
+                    &text_of(today),
                     text_style(
                         cx.theme.type_scale.body,
                         Weight::Regular,
@@ -54,6 +59,10 @@ impl Piece for Clock {
                     ),
                 )),
         )
+    }
+
+    fn face(&self, cx: &BarCx<'_>) -> Option<Face> {
+        Face::of_page(PageId::CLOCK, cx.today.map(text_of))
     }
 
     fn page(&self) -> Option<PageEntry> {

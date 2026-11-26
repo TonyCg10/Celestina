@@ -9,6 +9,8 @@ use super::{Mode, SessionAction, MENU_W};
 use crate::{
     copy,
     island::view::{button_filled, centred, text_style, BUTTON_H},
+    pieces::session,
+    sheet::subtitle::{subtitle, SUBTITLE_H},
 };
 
 /// A row's icon, logical px.
@@ -58,13 +60,14 @@ pub fn question_width(theme: &Theme) -> f32 {
     MENU_W - 2.0 * theme.spacing.sm - 2.0 * theme.spacing.md
 }
 
-/// The list's size: five rows, the divider (with its margins) and the
-/// body's padding (`xs` on top, `sm` below and at the sides).
+/// The list's size: the subtitle, five rows, the divider (with its margins)
+/// and the body's padding (`xs` on top, `sm` below and at the sides).
 #[must_use]
 pub fn list_size(theme: &Theme) -> (f32, f32) {
     (
         MENU_W,
-        5.0 * theme.row_height
+        SUBTITLE_H
+            + 5.0 * theme.row_height
             + DIVIDER_H
             + 2.0 * theme.spacing.xs
             + theme.spacing.xs
@@ -106,6 +109,7 @@ pub fn view(theme: &Theme, mode: Mode, question_h: f32) -> View {
         theme.spacing.sm,
         theme.spacing.sm,
     );
+    card = card.child(subtitle(theme, &session::face(), copy::PIECE_SESSION, None));
     for action in SessionAction::ROWS {
         if mode == Mode::Confirm(action) {
             card = card.child(confirm(theme, action));

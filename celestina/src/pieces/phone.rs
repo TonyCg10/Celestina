@@ -8,7 +8,7 @@ use celestina_paint::{Role, Weight};
 use celestina_shell::phone::PhoneState;
 use celestina_ui::{view, Key, View};
 
-use super::{BarCx, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
+use super::{BarCx, Face, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
 use crate::{
     copy,
     island::{pages::phone::Phone as Page, view::centred, view::text_style},
@@ -45,6 +45,11 @@ impl Phone {
     }
 }
 
+/// The charge as the bar shows it and the sheet's subtitle repeats it.
+fn level_text(level: u8) -> String {
+    copy::charge_percent(level)
+}
+
 impl Piece for Phone {
     fn id(&self) -> PieceId {
         PieceId("phone")
@@ -69,7 +74,7 @@ impl Piece for Phone {
         let level = phone.battery.map(|level| {
             view::text(
                 Key::named("phone-level"),
-                &copy::charge_percent(level),
+                &level_text(level),
                 text_style(
                     cx.theme.type_scale.caption,
                     Weight::Regular,
@@ -88,6 +93,20 @@ impl Piece for Phone {
                 .child(view::icon(Key::named("phone-icon"), name, GLYPH).tint(role))
                 .children(level),
         )
+    }
+
+    fn face(&self, cx: &BarCx<'_>) -> Option<Face> {
+        let PhoneState::Present(phone) = cx.phone else {
+            return Face::of_page(PageId::PHONE, None);
+        };
+        Some(Face {
+            icon: if phone.charging {
+                CHARGING_ICON
+            } else {
+                PHONE_ICON
+            },
+            text: phone.battery.map(level_text),
+        })
     }
 
     fn page(&self) -> Option<PageEntry> {

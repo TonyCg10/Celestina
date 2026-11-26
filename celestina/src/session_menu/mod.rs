@@ -288,8 +288,14 @@ impl SessionCore {
     }
 
     /// Paints the body at its own coordinates.
-    pub fn paint(&mut self, painter: &mut celestina_paint::Painter, now: Instant) {
-        self.tree.paint(painter, now);
+    pub fn paint(&mut self, painter: &mut celestina_paint::Painter, now: Instant, hidden: &[Key]) {
+        self.tree.paint_hiding(painter, now, hidden);
+    }
+
+    /// The menu's tree (the sheet reads its subtitle's place from it).
+    #[must_use]
+    pub fn tree(&self) -> &Tree {
+        &self.tree
     }
 
     /// Whether the body's own animations (hover, focus) still run.
@@ -425,7 +431,12 @@ mod tests {
             .collect();
         let divider = rect_of(&core, divider_key());
         assert_eq!(divider.h, 1.0 + 2.0 * theme.spacing.xs);
-        assert_eq!(ys[0], theme.spacing.xs);
+        let subtitle = rect_of(&core, crate::sheet::subtitle::row_key());
+        assert_eq!(
+            (subtitle.y, subtitle.h),
+            (theme.spacing.xs, crate::sheet::subtitle::SUBTITLE_H)
+        );
+        assert_eq!(ys[0], subtitle.y + subtitle.h, "the rows start under it");
         assert!(ys[0] < ys[1] && ys[1] < divider.y && divider.y < ys[2]);
         assert!(ys[2] < ys[3] && ys[3] < ys[4]);
         assert_eq!(ys[2], divider.y + divider.h);

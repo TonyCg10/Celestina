@@ -1655,3 +1655,39 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-007](docs/evidence/2026-11-26-cel-d-007-focus-tweaks.md)
+
+## VAL-CEL-D-008 — The capsule keeps its row and the open piece becomes the menu's subtitle
+
+- **Status:** pending
+- **Related implementation:** CEL-D-008 (a sheet is never narrower than its
+  capsule, so every other piece of the row stays visible and clickable; the
+  piece a sheet opens on leaves its capsule and the others close over its
+  slot; its icon and text fly down into the menu's subtitle and fly back up
+  to the slot when the sheet closes or switches)
+- **Requires:** the deployed shell after the landing of CEL-D-008 and a bar
+  capsule with at least three pieces, two of which open a sheet (the volume
+  and the session pieces)
+- **Procedure:** press the volume piece and watch it. Read the row and the
+  top of the sheet. Press the session piece in the same capsule, then press
+  outside the sheet. Press the volume piece again, move the volume with the
+  wheel while the sheet opens, and close it with Escape. With a sheet open,
+  turn the wheel and right-click over its subtitle row (the workspaces sheet
+  and the volume sheet), then click the subtitle. Open a sheet on the system
+  load or the clock and watch the text. Open a sheet on the only piece of a
+  capsule if the layout has one
+- **Pass condition:** the volume icon and its percentage fly from the bar to
+  the top of the sheet, growing and turning bolder, while the row closes over
+  its slot with no gap; the sheet is never narrower than the row, and every
+  other piece stays visible and answers a press; the subtitle shows the same
+  icon and percentage and follows the wheel; the switch flies the old piece
+  back up while the new one flies down, never painting a piece twice or
+  leaving a gap; on close the slot reopens at once and the piece flies back
+  and lands on it without a jump; a piece with no text shows the menu's name
+  in the subtitle and flies only its icon; a sheet on the only piece of a
+  capsule keeps a 40 px row; with reduced motion nothing flies and nothing
+  slides; over the open sheet's subtitle the wheel steps the workspaces or the
+  volume as it did over the piece, a right click mutes, and a click closes the
+  sheet; the system load and the clock fly their text to the subtitle
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-008](docs/evidence/2026-11-26-cel-d-008-capsule-keeps-its-row.md)

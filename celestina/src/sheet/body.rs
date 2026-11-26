@@ -214,7 +214,7 @@ pub enum SheetBody {
     Level(Box<LevelCore>),
     /// The session menu's rows and its confirmation card.
     Session(Box<SessionCore>),
-    /// An Island page: its content under a header with the overflow button.
+    /// An Island page: its content under the subtitle, with the overflow button.
     Page(Box<PageBody>),
     /// The workspaces list: one row per workspace of the output.
     Workspaces(Box<WorkspacesBody>),
@@ -310,13 +310,25 @@ impl SheetBody {
         }
     }
 
-    /// Paints the body at its own coordinates (the caller translates).
-    pub fn paint(&mut self, painter: &mut Painter, now: Instant) {
+    /// Paints the body at its own coordinates (the caller translates), but
+    /// for the nodes `hidden` (the subtitle's icon and text while they fly).
+    pub fn paint(&mut self, painter: &mut Painter, now: Instant, hidden: &[Key]) {
         match self {
-            SheetBody::Level(core) => core.paint(painter, now),
-            SheetBody::Session(core) => core.paint(painter, now),
-            SheetBody::Page(body) => body.tree.paint(painter, now),
-            SheetBody::Workspaces(body) => body.tree.paint(painter, now),
+            SheetBody::Level(core) => core.paint(painter, now, hidden),
+            SheetBody::Session(core) => core.paint(painter, now, hidden),
+            SheetBody::Page(body) => body.tree.paint_hiding(painter, now, hidden),
+            SheetBody::Workspaces(body) => body.tree.paint_hiding(painter, now, hidden),
+        }
+    }
+
+    /// The body's tree.
+    #[must_use]
+    pub fn tree(&self) -> &Tree {
+        match self {
+            SheetBody::Level(core) => core.tree(),
+            SheetBody::Session(core) => core.tree(),
+            SheetBody::Page(body) => &body.tree,
+            SheetBody::Workspaces(body) => &body.tree,
         }
     }
 

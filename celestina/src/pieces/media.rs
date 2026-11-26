@@ -6,7 +6,7 @@ use celestina_paint::{Role, Weight};
 use celestina_shell::media::now_playing_line;
 use celestina_ui::{view, Key, View};
 
-use super::{BarCx, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
+use super::{BarCx, Face, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
 use crate::{
     copy,
     island::{
@@ -56,6 +56,15 @@ pub fn bar_signature(state: &MediaState) -> Option<(bool, String)> {
     Some((state.shown()?.playing, bar_line(state)?))
 }
 
+/// The glyph for a player that plays or not.
+fn glyph_of(playing: bool) -> &'static str {
+    if playing {
+        "media-pause"
+    } else {
+        "media-play"
+    }
+}
+
 impl Media {
     /// The accessible name of the widget built from `cx`.
     #[must_use]
@@ -77,7 +86,7 @@ impl Piece for Media {
     fn bar(&self, cx: &BarCx<'_>) -> Option<View> {
         let (playing, text) = bar_signature(cx.media)?;
         let theme = cx.theme;
-        let glyph = if playing { "media-pause" } else { "media-play" };
+        let glyph = glyph_of(playing);
         let size = theme.type_scale.body;
         let line = view::col(Key::named("media-line"))
             .size(LINE_W, line(size))
@@ -100,6 +109,17 @@ impl Piece for Media {
                 .child(view::icon(Key::named("media-glyph"), glyph, GLYPH).tint(Role::TextHi))
                 .child(line),
         )
+    }
+
+    /// The play-pause glyph and the line the bar shows.
+    fn face(&self, cx: &BarCx<'_>) -> Option<Face> {
+        match bar_signature(cx.media) {
+            Some((playing, line)) => Some(Face {
+                icon: glyph_of(playing),
+                text: Some(line),
+            }),
+            None => Face::of_page(PageId::MEDIA, None),
+        }
     }
 
     fn page(&self) -> Option<PageEntry> {

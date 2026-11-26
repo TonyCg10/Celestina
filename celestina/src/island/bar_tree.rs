@@ -11,12 +11,22 @@
 //! is what is painted at every frame, and a centre capsule keeps its gap to
 //! a growing Island. A rebuild that moves no capsule lets the pieces inside
 //! move as the tree moves them, and a press's recoil run on.
+//!
+//! The one piece a capsule sheet is open on is lifted out of its capsule
+//! ([`BarTree::set_lifted`]): its node is hidden, so its slot closes and the
+//! pieces beside it slide together on the open spring while the capsule's
+//! glass, regions and anchor glide from the extent it had to the one it
+//! has ([`BarTree::capsule_extent`]) on the same spring, so the glass and the
+//! pieces in it stay one shape; landing it reopens the slot the same way.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use celestina_paint::{Painter, Rect, Theme};
 use celestina_shell::settings::BarLayout;
-use celestina_ui::{view, Highlight, Interaction, Key, Tree, TreeError, UiEvent, View};
+use celestina_ui::{
+    view, Easing, Highlight, Interaction, Key, Motion, Tree, TreeError, UiEvent, View, ViewKind,
+    BTN_LEFT,
+};
 use celestina_wayland::InputEvent;
 
 use super::{
@@ -31,6 +41,7 @@ use crate::{
         view::{zone_key, ZoneViews, Zones},
     },
     pieces::{self, Axis, BarCx, Gesture, PieceAction, PieceInput},
+    sheet::flight::{BarKeys, Parts, TextPart},
     tray::scroll_steps,
 };
 
@@ -95,6 +106,44 @@ pub struct BarTree {
     stale: bool,
     /// The wheel's rest, per node (the struct's `row` is the node).
     scroll: ScrollRemainder,
+    /// The piece out of its capsule: its node is hidden and its slot closed.
+    lifted: Option<Key>,
+    /// The lifted piece changed since the last update: the slides it starts
+    /// run on the open spring.
+    lift_changed: bool,
+    /// The open spring, from the theme: how long and on which curve.
+    spring: (Duration, Easing),
+    /// Each capsule's glide from the extent it was painted at to its rect,
+    /// while its pieces slide.
+    glides: [Option<Glide>; 4],
+}
+
+/// A capsule on its way from `from` to the rect it was placed at.
+#[derive(Clone, Copy, Debug)]
+struct Glide {
+    from: Rect,
+    start: Instant,
+}
+
+/// Whether two capsule rects are one to the eye (0.01 px).
+fn same_extent(a: Rect, b: Rect) -> bool {
+    (a.x - b.x).abs() < 0.01 && (a.w - b.w).abs() < 0.01
+}
+
+/// The painted tree: its hit-test follows the slides of the pieces, so a press
+/// lands on what is drawn while the row closes over a slot.
+fn bar_tree(reduced: bool, theme: &Theme) -> Tree {
+    let mut tree = Tree::new(reduced, theme);
+    tree.set_hit_painted(true);
+    tree
+}
+
+/// The open spring of `theme`: `motion.slow` with the overshoot easing.
+fn spring_of(theme: &Theme) -> (Duration, Easing) {
+    (
+        Motion::Slow.duration(&theme.motion),
+        Easing::OutBack(theme.overshoot),
+    )
 }
 
 impl BarTree {
@@ -107,13 +156,36 @@ impl BarTree {
             views: ZoneViews::default(),
             widths: ZoneWidths::default(),
             placement: None,
-            tree: Tree::new(reduced, theme),
+            tree: bar_tree(reduced, theme),
             measure: Tree::new(true, theme),
             input: Interaction::new(),
             reduced,
             stale: true,
             scroll: ScrollRemainder::default(),
+            lifted: None,
+            lift_changed: false,
+            spring: spring_of(theme),
+            glides: [None; 4],
         }
+    }
+
+    /// Lifts `piece` out of its capsule (`None` lands the one lifted): its
+    /// slot closes, or reopens, and the pieces beside it slide on the open
+    /// spring at the next update, which is where the slides start (`_now` is
+    /// when it was asked). A piece the bar does not hold is lifted from
+    /// nothing, and lands again with the sheet.
+    pub fn set_lifted(&mut self, piece: Option<Key>, _now: Instant) {
+        if piece != self.lifted {
+            self.lifted = piece;
+            self.lift_changed = true;
+            self.stale = true;
+        }
+    }
+
+    /// The piece out of its capsule, if one is.
+    #[must_use]
+    pub fn lifted(&self) -> Option<Key> {
+        self.lifted
     }
 
     /// The layout in force.
@@ -148,6 +220,7 @@ impl BarTree {
     pub fn set_theme(&mut self, theme: &Theme) {
         self.tree.set_theme(theme);
         self.measure.set_theme(theme);
+        self.spring = spring_of(theme);
         self.stale = true;
     }
 
@@ -180,12 +253,16 @@ impl BarTree {
         lay: &mut dyn FnMut(&mut Tree, (f32, f32)),
     ) {
         let rebuilt = self.stale;
+        let lift = std::mem::take(&mut self.lift_changed);
         if self.stale {
             let cx = BarCx {
                 tray_hidden: &self.layout.tray_hidden,
                 ..*base
             };
             self.views = self.zones.build(&self.layout, &cx);
+            if let Some(key) = self.lifted {
+                self.views.hide(key);
+            }
             self.measure_views(now, lay);
             self.stale = false;
         }
@@ -201,14 +278,40 @@ impl BarTree {
         if rebuilt || moved {
             // A new placement jumps, so nothing slides out from under its
             // region; with the same one, the pieces inside move as the tree
-            // moves them and a press's recoil runs on.
-            if moved {
+            // moves them and a press's recoil runs on. A piece lifted or
+            // landed moves the placement too, but there the capsules still
+            // jump while the pieces inside slide on the open spring from
+            // where they were drawn, and the capsules' glass follows them.
+            // One that comes while a lift's glide still runs is carried as a
+            // lift: the capsules jump and glide again from where they are
+            // drawn, so their glass and regions stay on their pieces.
+            let gliding = (0..4).any(|zone| self.is_sliding(zone, now));
+            let carry = lift || (moved && gliding);
+            let jump = moved && !carry;
+            if jump {
                 self.tree.set_reduced_motion(true);
+                self.glides = [None; 4];
+            }
+            let before: [Option<Rect>; 4] =
+                std::array::from_fn(|zone| self.capsule_extent(zone, now));
+            if carry {
+                let (duration, easing) = self.spring;
+                self.tree.slide_with(duration, easing, &zone_keys());
             }
             self.tree.apply(self.placed(&placement, surface_w), now);
             lay(&mut self.tree, (surface_w, BAR_H));
-            if moved {
+            if jump {
                 self.tree.set_reduced_motion(self.reduced);
+            }
+            if carry && !self.reduced {
+                // The capsules glide on the pieces' spring, from where they
+                // were drawn to where they are now.
+                for (zone, from) in before.into_iter().enumerate() {
+                    self.glides[zone] = from
+                        .zip(self.zone_rect(zone))
+                        .filter(|(from, to)| !same_extent(*from, *to))
+                        .map(|(from, _)| Glide { from, start: now });
+                }
             }
             self.placement = Some(placement);
         } else {
@@ -278,26 +381,37 @@ impl BarTree {
     }
 
     /// Paints the bar, without the capsule of zone `skip` when one is given
-    /// (a sheet draws that one itself).
-    pub fn paint(&mut self, painter: &mut Painter, now: Instant, skip: Option<usize>) {
-        match skip.and_then(|zone| self.zone_node(zone)) {
-            Some(id) => self.tree.paint_except(painter, now, id),
-            None => self.tree.paint(painter, now),
-        }
-    }
-
-    /// Paints only the pieces of zone `zone`'s capsule: not its box or Haze.
-    /// The piece `open` (the one a sheet is open under) shows no hover or
-    /// press: the sheet's indicator pill is its only plate.
-    pub fn paint_row(
+    /// (a sheet draws that one itself) and without the pieces `hidden` (ones
+    /// that are painted elsewhere while they fly).
+    pub fn paint(
         &mut self,
         painter: &mut Painter,
         now: Instant,
-        zone: usize,
-        open: Option<Key>,
+        skip: Option<usize>,
+        hidden: &[Key],
     ) {
+        self.sync_extents(now);
+        match skip.and_then(|zone| self.zone_node(zone)) {
+            Some(id) => self.tree.paint_except_hiding(painter, now, id, hidden),
+            None => self.tree.paint_hiding(painter, now, hidden),
+        }
+    }
+
+    /// Paints only the pieces of zone `zone`'s capsule: not its box or Haze,
+    /// and not the pieces `hidden`.
+    pub fn paint_row(&mut self, painter: &mut Painter, now: Instant, zone: usize, hidden: &[Key]) {
         if let Some(id) = self.zone_node(zone) {
-            self.tree.paint_children_quiet(painter, now, id, open);
+            self.tree.paint_children_hiding(painter, now, id, hidden);
+        }
+    }
+
+    /// Hands the tree the extents the capsules are painted at `now`.
+    fn sync_extents(&mut self, now: Instant) {
+        for (zone, key) in zone_keys().into_iter().enumerate() {
+            let extent = self
+                .capsule_extent(zone, now)
+                .filter(|e| self.zone_rect(zone) != Some(*e));
+            self.tree.set_extent(key, extent);
         }
     }
 
@@ -311,17 +425,205 @@ impl BarTree {
         self.zone_node(zone).map(|id| self.tree.rect(id))
     }
 
-    /// The zone whose capsule holds the centre of node `key`.
+    /// The capsule of zone `zone` as it is painted at `now`: its rect at
+    /// rest, and while its pieces slide (a piece lifted out or landed) its
+    /// edges glide from the extent it had to its rect on the pieces' spring.
+    /// What its glass, regions and sheet follow.
+    #[must_use]
+    pub fn capsule_extent(&self, zone: usize, now: Instant) -> Option<Rect> {
+        let rest = self.zone_rect(zone)?;
+        let Some(g) = self.glides.get(zone).copied().flatten() else {
+            return Some(rest);
+        };
+        if !self.gliding(&g, now) {
+            return Some(rest);
+        }
+        let (duration, easing) = self.spring;
+        let t = now.saturating_duration_since(g.start).as_secs_f32() / duration.as_secs_f32();
+        let k = easing.eval(t.clamp(0.0, 1.0));
+        let edge = |from: f32, to: f32| from + (to - from) * k;
+        let left = edge(g.from.x, rest.x);
+        let right = edge(g.from.x + g.from.w, rest.x + rest.w);
+        Some(Rect {
+            x: left,
+            w: (right - left).max(0.0),
+            ..rest
+        })
+    }
+
+    /// Whether the capsule of zone `zone` is on its glide at `now`, so that
+    /// its painted extent is not its rect.
+    #[must_use]
+    pub fn is_sliding(&self, zone: usize, now: Instant) -> bool {
+        self.glides
+            .get(zone)
+            .copied()
+            .flatten()
+            .is_some_and(|g| self.gliding(&g, now))
+    }
+
+    /// The id of the piece that drew node `key`, lifted or not.
+    #[must_use]
+    pub fn piece_id_of(&self, key: Key) -> Option<&str> {
+        self.views.owner(key)
+    }
+
+    /// The zone whose capsule holds node `key`, lifted or not.
     #[must_use]
     pub fn zone_of(&self, key: Key) -> Option<usize> {
-        let r = self.piece_rect(key)?;
-        let (x, y) = (r.x + r.w / 2.0, r.y + r.h / 2.0);
-        (0..zone_keys().len()).find(|&zone| self.zone_rect(zone).is_some_and(|z| z.contains(x, y)))
+        self.views.owner(key)?;
+        let zones = zone_keys();
+        let mut at = self.tree.node_by_key(key)?;
+        loop {
+            let found = zones.iter().position(|&z| z == self.tree.key_of(at));
+            if found.is_some() {
+                return found;
+            }
+            at = self.tree.parent_of(at)?;
+        }
+    }
+
+    /// Where the slot of piece `key` is at `now`, as a rect with no width:
+    /// the centre of the piece while it is in its row, and, once lifted, of
+    /// the gap its neighbours close over it (they slide, so it moves with
+    /// them; with no neighbour, the capsule's end or centre). `None` once
+    /// the bar does not hold the piece.
+    #[must_use]
+    pub fn slot_rect(&self, key: Key, now: Instant) -> Option<Rect> {
+        self.views.owner(key)?;
+        let id = self.tree.node_by_key(key)?;
+        let parent = self.tree.parent_of(id)?;
+        let kids = self.tree.painted_children(parent, now);
+        let i = kids.iter().position(|k| k.0 == key)?;
+        let (_, rect, hidden) = kids[i];
+        let x = if hidden {
+            let prev = kids[..i].iter().rev().find(|k| !k.2);
+            let next = kids[i + 1..].iter().find(|k| !k.2);
+            let host = self
+                .zone_of(key)
+                .and_then(|zone| self.capsule_extent(zone, now))
+                .unwrap_or_else(|| self.tree.painted_rect(parent, now));
+            match (prev, next) {
+                (Some(p), Some(n)) => (p.1.x + p.1.w + n.1.x) / 2.0,
+                // At an end of the row, the middle of what the piece took
+                // beside its neighbour (its own rect is where it was), so
+                // the slot starts where the piece was.
+                (Some(p), None) => (p.1.x + p.1.w + rect.x + rect.w) / 2.0,
+                (None, Some(n)) => (rect.x + n.1.x) / 2.0,
+                (None, None) => host.x + host.w / 2.0,
+            }
+        } else {
+            rect.x + rect.w / 2.0
+        };
+        Some(Rect {
+            x,
+            y: rect.y,
+            w: 0.0,
+            h: rect.h,
+        })
+    }
+
+    /// The icon and the text of piece `piece` as the bar paints them at
+    /// `now`: its first icon, and the text node that reads `text` (a piece
+    /// whose face has no text, or whose bar text is not that string, flies
+    /// its icon only; one drawn without an icon node, like the system load,
+    /// flies its text only). `None` once the bar does not hold the piece or
+    /// nothing of it can fly.
+    #[must_use]
+    pub fn flyers_of(
+        &self,
+        piece: Key,
+        text: Option<&str>,
+        now: Instant,
+    ) -> Option<(BarKeys, Parts)> {
+        self.views.owner(piece)?;
+        let root = self.tree.node_by_key(piece)?;
+        let mut icon = None;
+        let mut word = None;
+        let mut nodes = self.tree.descendants_of(root);
+        nodes.insert(0, root);
+        for id in nodes {
+            match self.tree.kind_of(id) {
+                Some(ViewKind::Icon { key, size, .. }) if icon.is_none() => {
+                    icon = Some((id, key.clone(), *size));
+                }
+                Some(ViewKind::Text {
+                    text: shown, style, ..
+                }) if word.is_none() && text == Some(shown.as_str()) => {
+                    word = Some((id, shown.clone(), style.size));
+                }
+                _ => {}
+            }
+        }
+        if icon.is_none() && word.is_none() {
+            return None;
+        }
+        let keys = BarKeys {
+            piece,
+            icon: icon.map(|(id, ..)| self.tree.key_of(id)),
+            text: word.as_ref().map(|(id, ..)| self.tree.key_of(*id)),
+        };
+        self.parts_at(keys, now).map(|parts| (keys, parts))
+    }
+
+    /// The parts `keys` name as the bar paints them at `now`; `None` once
+    /// the bar does not hold the piece or the nodes.
+    #[must_use]
+    pub fn parts_at(&self, keys: BarKeys, now: Instant) -> Option<Parts> {
+        self.views.owner(keys.piece)?;
+        let icon = match keys.icon {
+            Some(k) => {
+                let id = self.tree.node_by_key(k)?;
+                let ViewKind::Icon { key, .. } = self.tree.kind_of(id)? else {
+                    return None;
+                };
+                Some((key.clone(), self.tree.painted_rect(id, now)))
+            }
+            None => None,
+        };
+        let text = keys.text.and_then(|k| {
+            let id = self.tree.node_by_key(k)?;
+            let ViewKind::Text { text, style, .. } = self.tree.kind_of(id)? else {
+                return None;
+            };
+            Some(TextPart {
+                text: text.clone(),
+                rect: self.tree.painted_rect(id, now),
+                size: style.size,
+            })
+        });
+        // A text node gone mid-flight leaves the icon to fly alone.
+        if icon.is_none() && text.is_none() {
+            return None;
+        }
+        let (icon, icon_rect) = match icon {
+            Some((key, rect)) => (Some(key), rect),
+            None => (
+                None,
+                Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 0.0,
+                    h: 0.0,
+                },
+            ),
+        };
+        Some(Parts {
+            icon,
+            icon_rect,
+            text,
+            k: None,
+        })
     }
 
     #[must_use]
     pub fn is_animating(&self, now: Instant) -> bool {
-        self.tree.is_animating(now)
+        self.tree.is_animating(now) || self.glides.iter().flatten().any(|g| self.gliding(g, now))
+    }
+
+    /// Whether glide `g` still runs at `now`.
+    fn gliding(&self, g: &Glide, now: Instant) -> bool {
+        now.saturating_duration_since(g.start) < self.spring.0
     }
 
     /// The key of the node the pointer is over (tests).
@@ -341,52 +643,33 @@ impl BarTree {
     /// the blur and input regions cover.
     #[must_use]
     pub fn shapes(&self, now: Instant, radius: f32, skip: Option<usize>) -> Vec<Shape> {
-        let zones = zone_keys();
-        let skipped = skip.and_then(|zone| zones.get(zone).copied());
-        self.tree
-            .paint_order()
-            .into_iter()
-            .filter(|&id| {
-                let key = self.tree.key_of(id);
-                zones.contains(&key)
-                    && Some(key) != skipped
-                    && self.tree.effective_opacity(id, now) > 0.0
+        (0..zone_keys().len())
+            .filter(|&zone| Some(zone) != skip)
+            .filter(|&zone| {
+                self.zone_node(zone)
+                    .is_some_and(|id| self.tree.effective_opacity(id, now) > 0.0)
             })
-            .map(|id| {
-                let r = self.tree.rect(id);
-                let (dx, dy) = self.tree.offset(id, now);
-                (
-                    Rect {
-                        x: r.x + dx,
-                        y: r.y + dy,
-                        ..r
-                    },
-                    radius,
-                )
-            })
-            .filter(|(r, _)| r.w > 0.0 && r.h > 0.0)
+            .filter_map(|zone| self.capsule_extent(zone, now))
+            .filter(|r| r.w > 0.0 && r.h > 0.0)
+            .map(|r| (r, radius))
             .collect()
     }
 
-    /// Whether (`x`, `y`) is on one of the capsules.
+    /// Whether (`x`, `y`) is on one of the capsules, as painted at `now`.
     #[must_use]
-    pub fn contains(&self, x: f32, y: f32) -> bool {
-        zone_keys().into_iter().any(|key| {
-            self.tree
-                .node_by_key(key)
-                .is_some_and(|id| self.tree.rect(id).contains(x, y))
-        })
+    pub fn contains(&self, x: f32, y: f32, now: Instant) -> bool {
+        self.contains_except(x, y, None, now)
     }
 
-    /// Whether (`x`, `y`) is on a capsule other than zone `except`'s.
+    /// Whether (`x`, `y`) is on a capsule other than zone `except`'s, as
+    /// painted at `now`.
     #[must_use]
-    pub fn contains_except(&self, x: f32, y: f32, except: Option<usize>) -> bool {
-        zone_keys().into_iter().enumerate().any(|(zone, key)| {
+    pub fn contains_except(&self, x: f32, y: f32, except: Option<usize>, now: Instant) -> bool {
+        (0..zone_keys().len()).any(|zone| {
             Some(zone) != except
                 && self
-                    .tree
-                    .node_by_key(key)
-                    .is_some_and(|id| self.tree.rect(id).contains(x, y))
+                    .capsule_extent(zone, now)
+                    .is_some_and(|r| r.contains(x, y))
         })
     }
 
@@ -455,6 +738,52 @@ impl BarTree {
         }
     }
 
+    /// What piece `key` is asked by an event that did not land on the bar
+    /// but is its own (the open sheet's subtitle answers as the piece): a
+    /// release of the left, middle or right button is the primary, middle
+    /// or context gesture; a wheel turn goes in whole steps, as over the
+    /// piece. Each gesture goes through the same `activate` as the bar's.
+    pub fn ask_for(
+        &mut self,
+        key: Key,
+        ev: &InputEvent,
+        base: &BarCx<'_>,
+    ) -> Vec<(Key, Gesture, PieceAction)> {
+        let gestures: Vec<Gesture> = match *ev {
+            InputEvent::PointerRelease { button, .. } => match button {
+                BTN_LEFT => vec![Gesture::Primary],
+                BTN_MIDDLE => vec![Gesture::Middle],
+                BTN_RIGHT => vec![Gesture::Context],
+                _ => Vec::new(),
+            },
+            InputEvent::Axis {
+                horizontal,
+                vertical,
+                ..
+            } => self
+                .steps(key, horizontal, vertical)
+                .into_iter()
+                .map(|(_, gesture)| gesture)
+                .collect(),
+            _ => Vec::new(),
+        };
+        let cx = self.cx(base);
+        gestures
+            .into_iter()
+            .map(|gesture| (key, gesture, self.ask(key, gesture, &cx)))
+            .collect()
+    }
+
+    /// Whether a wheel step over piece `key` asks it for something (the
+    /// level pieces step their level; most pieces have no wheel action).
+    #[must_use]
+    pub fn takes_wheel(&self, key: Key, base: &BarCx<'_>) -> bool {
+        let cx = self.cx(base);
+        [1, -1].into_iter().any(|steps| {
+            self.ask(key, Gesture::Scroll(Axis::Vertical, steps), &cx) != PieceAction::None
+        })
+    }
+
     /// A wheel turn of (`horizontal`, `vertical`) logical px over `key`, in
     /// whole steps per axis with the Wayland sign; the rest waits for the
     /// next turn on the same node.
@@ -488,10 +817,14 @@ impl BarTree {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use celestina_paint::TextStyle;
+    use celestina_ui::Easing;
 
     use super::*;
     use crate::island::pages::NameOwner;
+    use crate::island::view::CAPSULE_PADDING;
 
     /// 7 px per char, 16 px tall.
     fn fake_measure(s: &str, _: &TextStyle, _: Option<f32>) -> (f32, f32) {
@@ -519,7 +852,10 @@ mod tests {
             weather: None,
             today: None,
             connectivity: &crate::connectivity::state::ConnectivityState::default(),
-            levels: crate::pieces::Levels::default(),
+            levels: crate::pieces::Levels {
+                brightness: Some(70),
+                ..crate::pieces::Levels::default()
+            },
             phone: &celestina_shell::phone::PhoneState::Absent,
             bubbles: &crate::bubbles::NONE,
             media: &crate::island::pages::media::NO_MEDIA,
@@ -632,6 +968,359 @@ mod tests {
             let bar = built(&twice, cx);
             assert_eq!(bar.views.owner(Key::named("bell")), Some("notifications"));
             assert!(bar.views.end.is_none(), "placed once, in the centre");
+        });
+    }
+
+    /// The start zone of three pieces (the bell, the brightness with a
+    /// reading, the session), laid out at rest.
+    fn trio(cx: &BarCx<'_>, reduced: bool) -> (BarTree, [Key; 3], Instant) {
+        let t0 = Instant::now();
+        let mut bar = BarTree::new(
+            &only(&["notifications", "brightness", "session"], &[]),
+            cx.theme,
+            reduced,
+        );
+        bar.update(cx, 1920.0, 300.0, t0, &mut lay());
+        let keys: Vec<Key> = bar
+            .views
+            .start
+            .as_ref()
+            .map(|v| v.children.iter().map(|c| c.key).collect())
+            .unwrap_or_default();
+        assert_eq!(keys.len(), 3, "the three pieces draw something");
+        (bar, [keys[0], keys[1], keys[2]], t0)
+    }
+
+    /// Lifts `key` at `t0` and lays the bar out again.
+    fn lift(bar: &mut BarTree, cx: &BarCx<'_>, key: Option<Key>, t0: Instant) {
+        bar.set_lifted(key, t0);
+        bar.update(cx, 1920.0, 300.0, t0, &mut lay());
+    }
+
+    const ZERO: Rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        w: 0.0,
+        h: 0.0,
+    };
+
+    fn spring_at(theme: &Theme, t: f32) -> f32 {
+        Easing::OutBack(theme.overshoot).eval(t)
+    }
+
+    fn after(t0: Instant, ms: u64) -> Instant {
+        t0 + Duration::from_millis(ms)
+    }
+
+    #[test]
+    fn a_lifted_piece_leaves_no_gap() {
+        with_cx(|cx| {
+            let (mut bar, [a, b, c], t0) = trio(cx, false);
+            let gap = cx.theme.spacing.sm;
+            let whole = bar.zone_rect(0).map_or(0.0, |r| r.w);
+            let width = |bar: &BarTree, k| bar.node_rect(k).map_or(0.0, |r| r.w);
+            let middle = width(&bar, b);
+            lift(&mut bar, cx, Some(b), t0);
+            let narrow = bar.zone_rect(0).map_or(0.0, |r| r.w);
+            assert_eq!(narrow, whole - middle - gap);
+            // The neighbours abut with the zone's gap; the middle is out of
+            // the layout.
+            let (ra, rc) = (bar.node_rect(a), bar.node_rect(c));
+            assert!(ra.zip(rc).is_some_and(|(ra, rc)| rc.x == ra.x + ra.w + gap));
+            assert_eq!(
+                bar.placement().and_then(|p| p.start).map(|r| r.w),
+                Some(narrow)
+            );
+            assert_eq!(bar.lifted(), Some(b));
+            assert_eq!(
+                bar.zone_of(b),
+                Some(0),
+                "a lifted piece is still in its zone"
+            );
+        });
+    }
+
+    #[test]
+    fn the_row_slides_with_the_open_spring() {
+        with_cx(|cx| {
+            let (mut bar, [_, b, c], t0) = trio(cx, false);
+            let old = bar.node_rect(c).map_or(0.0, |r| r.x);
+            lift(&mut bar, cx, Some(b), t0);
+            let new = bar.node_rect(c).map_or(0.0, |r| r.x);
+            assert!(new < old, "the piece after the lifted one moves left");
+            let id = bar.tree.node_by_key(c);
+            let painted =
+                |ms: u64| id.map_or(f32::NAN, |id| bar.tree.painted_rect(id, after(t0, ms)).x);
+            // It starts where it was and ends where it goes; half way is the
+            // open spring's, not the normal step's.
+            assert!((painted(0) - old).abs() < 0.01);
+            let k = spring_at(cx.theme, 0.5);
+            assert!((painted(175) - (old + (new - old) * k)).abs() < 0.01);
+            assert!((painted(350) - new).abs() < 0.01);
+            let normal = celestina_ui::ONE_UI.eval(0.5);
+            assert!((k - normal).abs() > 0.01, "the two curves differ at half");
+            assert!(bar.is_animating(after(t0, 349)));
+            assert!(!bar.is_animating(after(t0, 350)));
+        });
+    }
+
+    #[test]
+    fn the_capsule_extent_follows_its_sliding_pieces() {
+        with_cx(|cx| {
+            let (mut bar, [a, b, c], t0) = trio(cx, false);
+            let whole = bar.zone_rect(0);
+            lift(&mut bar, cx, Some(b), t0);
+            let rest = bar.zone_rect(0);
+            let pad = CAPSULE_PADDING;
+            for ms in [0, 60, 175, 300] {
+                let now = after(t0, ms);
+                let shown = |k: Key| {
+                    bar.tree
+                        .node_by_key(k)
+                        .map(|id| bar.tree.painted_rect(id, now))
+                        .unwrap_or(ZERO)
+                };
+                let (ra, rc) = (shown(a), shown(c));
+                let extent = bar.capsule_extent(0, now);
+                let want = Rect {
+                    x: ra.x - pad,
+                    w: (rc.x + rc.w + pad) - (ra.x - pad),
+                    ..whole.unwrap_or(ZERO)
+                };
+                assert!(
+                    extent.is_some_and(|e| (e.x - want.x).abs() < 0.01 && (e.w - want.w).abs() < 0.01),
+                    "+{ms} ms: {extent:?} vs {want:?}"
+                );
+                // The glass and the regions are that extent.
+                let shapes = bar.shapes(now, 20.0, None);
+                assert_eq!(shapes.first().map(|s| s.0), extent);
+                assert!(bar.contains(want.x + 1.0, 28.0, now));
+            }
+            // It starts as wide as the whole capsule and ends as the placed
+            // one: no gap, no jump.
+            assert_eq!(bar.capsule_extent(0, t0).map(|r| r.w), whole.map(|r| r.w));
+            let end = after(t0, 400);
+            assert_eq!(bar.capsule_extent(0, end), rest);
+            assert_eq!(bar.shapes(end, 20.0, None).first().map(|s| s.0), rest);
+            assert!(
+                !bar.is_sliding(0, end) && !bar.is_animating(end),
+                "no frames at rest"
+            );
+            assert!(bar.is_sliding(0, after(t0, 100)));
+        });
+    }
+
+    #[test]
+    fn a_capsule_moved_during_a_glide_keeps_its_glass_and_regions_on_it() {
+        with_cx(|cx| {
+            let t0 = Instant::now();
+            let mut bar = BarTree::new(
+                &only(&["notifications", "brightness"], &["session"]),
+                cx.theme,
+                false,
+            );
+            bar.update(cx, 1920.0, 300.0, t0, &mut lay());
+            let lifted = bar
+                .views
+                .start
+                .as_ref()
+                .and_then(|v| v.children.get(1).map(|c| c.key));
+            lift(&mut bar, cx, lifted, t0);
+            // The output narrows while the lift's glide runs.
+            bar.update(cx, 1900.0, 300.0, after(t0, 100), &mut lay());
+            for ms in [150, 250] {
+                let now = after(t0, ms);
+                bar.sync_extents(now);
+                let painted = bar.zone_node(3).map(|id| bar.tree.painted_rect(id, now));
+                let extent = bar.capsule_extent(3, now);
+                let shape = bar.shapes(now, 20.0, None).last().map(|s| s.0);
+                assert!(
+                    painted
+                        .zip(extent)
+                        .is_some_and(|(p, e)| (p.x - e.x).abs() < 0.01 && (p.w - e.w).abs() < 0.01),
+                    "+{ms} ms: glass {painted:?} vs extent {extent:?}"
+                );
+                assert_eq!(shape, extent, "+{ms} ms: regions");
+            }
+            let end = after(t0, 800);
+            assert_eq!(bar.capsule_extent(3, end), bar.zone_rect(3));
+            assert!(!bar.is_animating(end), "no frames at rest");
+        });
+    }
+
+    #[test]
+    fn landing_the_piece_reopens_its_slot() {
+        with_cx(|cx| {
+            let (mut bar, [_, b, c], t0) = trio(cx, false);
+            let whole = bar.zone_rect(0);
+            let at_rest = bar.node_rect(c).map_or(0.0, |r| r.x);
+            lift(&mut bar, cx, Some(b), t0);
+            let t1 = after(t0, 400);
+            let narrow = bar.node_rect(c).map_or(0.0, |r| r.x);
+            lift(&mut bar, cx, None, t1);
+            assert_eq!(bar.zone_rect(0), whole, "the width comes back");
+            assert_eq!(bar.lifted(), None);
+            let id = bar.tree.node_by_key(c);
+            let painted =
+                |ms: u64| id.map_or(f32::NAN, |id| bar.tree.painted_rect(id, after(t1, ms)).x);
+            assert!((painted(0) - narrow).abs() < 0.01);
+            let k = spring_at(cx.theme, 0.5);
+            assert!((painted(175) - (narrow + (at_rest - narrow) * k)).abs() < 0.01);
+            assert!((painted(350) - at_rest).abs() < 0.01);
+            assert!(!bar.is_animating(after(t1, 350)));
+        });
+    }
+
+    #[test]
+    fn the_slot_keeps_its_centre_while_lifted() {
+        with_cx(|cx| {
+            let (mut bar, [a, b, c], t0) = trio(cx, false);
+            let piece = bar.node_rect(b);
+            let before = bar.slot_rect(b, t0);
+            assert_eq!(
+                before.map(|s| (s.x, s.w)),
+                piece.map(|p| (p.x + p.w / 2.0, 0.0)),
+                "in its row, the slot is the piece's centre"
+            );
+            lift(&mut bar, cx, Some(b), t0);
+            // Right away the neighbours are still where they were: the gap
+            // between them is the old one, centred on the piece's.
+            let (ra, rc) = (bar.node_rect(a), bar.node_rect(c));
+            let gap = cx.theme.spacing.sm;
+            let slot = bar.slot_rect(b, after(t0, 400));
+            let want = ra.zip(rc).map(|(ra, rc)| (ra.x + ra.w + rc.x) / 2.0);
+            assert_eq!(slot.map(|s| s.x), want);
+            assert_eq!(slot.map(|s| (s.w, s.h)), Some((0.0, 40.0)));
+            assert!(ra
+                .zip(rc)
+                .is_some_and(|(ra, rc)| rc.x - (ra.x + ra.w) == gap));
+            // It moves with the pieces that slide, so the sheet over it does.
+            let mid = bar.slot_rect(b, after(t0, 100));
+            assert!(mid.is_some_and(|m| before.is_some_and(|b0| m.x != b0.x)));
+            // Off the bar, a piece has none.
+            assert!(bar.slot_rect(Key::named("nothing"), t0).is_none());
+        });
+    }
+
+    #[test]
+    fn reduced_motion_jumps_the_slot() {
+        with_cx(|cx| {
+            let (mut bar, [a, b, c], t0) = trio(cx, true);
+            lift(&mut bar, cx, Some(b), t0);
+            assert!(!bar.is_animating(t0), "no slide");
+            assert!(!bar.is_sliding(0, t0));
+            assert_eq!(bar.capsule_extent(0, t0), bar.zone_rect(0));
+            for k in [a, c] {
+                let id = bar.tree.node_by_key(k);
+                assert_eq!(
+                    id.map(|id| bar.tree.painted_rect(id, t0)),
+                    bar.node_rect(k),
+                    "drawn where it is"
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn the_only_piece_of_a_capsule_can_be_lifted() {
+        with_cx(|cx| {
+            let t0 = Instant::now();
+            let mut bar = BarTree::new(&only(&["notifications"], &[]), cx.theme, false);
+            bar.update(cx, 1920.0, 300.0, t0, &mut lay());
+            let bell = Key::named("bell");
+            lift(&mut bar, cx, Some(bell), t0);
+            let pad = CAPSULE_PADDING;
+            let zone = bar.zone_rect(0);
+            assert_eq!(
+                zone.map(|z| z.w),
+                Some(2.0 * pad),
+                "an empty row of padding"
+            );
+            assert!(bar.placement().is_some_and(|p| p.start.is_some()));
+            let slot = bar.slot_rect(bell, t0);
+            assert!(slot.is_some_and(|s| s.w == 0.0 && s.x.is_finite()));
+            let end = after(t0, 400);
+            assert!(bar.capsule_extent(0, end).is_some_and(|e| e.w == 2.0 * pad));
+            assert_eq!(bar.shapes(end, 20.0, None).len(), 1);
+        });
+    }
+
+    #[test]
+    fn a_lifted_piece_that_leaves_the_bar_has_no_slot() {
+        with_cx(|cx| {
+            let (mut bar, [_, b, _], t0) = trio(cx, false);
+            lift(&mut bar, cx, Some(b), t0);
+            assert!(bar.slot_rect(b, t0).is_some());
+            // The layout drops the piece: its node and slot are gone.
+            assert!(bar.set_layout(&only(&["notifications", "clock"], &[])));
+            bar.update(cx, 1920.0, 300.0, after(t0, 10), &mut lay());
+            assert!(bar.slot_rect(b, after(t0, 10)).is_none());
+            assert!(bar.zone_of(b).is_none());
+        });
+    }
+
+    #[test]
+    fn switching_lands_the_old_piece_and_lifts_the_new_one_on_one_spring() {
+        with_cx(|cx| {
+            let (mut bar, [a, b, c], t0) = trio(cx, false);
+            let gap = cx.theme.spacing.sm;
+            let whole = bar.zone_rect(0).map_or(0.0, |r| r.w);
+            lift(&mut bar, cx, Some(a), t0);
+            let t1 = after(t0, 400);
+            let width = |bar: &BarTree, k| bar.node_rect(k).map_or(0.0, |r| r.w);
+            // Now the last piece goes and the first comes back.
+            let b_before = bar.node_rect(b).map_or(0.0, |r| r.x);
+            lift(&mut bar, cx, Some(c), t1);
+            let narrow = bar.zone_rect(0).map_or(0.0, |r| r.w);
+            assert_eq!(narrow, whole - width(&bar, c) - gap);
+            let id = bar.tree.node_by_key(b);
+            let b_after = bar.node_rect(b).map_or(0.0, |r| r.x);
+            assert!(b_after > b_before, "the landed piece reopens room before b");
+            let painted =
+                |ms: u64| id.map_or(f32::NAN, |id| bar.tree.painted_rect(id, after(t1, ms)).x);
+            let k = spring_at(cx.theme, 0.5);
+            assert!((painted(0) - b_before).abs() < 0.01);
+            assert!((painted(175) - (b_before + (b_after - b_before) * k)).abs() < 0.01);
+            assert!((painted(350) - b_after).abs() < 0.01);
+            // The old piece is in its row again (not hidden), the new one is
+            // out of it.
+            let kids = bar
+                .tree
+                .node_by_key(zone_key(0))
+                .map(|z| bar.tree.painted_children(z, t1))
+                .unwrap_or_default();
+            let hidden: Vec<bool> = kids.iter().map(|k| k.2).collect();
+            assert_eq!(hidden, [false, false, true]);
+        });
+    }
+
+    #[test]
+    fn a_placement_change_during_a_lift_keeps_the_lifted_zones_glide() {
+        with_cx(|cx| {
+            let (mut bar, [_, b, _], t0) = trio(cx, false);
+            lift(&mut bar, cx, Some(b), t0);
+            let mid = after(t0, 100);
+            assert!(bar.is_sliding(0, mid));
+            // Another capsule's width moves the placement, not the lift.
+            bar.update(cx, 1900.0, 300.0, mid, &mut lay());
+            assert!(bar.is_sliding(0, mid), "the glide goes on");
+            let extent = bar.capsule_extent(0, mid);
+            assert_ne!(extent, bar.zone_rect(0), "the capsule has not jumped");
+        });
+    }
+
+    #[test]
+    fn the_slot_of_the_last_piece_starts_where_the_piece_was() {
+        with_cx(|cx| {
+            let (mut bar, [_, _, c], t0) = trio(cx, false);
+            let rect = bar.node_rect(c).unwrap_or(ZERO);
+            let centre = rect.x + rect.w / 2.0;
+            lift(&mut bar, cx, Some(c), t0);
+            let slot = bar.slot_rect(c, t0).map_or(f32::MAX, |s| s.x);
+            assert!(
+                (slot - centre).abs() <= cx.theme.spacing.sm,
+                "slot {slot} centre {centre}"
+            );
         });
     }
 }

@@ -1,6 +1,6 @@
 //! Page-backed capsule sheets (CEL-D-003): a bar piece that opened an Island
-//! page opens the page's content under a 32 px header (the page's title and
-//! the overflow button) in a sheet that grows from its capsule. The Island
+//! page opens the page's content under the piece's subtitle (its icon and text, with
+//! the overflow button at its right) in a sheet that grows from its capsule. The Island
 //! keeps its pages for `island open`, its tabs and the notification paths; a
 //! page sheet does not share a container with them. Both read one
 //! [`PageCx`], and what a node of either does is [`Island::page_action`]:
@@ -20,7 +20,7 @@ use crate::{
         network as network_page, notifications, page_view, phone as phone_page,
         power as power_page, sysmon as sysmon_page,
     },
-    pieces::{PageId, SheetKind},
+    pieces::{Face, PageId, SheetKind},
     sheet::PageBody,
 };
 
@@ -76,10 +76,26 @@ impl Island {
         }
     }
 
-    /// The body view and size of `page` as a sheet: its content in a box as
-    /// tall as the page would be, less what the Island spends on tabs and
-    /// its title row.
-    pub(super) fn page_sheet_view(&self, page: PageId) -> (View, (f32, f32)) {
+    /// The face of `piece`, the bar node that opened the sheet of `page`:
+    /// what the piece shows, else the page's icon alone (a piece that left
+    /// the bar, or one that gives none).
+    fn sheet_face(&self, piece: Key, page: PageId) -> Face {
+        self.bar
+            .as_ref()
+            .and_then(|bar| bar.piece_id_of(piece))
+            .and_then(crate::pieces::piece)
+            .and_then(|p| p.face(&self.bar_cx()))
+            .or_else(|| Face::of_page(page, None))
+            .unwrap_or(Face {
+                icon: "app-window",
+                text: None,
+            })
+    }
+
+    /// The body view and size of `page` as a sheet of `piece`: its content in
+    /// a box as tall as the page would be, less what the Island spends on
+    /// tabs and its title row, under the piece's subtitle.
+    pub(super) fn page_sheet_view(&self, piece: Key, page: PageId) -> (View, (f32, f32)) {
         let cx = self.page_cx();
         let shown = page_view(page);
         let wants = shown.wants(&cx).1;
@@ -89,7 +105,14 @@ impl Island {
             super::state::PAGE_SIZE.1
         };
         let content_h = (wants - view::chrome_height(&self.theme)).max(0.0);
-        let body = view::page_sheet(&self.theme, shown.title(), shown.view(&cx), content_h);
+        let face = self.sheet_face(piece, page);
+        let body = view::page_sheet(
+            &self.theme,
+            &face,
+            shown.title(),
+            shown.view(&cx),
+            content_h,
+        );
         (body, view::page_sheet_size(&self.theme, content_h))
     }
 
@@ -98,7 +121,7 @@ impl Island {
     pub(super) fn open_page_sheet(&mut self, piece: Key, page: PageId, now: Instant) -> bool {
         // A page that opens starts fresh, as a page opened on the Island.
         self.forget_page_state();
-        let (body, size) = self.page_sheet_view(page);
+        let (body, size) = self.page_sheet_view(piece, page);
         let body = PageBody::new(page, &self.theme, self.reduced, body, size, now);
         self.open_sheet_at(
             piece,
@@ -111,10 +134,10 @@ impl Island {
     /// Builds the open page sheet's body again (what the page reads
     /// changed): the focus and hover stay, the sheet follows a new size.
     pub(super) fn apply_page_sheet(&mut self, now: Instant) {
-        let Some(page) = self.sheets.page() else {
+        let (Some(page), Some((_, piece))) = (self.sheets.page(), self.sheets.anchor_ids()) else {
             return;
         };
-        let (body, size) = self.page_sheet_view(page);
+        let (body, size) = self.page_sheet_view(piece, page);
         if let Some(open) = self.sheets.page_body_mut() {
             open.apply(body, size, now);
         }

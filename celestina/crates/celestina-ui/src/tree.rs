@@ -15,7 +15,7 @@ use taffy::{Display, TaffyTree};
 
 use crate::{
     anim::{Animated, Reduced},
-    curve::Motion,
+    curve::{Easing, Motion},
     field::{Field, FieldId},
     highlight::Highlight,
     key::Key,
@@ -139,6 +139,22 @@ pub struct Tree {
     /// The theme's slider anatomy, shared by layout, hit-test and paint.
     pub(crate) slider_metrics: SliderMetrics,
     fault: Option<TreeError>,
+    /// Boxes painted, clipped and reported at a rect of their own instead
+    /// of their layout rect ([`Tree::set_extent`]).
+    pub(crate) extents: Vec<(Key, Rect)>,
+    /// The slide the next layout starts, when it is not the usual one.
+    pub(crate) slide_next: Option<NextSlide>,
+    /// Hit-testing follows the painted rects (slides included).
+    pub(crate) hit_painted: bool,
+}
+
+/// How the slides the next layout starts run ([`Tree::slide_with`]).
+#[derive(Clone, Debug)]
+pub(crate) struct NextSlide {
+    pub duration: Duration,
+    pub easing: Easing,
+    /// The nodes that jump to their new place instead of sliding.
+    pub still: Vec<Key>,
 }
 
 impl std::fmt::Debug for Tree {
@@ -173,7 +189,42 @@ impl Tree {
             press_scale: theme.press_scale,
             slider_metrics: SliderMetrics::of(theme),
             fault: None,
+            extents: Vec::new(),
+            slide_next: None,
+            hit_painted: false,
         }
+    }
+
+    /// The box keyed `key` is painted (haze, fill, clip) and reported by
+    /// [`Tree::painted_rect`] at `rect`, in surface coordinates, instead of
+    /// its layout rect, until `None` puts it back. A capsule whose glass
+    /// follows pieces that slide inside it, or its own glide, is drawn so.
+    pub fn set_extent(&mut self, key: Key, rect: Option<Rect>) {
+        self.extents.retain(|(k, _)| *k != key);
+        if let Some(rect) = rect {
+            self.extents.push((key, rect));
+        }
+    }
+
+    /// Whether a pointer hit lands on what is painted (the node's slide and
+    /// the extent [`Tree::set_extent`] gave count) instead of on its laid-out
+    /// rect, which is the default: slides are visual only. A row whose pieces
+    /// slide on the open spring asks for it.
+    pub fn set_hit_painted(&mut self, on: bool) {
+        self.hit_painted = on;
+    }
+
+    /// The slides the next layout starts (the one that follows the next
+    /// `apply`) run for `duration` on `easing` instead of the theme's normal
+    /// step, and the nodes keyed in `still` jump to their new place without a
+    /// slide of their own: what is inside them slides from where it was drawn.
+    /// Taken by that layout; reduced motion still makes every slide a step.
+    pub fn slide_with(&mut self, duration: Duration, easing: Easing, still: &[Key]) {
+        self.slide_next = Some(NextSlide {
+            duration,
+            easing,
+            still: still.to_vec(),
+        });
     }
 
     /// Takes `theme`'s motion ladder and press scale for the animations
@@ -403,6 +454,12 @@ impl Tree {
         self.slot(id).map_or((0.0, 0.0), |s| {
             (s.offset_x.value(now), s.offset_y.value(now))
         })
+    }
+
+    /// The parent of node `id`; `None` for a root or a stale id.
+    #[must_use]
+    pub fn parent_of(&self, id: NodeId) -> Option<NodeId> {
+        self.slot(id).and_then(|s| s.parent)
     }
 
     /// The first layout fault since the last call, if any.
