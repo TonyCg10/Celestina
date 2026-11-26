@@ -20,6 +20,7 @@ pub mod cadence;
 pub mod clock;
 pub mod menu;
 pub mod pages;
+mod sheets;
 pub mod state;
 pub mod view;
 pub mod workspaces;
@@ -29,7 +30,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use celestina_paint::{Painter, PixmapId, Rect, Theme};
+use celestina_paint::{Painter, PixmapId, Rect, TextStyle, Theme};
 use celestina_shell::{
     connectivity::Action, glance::Today, phone::PhoneState, settings::BarLayout,
 };
@@ -54,6 +55,7 @@ use crate::{
         magnetita::MediaKind, niri::NiriModel, notifications::NotificationsCommand,
         sysmon::SysReading, weather::WeatherReading,
     },
+    sheet::{Measure, Next, Sheets},
     tray::{scroll_steps, ItemId, Orientation, TrayCommand},
 };
 use bar_tree::BarTree;
@@ -115,9 +117,15 @@ pub enum IslandAction {
     /// The Brightness piece's wheel: the app commands the brightness workers
     /// for this Island's output.
     Brightness(BrightnessAction),
-    /// The Volume or Brightness piece was clicked: the app builds the slider
-    /// popup and hands it to [`Island::open_level_popup`], anchored at
-    /// `anchor` (a rect of the surface).
+    /// The Volume piece (`piece`, a node of the bar) asked for its sheet: the
+    /// app builds the body and hands it to [`Island::open_level_sheet`].
+    OpenLevelSheet {
+        kind: level_popup::Kind,
+        piece: Key,
+    },
+    /// The Brightness piece was clicked: the app builds the slider popup and
+    /// hands it to [`Island::open_level_popup`], anchored at `anchor` (a
+    /// rect of the surface).
     OpenLevelPopup {
         kind: level_popup::Kind,
         anchor: Rect,
@@ -337,6 +345,8 @@ pub struct Island {
     level_popup: Option<PopupId>,
     /// The session menu, while it is open. It hangs from the bar too.
     session_menu: Option<PopupId>,
+    /// The capsule sheet that is open, and what waits for it to close.
+    sheets: Sheets,
     /// What the Volume and Brightness pieces read.
     levels: Levels,
     /// The open tray menu hangs from the bar, not from the Tray page, so it
@@ -417,6 +427,7 @@ impl Island {
             bar: None,
             level_popup: None,
             session_menu: None,
+            sheets: Sheets::default(),
             levels: Levels::default(),
             tray_menu_on_bar: false,
             bar_menu_asked: false,
@@ -809,17 +820,30 @@ impl Island {
         }
         self.hold_sysmon(sysmon, now, &mut cx.ctl);
         self.tick_clock(now, &mut cx.ctl);
+        let dpr = self.dpr;
+        self.sheets_before_layout(now, &mut |s: &str, st: &TextStyle, w: Option<f32>| {
+            painter.text().measure(s, st, w, dpr)
+        });
         if self.stale || self.state.slide(now) != self.applied_slide {
             self.apply_views(now);
         }
         self.layout(painter, now);
+        self.sheets_after_layout(now);
         self.paint(painter, now, cx.blur_available);
         self.sync_ctl(&mut cx.ctl, now);
 
         let moving = self.state.wants_frame(now);
         let bar_moving = self.bar.as_ref().is_some_and(|b| b.is_animating(now));
-        if moving || self.capsule.is_animating(now) || self.page.is_animating(now) || bar_moving {
+        if moving
+            || self.capsule.is_animating(now)
+            || self.page.is_animating(now)
+            || bar_moving
+            || self.sheets.wants_frame(now)
+        {
             cx.ctl.request_redraw();
+        }
+        if let Some(wait) = self.sheets.wait(now) {
+            cx.ctl.redraw_after(wait);
         }
         if self.moving && !moving {
             tracing::debug!(output = %self.output, open = self.state.is_open(), "island: growth settled");
@@ -991,6 +1015,7 @@ impl Island {
     fn layout_with(&mut self, now: Instant, lay: &mut dyn FnMut(&mut Tree, (f32, f32))) {
         lay(&mut self.capsule, self.size);
         lay(&mut self.page, self.size);
+        self.sheets.layout(lay);
         for tree in [&mut self.capsule, &mut self.page] {
             if let Some(fault) = tree.take_fault() {
                 tracing::warn!(output = %self.output, %fault, "island: layout fault");
@@ -1016,10 +1041,10 @@ impl Island {
     /// the Island's rect.
     fn shapes(&self, now: Instant) -> Vec<Shape> {
         let radius = self.theme.radius_lg;
-        let mut shapes = self
-            .bar
-            .as_ref()
-            .map_or_else(Vec::new, |bar| bar.shapes(now, radius));
+        let mut shapes = self.bar.as_ref().map_or_else(Vec::new, |bar| {
+            bar.shapes(now, radius, self.sheets.zone(now))
+        });
+        shapes.extend(self.sheet_rect(now).map(|rect| (rect, radius)));
         shapes.push((self.state.rect(now, self.size.0), radius));
         shapes
     }
@@ -1031,8 +1056,9 @@ impl Island {
         let rect = self.state.rect(now, self.size.0);
         let radius = self.theme.radius_lg;
         painter.begin(self.size, self.dpr, blur_available);
+        let skip = self.sheets.zone(now);
         if let Some(bar) = self.bar.as_mut() {
-            bar.paint(painter, now);
+            bar.paint(painter, now, skip);
         }
         painter.haze(rect, radius);
         painter.push_clip(rect, radius);
@@ -1049,6 +1075,7 @@ impl Island {
             }
         }
         painter.pop_clip();
+        self.paint_sheet(painter, now);
         painter.end();
     }
 
@@ -1060,7 +1087,7 @@ impl Island {
     /// `None` at rest and `OnDemand` while open (ADR 0007).
     fn sync_ctl(&self, ctl: &mut SurfaceCtl<'_>, now: Instant) {
         let shapes = self.shapes(now);
-        let open = self.state.is_open();
+        let open = self.anything_shown(now);
         ctl.set_blur_region(&silhouette::union(&shapes));
         ctl.set_input_region(&silhouette::input_region(&shapes, open, self.size));
         ctl.set_keyboard_interactivity(if open {
@@ -1070,12 +1097,29 @@ impl Island {
         });
     }
 
+    /// Whether the page or a sheet is painted (closing ones included): the
+    /// input region is then the whole surface and the keyboard `OnDemand`.
+    fn anything_shown(&self, now: Instant) -> bool {
+        // What waits keeps the keyboard too: dropping it would send the
+        // `FocusLost` that gives the queue up.
+        self.state.is_open() || self.sheets.is_shown(now) || self.sheets.has_queued()
+    }
+
     /// Grows into `page`, or slides to it while already open.
     fn open(&mut self, page: PageId, now: Instant) {
         if page == PageId::PHONE && !self.phone_duty {
             tracing::info!("island open phone: the phone duty is off; nothing was done");
             return;
         }
+        if self.sheets.is_shown(now) {
+            // One thing at a time: the sheet closes, the page opens once it
+            // is gone.
+            self.close_sheet(now);
+            self.sheets.queue(Next::Page(page));
+            return;
+        }
+        // A page asked for supersedes a sheet that waited behind it.
+        self.sheets.drop_queue();
         if page != self.state.shown_page() {
             self.stale = true;
             self.forget_confirmation();
@@ -1127,7 +1171,12 @@ impl Island {
             self.apply_views(now);
         }
         self.layout(painter, now);
-        self.route(ev, ctl, now)
+        // The painter is in hand here: the sheet's body cuts and measures
+        // with it, never with a closure that borrows it again.
+        let dpr = self.dpr;
+        let mut measure =
+            |s: &str, st: &TextStyle, w: Option<f32>| painter.text().measure(s, st, w, dpr);
+        self.route(ev, ctl, now, &mut measure)
     }
 
     /// What input does before anything is laid out: a closed popup, and a
@@ -1164,7 +1213,16 @@ impl Island {
     /// Whether (`x`, `y`) is the bar's: on one of its capsules and not on
     /// the open page.
     fn on_bar(&self, x: f32, y: f32, now: Instant) -> bool {
-        self.bar.as_ref().is_some_and(|bar| bar.contains(x, y))
+        // The open sheet's own capsule is the sheet's: its row is hit through
+        // the window, never through the bar.
+        let sheet_zone = self
+            .sheets
+            .is_open()
+            .then(|| self.sheets.zone(now))
+            .flatten();
+        self.bar
+            .as_ref()
+            .is_some_and(|bar| bar.contains_except(x, y, sheet_zone))
             && !(self.state.is_open() && self.state.rect(now, self.size.0).contains(x, y))
     }
 
@@ -1176,14 +1234,16 @@ impl Island {
         ev: InputEvent,
         ctl: &mut SurfaceCtl<'_>,
         now: Instant,
+        measure: &mut Measure<'_>,
     ) -> Vec<IslandAction> {
         let before = (
             self.capsule.highlight(),
             self.page.highlight(),
             self.bar.as_ref().map(BarTree::highlight),
             self.state.is_open(),
+            self.sheets.revision(),
         );
-        let actions = self.dispatch(ev, now);
+        let actions = self.dispatch(ev, now, measure);
         // The page is closing: its menus go with it.
         if !self.state.is_open() {
             self.close_page_menus(ctl);
@@ -1193,17 +1253,32 @@ impl Island {
             self.page.highlight(),
             self.bar.as_ref().map(BarTree::highlight),
             self.state.is_open(),
+            self.sheets.revision(),
         );
         if before != after || !actions.is_empty() || self.stale {
             self.sync_ctl(ctl, now);
             ctl.request_redraw();
+        }
+        if let Some(wait) = self.sheets.wait(now) {
+            ctl.redraw_after(wait);
         }
         actions
     }
 
     /// Sends a laid-out event where it belongs: the page, the capsule or the
     /// bar. A pointer that moves from one to another leaves the first.
-    fn dispatch(&mut self, ev: InputEvent, now: Instant) -> Vec<IslandAction> {
+    fn dispatch(
+        &mut self,
+        ev: InputEvent,
+        now: Instant,
+        measure: &mut Measure<'_>,
+    ) -> Vec<IslandAction> {
+        self.sheet_queue_input(&ev, now);
+        if self.sheets.is_open() {
+            if let Some(actions) = self.sheet_input(&ev, now, measure) {
+                return actions;
+            }
+        }
         let open = self.state.is_open();
         let point = match ev {
             InputEvent::PointerMotion { x, y }
@@ -1230,7 +1305,7 @@ impl Island {
         let mut actions = Vec::new();
         let events = match &ev {
             _ if on_bar => {
-                actions.extend(self.bar_input(&ev, open, now));
+                actions.extend(self.bar_input(&ev, open, true, now));
                 Vec::new()
             }
             InputEvent::FocusLost => {
@@ -1314,21 +1389,41 @@ impl Island {
     /// While a page is open, a press on the bar but on none of its pieces
     /// is a press outside the page and closes it; a piece's click, middle
     /// or right click closes it too unless it asked for a page; the wheel
-    /// never does.
-    fn bar_input(&mut self, ev: &InputEvent, open: bool, now: Instant) -> Vec<IslandAction> {
+    /// never does. An open sheet follows the same rules: `glass` says a
+    /// press on the bar but on no piece is a press outside (it is not, on the
+    /// sheet's own row, where the glass does nothing), and a piece asking
+    /// for a sheet leaves the sheet's own switch or close to the app's answer
+    /// ([`Island::open_level_sheet`]) except for the open piece itself,
+    /// which closes it.
+    fn bar_input(
+        &mut self,
+        ev: &InputEvent,
+        open: bool,
+        glass: bool,
+        now: Instant,
+    ) -> Vec<IslandAction> {
         let Some(input) = self.with_bar(|bar, cx| bar.pointer(ev, cx, now)) else {
             return Vec::new();
         };
-        if open && !input.on_piece && matches!(ev, InputEvent::PointerPress { .. }) {
-            self.close(now);
+        let sheet = self.sheets.is_open();
+        if !input.on_piece && matches!(ev, InputEvent::PointerPress { .. }) {
+            if open {
+                self.close(now);
+            }
+            if sheet && glass {
+                self.sheets.drop_queue();
+                self.close_sheet(now);
+            }
         }
         let mut out = Vec::new();
         for (key, gesture, action) in input.asked {
             let scroll = matches!(gesture, Gesture::Scroll(..));
             let page = matches!(action, PieceAction::OpenPage(_));
+            let request = page || matches!(action, PieceAction::Sheet(_));
             match action {
                 PieceAction::None => {}
                 PieceAction::OpenPage(page) => self.open(page, now),
+                PieceAction::Sheet(kind) => out.extend(self.sheet_request(key, kind, now)),
                 PieceAction::FocusWorkspace(id) => out.push(IslandAction::FocusWorkspace(id)),
                 PieceAction::Tray(command) => out.push(IslandAction::Tray(command)),
                 PieceAction::TrayMenu(item) => {
@@ -1340,9 +1435,6 @@ impl Island {
                             keyboard: false,
                         });
                     }
-                }
-                PieceAction::Audio(AudioAction::Popup) => {
-                    out.extend(self.popup_action(key, level_popup::Kind::Volume));
                 }
                 PieceAction::Audio(action) => out.push(IslandAction::Audio(action)),
                 PieceAction::Brightness(BrightnessAction::Popup) => {
@@ -1362,6 +1454,9 @@ impl Island {
             }
             if open && !scroll && !page && self.state.is_open() {
                 self.close(now);
+            }
+            if sheet && !scroll && !request && self.sheets.is_open() {
+                self.close_sheet(now);
             }
         }
         out
@@ -1405,6 +1500,16 @@ impl Island {
             || self.tray_menu.is_some()
             || self.level_popup.is_some()
             || self.session_menu.is_some()
+    }
+
+    /// Whether a level popup could open here once the one it replaces is
+    /// closed: the bar is on and no other popup is in the way.
+    #[must_use]
+    pub fn level_popup_fits(&self) -> bool {
+        self.bar.is_some()
+            && self.menu.is_none()
+            && self.tray_menu.is_none()
+            && self.session_menu.is_none()
     }
 
     /// Whether the session menu hangs from this Island right now.
@@ -1948,16 +2053,32 @@ impl Island {
     /// the Island's and change nothing.
     pub fn command(&mut self, verb: &Verb, ctl: &mut SurfaceCtl<'_>) {
         let now = Instant::now();
+        if !self.command_at(verb, now) {
+            return;
+        }
+        tracing::debug!(
+            output = %self.output,
+            page = ?self.state.shown_page(),
+            open = self.state.is_open(),
+            "island: command applied"
+        );
+        self.sync_ctl(ctl, now);
+        ctl.request_redraw();
+    }
+
+    /// [`Island::command`] at `now`, without the surface: whether the verb was
+    /// the Island's.
+    fn command_at(&mut self, verb: &Verb, now: Instant) -> bool {
         match *verb {
             Verb::IslandToggle => {
-                if self.state.is_open() {
-                    self.close(now);
+                if self.state.is_open() || self.sheets.is_open() {
+                    self.close_everything(now);
                 } else {
                     self.open(self.state.shown_page(), now);
                 }
             }
             Verb::IslandOpen(page) => self.open(page, now),
-            Verb::IslandClose => self.close(now),
+            Verb::IslandClose => self.close_everything(now),
             Verb::LauncherToggle
             | Verb::Overview(_)
             | Verb::Shortcuts(_)
@@ -1980,16 +2101,9 @@ impl Island {
             | Verb::BubblesSelect
             | Verb::BubblesMinimize
             | Verb::PhoneMedia(_)
-            | Verb::Quit => return,
+            | Verb::Quit => return false,
         }
-        tracing::debug!(
-            output = %self.output,
-            page = ?self.state.shown_page(),
-            open = self.state.is_open(),
-            "island: command applied"
-        );
-        self.sync_ctl(ctl, now);
-        ctl.request_redraw();
+        true
     }
 }
 
@@ -2036,18 +2150,33 @@ mod tests {
     /// Lays every tree out with 7 px per char, 16 px tall.
     fn lay_fake(island: &mut Island, now: Instant) {
         island.layout_with(now, &mut |tree: &mut Tree, room: (f32, f32)| {
-            tree.layout_measured(room, |s, _, _| (7.0 * s.chars().count() as f32, 16.0));
+            tree.layout_measured(room, fake_measure);
         });
     }
 
     /// What `input` does after the popups: the views, the layout, then the
     /// event.
     fn feed(island: &mut Island, ev: InputEvent, now: Instant) -> Vec<IslandAction> {
+        feed_with(island, ev, now, &mut fake_measure)
+    }
+
+    /// 7 px per char, 16 px tall: `lay_fake`'s measure.
+    fn fake_measure(s: &str, _: &TextStyle, _: Option<f32>) -> (f32, f32) {
+        (7.0 * s.chars().count() as f32, 16.0)
+    }
+
+    /// [`feed`] with the measure the input has in hand.
+    fn feed_with(
+        island: &mut Island,
+        ev: InputEvent,
+        now: Instant,
+        measure: &mut Measure<'_>,
+    ) -> Vec<IslandAction> {
         if island.stale {
             island.apply_views(now);
         }
         lay_fake(island, now);
-        island.dispatch(ev, now)
+        island.dispatch(ev, now, measure)
     }
 
     fn press(x: f32, y: f32, button: u32) -> InputEvent {
@@ -2468,7 +2597,7 @@ mod tests {
     }
 
     #[test]
-    fn the_level_pieces_appear_with_a_reading_and_ask_for_their_workers_and_popup() {
+    fn the_level_pieces_appear_with_a_reading_and_ask_for_their_workers_and_sheet_or_popup() {
         use crate::pieces::Level;
         let (mut island, t0) = bar_island(1920.0);
         let volume = Key::named("volume");
@@ -2520,12 +2649,12 @@ mod tests {
                 [IslandAction::Audio(AudioAction::ToggleMute)]
             );
         }
-        // A click asks for the popup, anchored at the piece's node.
+        // A click asks for the volume sheet, at the piece's node.
         assert_eq!(
             click_at(&mut island, at, BTN_LEFT, t0),
-            [IslandAction::OpenLevelPopup {
+            [IslandAction::OpenLevelSheet {
                 kind: level_popup::Kind::Volume,
-                anchor: bar_rect(&island, volume),
+                piece: volume,
             }]
         );
 
@@ -4477,5 +4606,1056 @@ mod tests {
         island.set_media(&mut px, false, &[], None);
         assert!(!island.media.unavailable);
         assert!(!island.set_media_unavailable(true), "nothing runs");
+    }
+    // The capsule sheets (CEL-D-002).
+
+    use crate::osd::monitor_rows::MonitorFeed;
+    use crate::osd::popup::{
+        body_size, CardFrame, Feeds, LevelCore, Request as LevelRequest, SharedGraph, SharedLevels,
+        Sink, SHEET_W,
+    };
+    use crate::pieces::Level;
+    use crate::sheet::geometry::{self, Hit};
+    use celestina_shell::audio::AudioGraph;
+    use std::{cell::Cell, cell::RefCell, rc::Rc, time::Duration};
+
+    const ESC: u32 = 0xff1b;
+
+    fn escape() -> InputEvent {
+        InputEvent::Key {
+            keysym: ESC,
+            utf8: None,
+            modifiers: celestina_wayland::Modifiers::default(),
+            pressed: true,
+            serial: 0,
+        }
+    }
+
+    fn ms(n: u64) -> Duration {
+        Duration::from_millis(n)
+    }
+
+    /// A volume body at 40 % that sends its requests nowhere.
+    fn volume_core(theme: &Theme) -> LevelCore {
+        sent_core(
+            theme,
+            &Rc::new(RefCell::new(Vec::new())),
+            AudioGraph::default(),
+        )
+    }
+
+    /// A volume body over `graph` whose requests land in `sent`.
+    fn sent_core(
+        theme: &Theme,
+        sent: &Rc<RefCell<Vec<LevelRequest>>>,
+        graph: AudioGraph,
+    ) -> LevelCore {
+        sent_core_with(theme, sent, graph, false)
+    }
+
+    /// [`sent_core`], with the microphone's section when `mic`.
+    fn sent_core_with(
+        theme: &Theme,
+        sent: &Rc<RefCell<Vec<LevelRequest>>>,
+        graph: AudioGraph,
+        mic: bool,
+    ) -> LevelCore {
+        let sink: Sink = {
+            let sent = Rc::clone(sent);
+            Rc::new(move |request| sent.borrow_mut().push(request))
+        };
+        let levels = Levels {
+            audio: AudioLevels {
+                output: Some(Level {
+                    percent: 40,
+                    muted: false,
+                }),
+                input: mic.then_some(Level {
+                    percent: 30,
+                    muted: false,
+                }),
+            },
+            brightness: None,
+        };
+        let cell: SharedLevels = Rc::new(Cell::new(levels));
+        let graph: SharedGraph = Rc::new(RefCell::new(graph));
+        let mut fit = |name: &str, _: f32| name.to_owned();
+        LevelCore::new(
+            theme,
+            level_popup::Kind::Volume,
+            CardFrame::Sheet,
+            Feeds {
+                cell,
+                graph,
+                monitors: MonitorFeed::default(),
+            },
+            sink,
+            false,
+            Instant::now(),
+            &mut fit,
+        )
+    }
+
+    /// The bar with the volume and brightness pieces shown, a second after
+    /// they appeared (their nodes have faded in).
+    fn level_island() -> (Island, Instant) {
+        let (mut island, t0) = bar_island(1920.0);
+        island.levels = Levels {
+            audio: AudioLevels {
+                output: Some(Level {
+                    percent: 40,
+                    muted: false,
+                }),
+                input: None,
+            },
+            brightness: Some(70),
+        };
+        island.invalidate_bar();
+        lay_fake(&mut island, t0);
+        (island, t0 + Duration::from_secs(1))
+    }
+
+    /// The frame's parts that move the sheets, at `now`.
+    fn step(island: &mut Island, now: Instant) {
+        island.sheets_before_layout(now, &mut fake_measure);
+        if island.stale {
+            island.apply_views(now);
+        }
+        lay_fake(island, now);
+        island.sheets_after_layout(now);
+    }
+
+    fn volume() -> Key {
+        Key::named("volume")
+    }
+
+    fn brightness_key() -> Key {
+        Key::named("brightness")
+    }
+
+    /// Opens the volume sheet on `piece`, as the app does after the action.
+    fn open_on(island: &mut Island, piece: Key, now: Instant) -> bool {
+        let core = volume_core(&island.theme);
+        let opened = island.open_level_sheet_at(piece, core, now);
+        step(island, now);
+        opened
+    }
+
+    fn end_capsule(island: &Island) -> Rect {
+        zone(island.bar.as_ref().and_then(|b| b.zone_rect(3)))
+    }
+
+    fn near(a: Rect, b: Rect) -> bool {
+        (a.x - b.x).abs() < 0.01
+            && (a.y - b.y).abs() < 0.01
+            && (a.w - b.w).abs() < 0.01
+            && (a.h - b.h).abs() < 0.01
+    }
+
+    fn shown_rect(island: &Island, now: Instant) -> Rect {
+        match island.sheet_rect(now) {
+            Some(r) => r,
+            None => panic!("no sheet shown at {now:?}"),
+        }
+    }
+
+    /// An open sheet, settled, with the volume piece open.
+    fn settled() -> (Island, Instant) {
+        let (mut island, t0) = level_island();
+        assert!(open_on(&mut island, volume(), t0));
+        let t = t0 + ms(400);
+        step(&mut island, t);
+        (island, t)
+    }
+
+    #[test]
+    fn a_volume_click_asks_for_its_sheet_at_its_node() {
+        let (mut island, t0) = level_island();
+        let at = centre(bar_rect(&island, volume()));
+        assert_eq!(
+            click_at(&mut island, at, BTN_LEFT, t0),
+            [IslandAction::OpenLevelSheet {
+                kind: level_popup::Kind::Volume,
+                piece: Key::named("volume"),
+            }]
+        );
+        assert!(!island.sheets.is_open(), "the app builds the body first");
+    }
+
+    #[test]
+    fn the_sheet_grows_from_the_end_capsule_and_settles_on_its_target() {
+        let (mut island, t0) = level_island();
+        let end = end_capsule(&island);
+        let piece = bar_rect(&island, volume());
+        assert!(open_on(&mut island, volume(), t0));
+        assert!(near(shown_rect(&island, t0), end), "starts at the capsule");
+        let body = volume_core(&island.theme).size();
+        assert_eq!(
+            body,
+            body_size(
+                &island.theme,
+                level_popup::Kind::Volume,
+                false,
+                Default::default()
+            )
+        );
+        let settle = t0 + ms(350);
+        step(&mut island, settle);
+        let target = geometry::target(end, piece, body, island.size);
+        assert!(
+            near(shown_rect(&island, settle), target),
+            "{:?} vs {target:?}",
+            shown_rect(&island, settle)
+        );
+        assert_eq!(target.w, SHEET_W);
+        // Midway it is between the two.
+        let mid = shown_rect(&island, t0 + ms(120));
+        assert!(mid.h > end.h && mid.h <= target.h * 1.2);
+    }
+
+    /// The bar with thirty workspaces: its start capsule is wider than a 320
+    /// px body, so a sheet from the bell is a window over it.
+    fn wide_start_island() -> (Island, Instant) {
+        let (mut island, t0) = bar_island(1920.0);
+        let mut many = model("DP-1", 2);
+        many.workspaces = (1..=30).map(celestina_shell_workspace).collect();
+        island.rows = rows_for(&many, "DP-1");
+        island.model = Some(many);
+        island.stale = true;
+        island.invalidate_bar();
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        (island, t0 + Duration::from_secs(1))
+    }
+
+    fn celestina_shell_workspace(id: u64) -> crate::providers::niri::Workspace {
+        crate::providers::niri::Workspace {
+            id,
+            idx: u8::try_from(id).unwrap_or(0),
+            name: None,
+            output: Some("DP-1".to_owned()),
+            is_active: id == 2,
+            is_focused: id == 2,
+            columns: 1,
+        }
+    }
+
+    #[test]
+    fn a_narrow_sheet_keeps_the_row_where_it_is() {
+        let (mut island, t0) = wide_start_island();
+        let bell = Key::named("bell");
+        let keys = [
+            bell,
+            Key::indexed("dot", 1),
+            Key::indexed("dot", 20),
+            Key::indexed("dot", 30),
+        ];
+        let before: Vec<Rect> = keys.iter().map(|&k| bar_rect(&island, k)).collect();
+        let start = start_zone(&island);
+        assert!(
+            start.w > SHEET_W,
+            "premise: the capsule is wider than the body"
+        );
+        assert!(open_on(&mut island, bell, t0));
+        let settle = t0 + ms(400);
+        step(&mut island, settle);
+        let sheet = shown_rect(&island, settle);
+        assert_eq!(sheet.w, SHEET_W);
+        let cuts = geometry::cuts(start, sheet);
+        assert!(
+            cuts.left && !cuts.right,
+            "the window cuts the row on its left: {cuts:?}"
+        );
+        let after: Vec<Rect> = keys.iter().map(|&k| bar_rect(&island, k)).collect();
+        assert_eq!(before, after, "no node of the bar moved");
+        assert_eq!(start, start_zone(&island));
+        // A piece outside the window is not hit: its press only closes.
+        let far = centre(bar_rect(&island, Key::indexed("dot", 1)));
+        assert!(!sheet.contains(far.0, far.1));
+        assert!(click_at(&mut island, far, BTN_LEFT, settle).is_empty());
+        assert!(!island.sheets.is_open());
+        // A piece in the window acts, and the sheet closes.
+        let (mut island, t0) = wide_start_island();
+        assert!(open_on(&mut island, bell, t0));
+        let settle = t0 + ms(400);
+        step(&mut island, settle);
+        let sheet = shown_rect(&island, settle);
+        let near = centre(bar_rect(&island, Key::indexed("dot", 30)));
+        assert!(sheet.contains(near.0, near.1));
+        assert_eq!(
+            click_at(&mut island, near, BTN_LEFT, settle),
+            [IslandAction::FocusWorkspace(30)]
+        );
+        assert!(!island.sheets.is_open());
+    }
+
+    #[test]
+    fn a_second_piece_of_the_same_capsule_switches_with_one_morph() {
+        let (mut island, t0) = settled_pair();
+        // Open on the volume; the brightness is its neighbour.
+        let before = shown_rect(&island, t0);
+        let core = volume_core(&island.theme);
+        assert!(island.open_level_sheet_at(brightness_key(), core, t0));
+        for t in [0, 10, 60, 120, 200, 400] {
+            let now = t0 + ms(t);
+            step(&mut island, now);
+            assert!(island.sheets.is_open(), "open at +{t} ms");
+            assert!(!island.state.is_open());
+            // The old body is left and fades out over the flight's first 30 %
+            // (105 ms); the new one fades in.
+            assert_eq!(island.sheets.is_leaving(), t < 105, "leaving at +{t} ms");
+        }
+        assert_eq!(island.sheets.piece(), Some(brightness_key()));
+        // The rect started from where it was.
+        assert!(shown_rect(&island, t0).w > 0.0 && before.w > 0.0);
+    }
+
+    fn settled_pair() -> (Island, Instant) {
+        settled()
+    }
+
+    #[test]
+    fn pressing_the_open_piece_again_closes_its_sheet() {
+        let (mut island, t0) = settled();
+        let at = centre(bar_rect(&island, volume()));
+        assert!(
+            click_at(&mut island, at, BTN_LEFT, t0).is_empty(),
+            "no new request"
+        );
+        assert!(!island.sheets.is_open(), "closing");
+        assert!(island.sheets.is_shown(t0 + ms(10)), "still painted");
+        step(&mut island, t0 + ms(160));
+        assert!(island.sheet_rect(t0 + ms(160)).is_none(), "gone");
+    }
+
+    #[test]
+    fn a_piece_without_a_sheet_acts_and_closes_it_and_the_wheel_never_does() {
+        let (mut island, t0) = settled();
+        // The wheel on the brightness piece steps the brightness; the sheet stays.
+        let at = centre(bar_rect(&island, brightness_key()));
+        feed(
+            &mut island,
+            InputEvent::PointerMotion { x: at.0, y: at.1 },
+            t0,
+        );
+        let wheel = InputEvent::Axis {
+            x: at.0,
+            y: at.1,
+            horizontal: 0.0,
+            vertical: -15.0,
+        };
+        assert_eq!(
+            feed(&mut island, wheel, t0),
+            [IslandAction::Brightness(BrightnessAction::Step(
+                Direction::Up,
+                1
+            ))]
+        );
+        assert!(island.sheets.is_open(), "the wheel never closes it");
+        // A right click on the volume piece flips the mute and closes it.
+        let vol = centre(bar_rect(&island, volume()));
+        assert_eq!(
+            click_at(&mut island, vol, BTN_RIGHT, t0),
+            [IslandAction::Audio(AudioAction::ToggleMute)]
+        );
+        assert!(!island.sheets.is_open(), "an acting gesture closes it");
+    }
+
+    #[test]
+    fn a_press_outside_escape_and_focus_loss_close_the_sheet() {
+        for how in 0..3 {
+            let (mut island, t0) = settled();
+            match how {
+                0 => assert!(feed(&mut island, press(5.0, 500.0, BTN_LEFT), t0).is_empty()),
+                1 => assert!(feed(&mut island, escape(), t0).is_empty()),
+                _ => assert!(feed(&mut island, InputEvent::FocusLost, t0).is_empty()),
+            }
+            assert!(!island.sheets.is_open(), "way {how}");
+            assert!(!island.sheets.has_queued());
+        }
+    }
+
+    #[test]
+    fn the_sheet_paints_over_and_takes_the_input_of_what_it_covers() {
+        // A narrow surface puts the end sheet over the Island's capsule.
+        let t0 = Instant::now();
+        let mut island = Island::new("DP-1", (520.0, 560.0));
+        island.set_bar(&BarLayout {
+            start: vec!["notifications".to_owned()],
+            centre: Vec::new(),
+            end: vec!["volume".to_owned()],
+            tray_hidden: Vec::new(),
+        });
+        island.levels = Levels {
+            audio: AudioLevels {
+                output: Some(Level {
+                    percent: 40,
+                    muted: false,
+                }),
+                input: None,
+            },
+            brightness: None,
+        };
+        island.invalidate_bar();
+        island.apply_views(t0);
+        lay_fake(&mut island, t0);
+        let t0 = t0 + Duration::from_secs(1);
+        assert!(open_on(&mut island, volume(), t0));
+        let t = t0 + ms(400);
+        step(&mut island, t);
+        let sheet = shown_rect(&island, t);
+        let capsule = island.state.rect(t, island.size.0);
+        // The sheet covers part of the Island's capsule.
+        let over = (
+            (sheet.x.max(capsule.x) + (sheet.x + sheet.w).min(capsule.x + capsule.w)) / 2.0,
+            sheet.y + 20.0,
+        );
+        assert!(sheet.contains(over.0, over.1) && capsule.contains(over.0, over.1));
+        assert!(matches!(geometry::hit(sheet, over.0, over.1), Hit::Row));
+        feed(
+            &mut island,
+            InputEvent::PointerMotion {
+                x: over.0,
+                y: over.1,
+            },
+            t,
+        );
+        assert!(click_at(&mut island, over, BTN_LEFT, t).is_empty());
+        assert!(
+            island.sheets.is_open(),
+            "a press on the row's glass does nothing"
+        );
+        assert!(
+            !island.state.is_open(),
+            "the capsule under it opened no page"
+        );
+        assert!(!island.sheets.has_queued());
+        // The same through the body.
+        let body = (sheet.x + sheet.w / 2.0, sheet.y + sheet.h - 4.0);
+        assert!(click_at(&mut island, body, BTN_LEFT, t).is_empty());
+        assert!(!island.state.is_open());
+    }
+
+    #[test]
+    fn the_island_capsule_while_a_sheet_is_open_closes_it_then_opens_the_page() {
+        let (mut island, t0) = settled();
+        let capsule = island.state.rect(t0, island.size.0);
+        let at = centre(capsule);
+        assert!(!shown_rect(&island, t0).contains(at.0, at.1));
+        assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
+        assert!(!island.sheets.is_open() && island.sheets.is_shown(t0 + ms(1)));
+        assert!(!island.state.is_open(), "not yet");
+        assert!(island.sheets.has_queued());
+        step(&mut island, t0 + ms(100));
+        assert!(!island.state.is_open(), "still closing at +100 ms");
+        step(&mut island, t0 + ms(150));
+        assert!(island.state.is_open(), "the page opens at +150 ms");
+        assert!(!island.sheets.is_shown(t0 + ms(150)));
+    }
+
+    #[test]
+    fn a_volume_click_while_a_page_is_open_closes_the_page_then_opens_the_sheet() {
+        let (mut island, t0) = level_island();
+        island.open(PageId::ACTIVITY, t0);
+        step(&mut island, t0 + ms(400));
+        let t = t0 + ms(400);
+        let at = centre(bar_rect(&island, volume()));
+        let asked = click_at(&mut island, at, BTN_LEFT, t);
+        assert_eq!(
+            asked,
+            [IslandAction::OpenLevelSheet {
+                kind: level_popup::Kind::Volume,
+                piece: volume(),
+            }]
+        );
+        assert!(!island.state.is_open(), "the page is closing");
+        // The app answers: the sheet waits for the page to go.
+        assert!(open_on(&mut island, volume(), t));
+        assert!(!island.sheets.is_shown(t));
+        assert!(island.sheets.has_queued());
+        assert!(island.level_sheet_open(), "queued counts as open");
+        step(&mut island, t + ms(100));
+        assert!(!island.sheets.is_shown(t + ms(100)));
+        step(&mut island, t + ms(160));
+        assert!(
+            island.sheets.is_open(),
+            "the sheet opens once the page is gone"
+        );
+        assert!(island.state.progress(t + ms(160)) <= 0.0);
+    }
+
+    #[test]
+    fn island_close_and_toggle_close_a_sheet_and_open_goes_in_sequence() {
+        let (mut island, t0) = settled();
+        assert!(island.command_at(&Verb::IslandClose, t0));
+        assert!(!island.sheets.is_open());
+        step(&mut island, t0 + ms(200));
+        assert!(!island.sheets.is_shown(t0 + ms(200)));
+
+        let (mut island, t0) = settled();
+        assert!(island.command_at(&Verb::IslandToggle, t0));
+        assert!(!island.sheets.is_open(), "toggle closes whichever is open");
+        assert!(!island.state.is_open());
+
+        let (mut island, t0) = settled();
+        assert!(island.command_at(&Verb::IslandOpen(PageId::ACTIVITY), t0));
+        assert!(!island.state.is_open(), "the sheet closes first");
+        assert!(!island.sheets.is_open());
+        step(&mut island, t0 + ms(150));
+        assert_eq!(island.page(), Some(PageId::ACTIVITY));
+        // Toggle with nothing open opens the last page.
+        step(&mut island, t0 + ms(800));
+        assert!(island.command_at(&Verb::IslandToggle, t0 + ms(800)));
+        assert!(!island.state.is_open());
+        assert!(island.command_at(&Verb::IslandToggle, t0 + ms(900)));
+        assert_eq!(island.page(), Some(PageId::ACTIVITY));
+    }
+
+    #[test]
+    fn never_two_things_open_at_once_through_any_sequence() {
+        #[derive(Clone, Copy)]
+        enum Op {
+            ClickVolume,
+            ClickBrightness,
+            ClickBell,
+            ClickIsland,
+            Escape,
+            Open,
+            Toggle,
+            Close,
+            ClickAway,
+        }
+        let script = [
+            Op::ClickVolume,
+            Op::ClickVolume,
+            Op::ClickIsland,
+            Op::ClickVolume,
+            Op::Open,
+            Op::ClickBell,
+            Op::ClickVolume,
+            Op::Escape,
+            Op::ClickVolume,
+            Op::Toggle,
+            Op::Toggle,
+            Op::ClickBrightness,
+            Op::ClickIsland,
+            Op::ClickAway,
+            Op::ClickVolume,
+            Op::Open,
+            Op::Close,
+            Op::ClickVolume,
+            Op::ClickBell,
+            Op::Toggle,
+            Op::ClickVolume,
+        ];
+        let (mut island, mut now) = level_island();
+        for gap in [0_u64, 40, 90, 160] {
+            for (n, op) in script.into_iter().enumerate() {
+                now += ms(gap);
+                step(&mut island, now);
+                let centre_of = |island: &Island, key| centre(bar_rect(island, key));
+                let actions = match op {
+                    Op::ClickVolume => {
+                        let at = centre_of(&island, volume());
+                        click_at(&mut island, at, BTN_LEFT, now)
+                    }
+                    Op::ClickBrightness => {
+                        let at = centre_of(&island, brightness_key());
+                        click_at(&mut island, at, BTN_LEFT, now)
+                    }
+                    Op::ClickBell => {
+                        let at = centre_of(&island, Key::named("bell"));
+                        click_at(&mut island, at, BTN_LEFT, now)
+                    }
+                    Op::ClickIsland => {
+                        let at = centre(island.state.rect(now, island.size.0));
+                        click_at(&mut island, at, BTN_LEFT, now)
+                    }
+                    Op::Escape => feed(&mut island, escape(), now),
+                    Op::ClickAway => click_at(&mut island, (5.0, 500.0), BTN_LEFT, now),
+                    Op::Open => {
+                        island.command_at(&Verb::IslandOpen(PageId::ACTIVITY), now);
+                        Vec::new()
+                    }
+                    Op::Toggle => {
+                        island.command_at(&Verb::IslandToggle, now);
+                        Vec::new()
+                    }
+                    Op::Close => {
+                        island.command_at(&Verb::IslandClose, now);
+                        Vec::new()
+                    }
+                };
+                for action in actions {
+                    if let IslandAction::OpenLevelSheet { piece, .. } = action {
+                        let core = volume_core(&island.theme);
+                        island.open_level_sheet_at(piece, core, now);
+                    }
+                }
+                for at in [now, now + ms(20)] {
+                    step(&mut island, at);
+                    assert!(
+                        !(island.state.is_open() && island.sheets.is_open()),
+                        "gap {gap} op {n}: page and sheet both open"
+                    );
+                    let page_painted = island.state.progress(at) > 0.0
+                        && island.state.rect(at, island.size.0).w > 0.0
+                        && island.state.rect(at, island.size.0).h > 0.0;
+                    let sheet_painted = island
+                        .sheet_rect(at)
+                        .is_some_and(|r| r.w > 0.0 && r.h > 0.0);
+                    assert!(
+                        !(page_painted && sheet_painted),
+                        "gap {gap} op {n}: both painted"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_regions_and_keyboard_follow_the_sheet() {
+        let (mut island, t0) = level_island();
+        let radius = island.theme.radius_lg;
+        let end = end_capsule(&island);
+        assert!(!island.anything_shown(t0));
+        let rest = island.shapes(t0);
+        assert!(open_on(&mut island, volume(), t0));
+        let t = t0 + ms(400);
+        step(&mut island, t);
+        assert!(island.anything_shown(t), "keyboard OnDemand, whole input");
+        let sheet = shown_rect(&island, t);
+        let shapes = island.shapes(t);
+        assert!(shapes.contains(&(sheet, radius)));
+        assert!(
+            !shapes.iter().any(|&(r, _)| r == end),
+            "the end capsule is replaced by the sheet"
+        );
+        let bands = silhouette::union(&shapes);
+        // A band covers the sheet; none covers the end capsule's part that
+        // the sheet does not.
+        let covered = |x: f32, y: f32| bands.iter().any(|b| b.contains(x, y));
+        assert!(covered(sheet.x + sheet.w / 2.0, sheet.y + sheet.h / 2.0));
+        let mut outside = 0;
+        for i in 0..40 {
+            let x = end.x + end.w * (i as f32 + 0.5) / 40.0;
+            let y = end.y + end.h / 2.0;
+            let near_edge = (x - sheet.x).abs() < 4.0 || (x - sheet.x - sheet.w).abs() < 4.0;
+            if !sheet.contains(x, y) && !near_edge {
+                outside += 1;
+                assert!(!covered(x, y), "band over the end zone at {x}");
+            }
+        }
+        assert!(outside > 0 || sheet.w >= end.w, "premise");
+        assert_eq!(
+            silhouette::input_region(&shapes, island.anything_shown(t), island.size),
+            [Rect::whole(island.size)]
+        );
+        // Closed again: today's regions.
+        island.close_sheet(t);
+        let gone = t + ms(200);
+        step(&mut island, gone);
+        assert!(!island.anything_shown(gone));
+        assert_eq!(island.shapes(gone), rest);
+    }
+
+    /// A graph with enough applications to make a body taller than a sheet.
+    fn busy_graph() -> AudioGraph {
+        use celestina_shell::audio::{AudioLevel, GraphDevice, GraphStream};
+        AudioGraph {
+            outputs: (0..6)
+                .map(|id| GraphDevice {
+                    id,
+                    name: format!("Speakers {id}"),
+                    default: id == 0,
+                })
+                .collect(),
+            inputs: Vec::new(),
+            streams: (0..12)
+                .map(|id| GraphStream {
+                    id: 100 + id,
+                    name: format!("App {id}"),
+                    level: Some(AudioLevel {
+                        percent: 30,
+                        muted: false,
+                    }),
+                    playing: true,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn a_tall_body_scrolls_and_a_wheel_over_a_slider_moves_the_slider() {
+        let (mut island, t0) = level_island();
+        let sent = Rc::new(RefCell::new(Vec::new()));
+        let core = sent_core_with(&island.theme, &sent, busy_graph(), true);
+        assert!(island.open_level_sheet_at(volume(), core, t0));
+        let t = t0 + ms(400);
+        step(&mut island, t);
+        let sheet = shown_rect(&island, t);
+        assert!(
+            island.sheets.scroll().can_scroll(),
+            "a body taller than 504: {:?}",
+            island.sheets.body_size()
+        );
+        assert_eq!(sheet.h, geometry::max_height(island.size));
+        // The wheel over a slider moves the slider, not the scroll.
+        let slider = match island.sheets.body_node_rect(crate::osd::popup::slider_key(
+            crate::osd::popup::Control::Output,
+        )) {
+            Some(r) => r,
+            None => panic!("no output slider"),
+        };
+        let at = (
+            sheet.x + slider.x + slider.w / 2.0,
+            sheet.y + geometry::ROW_H + slider.y + slider.h / 2.0,
+        );
+        let wheel = |at: (f32, f32), vertical| InputEvent::Axis {
+            x: at.0,
+            y: at.1,
+            horizontal: 0.0,
+            vertical,
+        };
+        feed(
+            &mut island,
+            InputEvent::PointerMotion { x: at.0, y: at.1 },
+            t,
+        );
+        feed(&mut island, wheel(at, -15.0), t);
+        assert_eq!(island.sheets.scroll().offset(), 0.0);
+        island
+            .sheets
+            .sync(&island.theme.clone(), t + ms(200), &mut fake_measure);
+        assert_eq!(
+            *sent.borrow(),
+            [LevelRequest::Set(crate::osd::popup::Control::Output, 41)]
+        );
+        // Over the rows' empty space the wheel scrolls, one px per px.
+        let empty = (sheet.x + 4.0, sheet.y + geometry::ROW_H + 2.0);
+        feed(
+            &mut island,
+            InputEvent::PointerMotion {
+                x: empty.0,
+                y: empty.1,
+            },
+            t,
+        );
+        feed(&mut island, wheel(empty, 30.0), t);
+        assert_eq!(island.sheets.scroll().offset(), 30.0);
+        feed(&mut island, wheel(empty, 10_000.0), t);
+        let max = island.sheets.scroll().offset();
+        assert!(max > 30.0);
+        feed(&mut island, wheel(empty, -10_000.0), t);
+        assert_eq!(island.sheets.scroll().offset(), 0.0);
+        assert!(island.sheets.is_open(), "scrolling never closes");
+    }
+
+    #[test]
+    fn an_open_sheet_at_rest_asks_for_no_frame() {
+        // A sheet whose window cuts its row (the costliest case), and one that
+        // does not.
+        let (mut cut, t0) = wide_start_island();
+        assert!(open_on(&mut cut, Key::named("bell"), t0));
+        let (plain, t1) = settled();
+        for (island, t) in [(&mut cut, t0), (&mut { plain }, t1)] {
+            let later = t + Duration::from_secs(1);
+            step(island, later);
+            assert!(island.sheets.is_open());
+            assert!(!island.sheets.wants_frame(later), "no frame at rest");
+            assert_eq!(island.sheets.wait(later), None, "no timer at rest");
+        }
+        let sheet = shown_rect(&cut, t0 + Duration::from_secs(1));
+        assert!(
+            geometry::cuts(start_zone(&cut), sheet).left,
+            "the row is cut"
+        );
+    }
+
+    #[test]
+    fn a_sheet_whose_piece_leaves_the_bar_closes() {
+        let (mut island, t0) = settled();
+        let t = t0 + ms(10);
+        // The reading is lost: the volume piece has nothing to show.
+        island.levels.audio.output = None;
+        island.invalidate_bar();
+        step(&mut island, t);
+        assert!(island
+            .bar
+            .as_ref()
+            .is_some_and(|b| b.piece_rect(volume()).is_none()));
+        assert!(!island.sheets.is_open(), "closing on the exit motion");
+        assert!(island.sheets.is_shown(t + ms(10)));
+        let end = island.sheets.last_anchor().map(|a| a.capsule);
+        assert!(end.is_some());
+        // It flies to the last capsule rect it had and is gone.
+        let r = shown_rect(&island, t + ms(75));
+        assert!(r.w > 0.0);
+        step(&mut island, t + ms(200));
+        assert!(island.sheet_rect(t + ms(200)).is_none());
+        assert!(!island.sheets.is_shown(t + ms(200)));
+    }
+
+    #[test]
+    fn a_capsule_that_changes_width_while_open_carries_the_sheet() {
+        let (mut island, t0) = settled();
+        let before = shown_rect(&island, t0);
+        let capsule = end_capsule(&island);
+        // "40 %" widens to "100 %": the capsule is wider by a few chars.
+        island.levels.audio.output = Some(Level {
+            percent: 100,
+            muted: false,
+        });
+        island.invalidate_bar();
+        let t = t0 + ms(20);
+        step(&mut island, t);
+        let wider = end_capsule(&island);
+        assert!(wider.w >= capsule.w);
+        let settle = t + ms(400);
+        step(&mut island, settle);
+        let piece = bar_rect(&island, volume());
+        let body = volume_core(&island.theme).size();
+        let want = geometry::target(wider, piece, body, island.size);
+        assert!(near(shown_rect(&island, settle), want));
+        assert!(island.sheets.is_open());
+        let _ = before;
+    }
+
+    #[test]
+    fn a_fold_inside_island_input_cuts_with_the_measure_in_hand() {
+        let (mut island, t0) = level_island();
+        let core = sent_core(
+            &island.theme,
+            &Rc::new(RefCell::new(Vec::new())),
+            busy_graph(),
+        );
+        assert!(island.open_level_sheet_at(volume(), core, t0));
+        let t = t0 + ms(400);
+        step(&mut island, t);
+        let sheet = shown_rect(&island, t);
+        let header = match island
+            .sheets
+            .body_node_rect(crate::osd::audio_rows::section_key(
+                crate::osd::audio_rows::Section::Output,
+            )) {
+            Some(r) => r,
+            None => panic!("no output header"),
+        };
+        let at = (
+            sheet.x + header.x + header.w / 2.0,
+            sheet.y + geometry::ROW_H + header.y + header.h / 2.0,
+        );
+        let calls = Cell::new(0_u32);
+        let mut measure = |s: &str, st: &TextStyle, w: Option<f32>| {
+            calls.set(calls.get() + 1);
+            fake_measure(s, st, w)
+        };
+        let before = island.sheets.body_size();
+        feed_with(
+            &mut island,
+            InputEvent::PointerMotion { x: at.0, y: at.1 },
+            t,
+            &mut measure,
+        );
+        feed_with(&mut island, press(at.0, at.1, BTN_LEFT), t, &mut measure);
+        let seen = calls.get();
+        feed_with(&mut island, release(at.0, at.1, BTN_LEFT), t, &mut measure);
+        assert!(
+            calls.get() > seen,
+            "the fold cut names with the measure in hand"
+        );
+        assert_ne!(
+            island.sheets.body_size(),
+            before,
+            "the fold changed the body"
+        );
+        // The sheet notices at its next look and morphs.
+        let later = t + ms(10);
+        step(&mut island, later);
+        assert!(island.sheets.is_open());
+    }
+
+    #[test]
+    fn closing_a_level_sheet_sends_what_the_throttle_holds() {
+        let (mut island, t0) = level_island();
+        let sent = Rc::new(RefCell::new(Vec::new()));
+        let core = sent_core(&island.theme, &sent, AudioGraph::default());
+        assert!(island.open_level_sheet_at(volume(), core, t0));
+        let t = t0 + ms(400);
+        step(&mut island, t);
+        let sheet = shown_rect(&island, t);
+        let slider = match island.sheets.body_node_rect(crate::osd::popup::slider_key(
+            crate::osd::popup::Control::Output,
+        )) {
+            Some(r) => r,
+            None => panic!("no output slider"),
+        };
+        let y = sheet.y + geometry::ROW_H + slider.y + slider.h / 2.0;
+        let x0 = sheet.x + slider.x + 20.0;
+        // A drag: the first level goes out, the next two wait on the throttle.
+        feed(&mut island, InputEvent::PointerMotion { x: x0, y }, t);
+        feed(&mut island, press(x0, y, BTN_LEFT), t);
+        feed(
+            &mut island,
+            InputEvent::PointerMotion { x: x0 + 30.0, y },
+            t,
+        );
+        feed(
+            &mut island,
+            InputEvent::PointerMotion { x: x0 + 60.0, y },
+            t,
+        );
+        let sent_so_far = sent.borrow().len();
+        assert_eq!(
+            sent_so_far,
+            1,
+            "the throttle holds the rest: {:?}",
+            sent.borrow()
+        );
+        assert!(island.sheets.wait(t).is_some());
+        // Escape: closing flushes what waits.
+        feed(&mut island, escape(), t);
+        assert!(!island.sheets.is_open());
+        assert!(
+            sent.borrow().len() > sent_so_far,
+            "what the throttle held went out"
+        );
+    }
+
+    #[test]
+    fn a_level_sheet_closed_without_a_surface_sends_what_the_throttle_holds() {
+        let (mut island, t0) = level_island();
+        let sent = Rc::new(RefCell::new(Vec::new()));
+        let core = sent_core(&island.theme, &sent, AudioGraph::default());
+        assert!(island.open_level_sheet_at(volume(), core, t0));
+        let t = t0 + ms(400);
+        step(&mut island, t);
+        let sheet = shown_rect(&island, t);
+        let slider = match island.sheets.body_node_rect(crate::osd::popup::slider_key(
+            crate::osd::popup::Control::Output,
+        )) {
+            Some(r) => r,
+            None => panic!("no output slider"),
+        };
+        let y = sheet.y + geometry::ROW_H + slider.y + slider.h / 2.0;
+        let x0 = sheet.x + slider.x + 20.0;
+        // A drag: the first level goes out, the next two wait on the throttle.
+        feed(&mut island, InputEvent::PointerMotion { x: x0, y }, t);
+        feed(&mut island, press(x0, y, BTN_LEFT), t);
+        feed(
+            &mut island,
+            InputEvent::PointerMotion { x: x0 + 30.0, y },
+            t,
+        );
+        feed(
+            &mut island,
+            InputEvent::PointerMotion { x: x0 + 60.0, y },
+            t,
+        );
+        let sent_so_far = sent.borrow().len();
+        assert_eq!(
+            sent_so_far,
+            1,
+            "the throttle holds the rest: {:?}",
+            sent.borrow()
+        );
+        assert!(island.sheets.wait(t).is_some());
+        // The output is gone: the app closes the sheet before the Island is
+        // dropped (`Sheets` has no Drop flush).
+        island.close_level_sheet_now();
+        assert!(!island.sheets.is_open());
+        assert!(!island.level_sheet_open());
+        assert!(
+            sent.borrow().len() > sent_so_far,
+            "what the throttle held went out"
+        );
+    }
+
+    #[test]
+    fn under_reduced_motion_what_waited_opens_on_the_same_input() {
+        let (mut island, t0) = level_island();
+        island.set_reduced_motion(true);
+        assert!(open_on(&mut island, volume(), t0));
+        let at = centre(island.state.rect(t0, island.size.0));
+        assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
+        assert!(!island.sheets.is_shown(t0), "the sheet is gone at once");
+        step(&mut island, t0);
+        assert!(island.state.is_open(), "the page opens on the same instant");
+    }
+
+    #[test]
+    fn escape_and_focus_loss_drop_what_waited_behind_a_closing_sheet() {
+        for ev in [escape(), InputEvent::FocusLost] {
+            let (mut island, t0) = settled();
+            island.command_at(&Verb::IslandOpen(PageId::ACTIVITY), t0);
+            assert!(island.sheets.has_queued());
+            feed(&mut island, ev, t0 + ms(20));
+            assert!(!island.sheets.has_queued());
+            step(&mut island, t0 + ms(300));
+            assert!(!island.state.is_open(), "the page never opened");
+            assert!(!island.sheets.is_shown(t0 + ms(300)));
+        }
+    }
+
+    #[test]
+    fn the_keyboard_dropping_does_not_drop_the_sheet_that_waits_for_the_page() {
+        let (mut island, t0) = level_island();
+        island.open(PageId::ACTIVITY, t0);
+        let t = t0 + ms(400);
+        step(&mut island, t);
+        let at = centre(bar_rect(&island, volume()));
+        assert_eq!(click_at(&mut island, at, BTN_LEFT, t).len(), 1);
+        assert!(open_on(&mut island, volume(), t));
+        assert!(island.sheets.has_queued());
+        // The Island itself drops the keyboard when nothing is shown: the
+        // compositor's leave must find the keyboard still held.
+        // The compositor sends the leave only when the keyboard was dropped.
+        if !island.anything_shown(t) {
+            feed(&mut island, InputEvent::FocusLost, t);
+        }
+        assert!(
+            island.anything_shown(t),
+            "the keyboard stays while it waits"
+        );
+        assert!(island.sheets.has_queued(), "the request survived");
+        step(&mut island, t + ms(160));
+        assert!(
+            island.sheets.is_open(),
+            "the sheet opens once the page is gone"
+        );
+    }
+
+    #[test]
+    fn a_sheet_opened_in_the_gap_after_a_close_does_not_swallow_the_waiting_page() {
+        let (mut island, t0) = settled();
+        let at = centre(island.state.rect(t0, island.size.0));
+        assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
+        assert!(island.sheets.has_queued());
+        // The owner itself keeps a waiting page when a sheet opens directly.
+        let t = t0 + ms(160);
+        let zone = 3;
+        let anchor = match island.live_anchor(zone, volume()) {
+            Some(a) => a,
+            None => panic!("no anchor"),
+        };
+        let request = crate::sheet::Request {
+            zone,
+            piece: volume(),
+            kind: crate::pieces::SheetKind::Volume,
+            body: crate::sheet::SheetBody::Level(Box::new(volume_core(&island.theme))),
+        };
+        island
+            .sheets
+            .open(request, &anchor, &island.theme.clone(), t, false);
+        assert!(island.sheets.has_queued(), "the page still waits");
+        // And through the Island, the page opens first and the sheet follows.
+        let (mut island, t0) = settled();
+        let at = centre(island.state.rect(t0, island.size.0));
+        click_at(&mut island, at, BTN_LEFT, t0);
+        let t = t0 + ms(160);
+        assert!(open_on(&mut island, volume(), t));
+        assert!(!(island.state.is_open() && island.sheets.is_open()));
+        step(&mut island, t + ms(400));
+        assert!(island.sheets.is_open() && !island.state.is_open());
     }
 }

@@ -16,12 +16,10 @@ each tried live by the author the day it lands. **Plan:**
 whose ledger is the source of each entry's status and exit. **Design:**
 [the standing-tracks design](../docs/superpowers/specs/2026-11-24-celestina-standing-tracks-design.md).
 
-**In progress:** `CEL-I-004`, the output and input device selector and the
-per-application volume and mute in the volume popup
-([design](../docs/superpowers/specs/2026-11-25-celestina-cel-i-004-audio-design.md),
-[plan](../docs/superpowers/plans/2026-11-25-celestina-cel-i-004-audio-plan.md)).
-It needs Cuprita's `CUP-WPCTL-STATUS`, which moves the pure `wpctl status`
-parser out of the `wpctl` feature of `cuprita-core`.
+**In progress:** `CEL-D-002` to `CEL-D-005`, the capsule sheets: a bar capsule
+grows into the menu of the piece pressed, starting with the volume menu
+([design](../docs/superpowers/specs/2026-11-25-celestina-capsule-sheets-design.md),
+[plan](../docs/superpowers/plans/2026-11-25-celestina-capsule-sheets-plan.md)).
 
 ## CEL-2 — Shell parity with Noctalia (closed 2026-11-25)
 

@@ -104,6 +104,17 @@ pub(crate) enum Visit {
     Leave(NodeId),
 }
 
+/// What a walk covers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Scope {
+    /// Every visible node.
+    All,
+    /// Every visible node but this one and its subtree.
+    Except(NodeId),
+    /// The subtrees of this node's children, not the node itself.
+    ChildrenOf(NodeId),
+}
+
 /// The retained UI tree of one surface.
 pub struct Tree {
     pub(crate) slots: Vec<Option<Slot>>,
@@ -221,21 +232,45 @@ impl Tree {
     /// they are neither painted, hit nor focused; leaving nodes are in
     /// (they are painted while they fade).
     pub fn paint_order(&self) -> Vec<NodeId> {
-        let mut order = Vec::new();
-        self.visit(&mut |v| {
-            if let Visit::Enter(id) = v {
-                order.push(id);
-            }
-        });
-        order
+        self.walk(Scope::All)
+            .into_iter()
+            .filter_map(|v| match v {
+                Visit::Enter(id) => Some(id),
+                Visit::Leave(_) => None,
+            })
+            .collect()
     }
 
-    /// Walks the visible tree in paint order, entering and leaving each
-    /// node.
-    pub(crate) fn visit(&self, f: &mut impl FnMut(Visit)) {
-        let mut stack: Vec<Visit> = self.roots.iter().rev().map(|&r| Visit::Enter(r)).collect();
+    /// The visible tree in paint order under `scope`, each node entered and
+    /// left. A stale or hidden scope node yields nothing.
+    pub(crate) fn walk(&self, scope: Scope) -> Vec<Visit> {
+        let (mut stack, skip): (Vec<Visit>, Option<NodeId>) = match scope {
+            Scope::All => (
+                self.roots.iter().rev().map(|&r| Visit::Enter(r)).collect(),
+                None,
+            ),
+            Scope::Except(skip) => (
+                self.roots.iter().rev().map(|&r| Visit::Enter(r)).collect(),
+                Some(skip),
+            ),
+            Scope::ChildrenOf(parent) => match self.slot(parent) {
+                Some(slot) if !slot.hidden() => (
+                    slot.children
+                        .iter()
+                        .rev()
+                        .map(|&c| Visit::Enter(c))
+                        .collect(),
+                    None,
+                ),
+                _ => (Vec::new(), None),
+            },
+        };
+        let mut out = Vec::new();
         while let Some(v) = stack.pop() {
             if let Visit::Enter(id) = v {
+                if skip == Some(id) {
+                    continue;
+                }
                 let Some(slot) = self.slot(id) else {
                     continue;
                 };
@@ -245,8 +280,18 @@ impl Tree {
                 stack.push(Visit::Leave(id));
                 stack.extend(slot.children.iter().rev().map(|&c| Visit::Enter(c)));
             }
-            f(v);
+            out.push(v);
         }
+        out
+    }
+
+    /// The slider under the point, as the pointer hit-test sees it: the
+    /// key of the topmost interactive node at (`x`, `y`) when that node is
+    /// a slider.
+    pub fn slider_at(&self, x: f32, y: f32, now: Instant) -> Option<Key> {
+        let id = crate::input::hit(self, x, y, now)?;
+        let slot = self.slot(id)?;
+        matches!(slot.kind, ViewKind::Slider(_)).then_some(slot.key)
     }
 
     /// Absolute rect in logical px after `layout`; empty for a stale id.
@@ -514,6 +559,71 @@ mod tests {
             tree.paint_order(),
             vec![card, rows[0], rows[1], inner, rows[2]]
         );
+    }
+
+    #[test]
+    fn a_scoped_walk_skips_one_subtree_or_keeps_only_its_children() {
+        let mut tree = Tree::new(false, &Theme::dark());
+        let rows = (0..3).map(|i| {
+            if i == 1 {
+                row_view(i).child(view::col(Key::named("inner")).size(1.0, 1.0))
+            } else {
+                row_view(i)
+            }
+        });
+        tree.apply(card(rows), Instant::now());
+        let card = id(&tree, Key::named("card"));
+        let inner = id(&tree, Key::named("inner"));
+        let rows = [0, 1, 2].map(|i| id(&tree, row_key(i)));
+        let enters = |scope| {
+            tree.walk(scope)
+                .into_iter()
+                .filter_map(|v| match v {
+                    Visit::Enter(id) => Some(id),
+                    Visit::Leave(_) => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(enters(Scope::All), tree.paint_order());
+        assert_eq!(enters(Scope::Except(rows[1])), vec![card, rows[0], rows[2]]);
+        assert_eq!(enters(Scope::Except(card)), Vec::<NodeId>::new());
+        assert_eq!(
+            enters(Scope::ChildrenOf(card)),
+            vec![rows[0], rows[1], inner, rows[2]]
+        );
+        assert_eq!(enters(Scope::ChildrenOf(rows[1])), vec![inner]);
+        assert_eq!(enters(Scope::ChildrenOf(rows[0])), Vec::<NodeId>::new());
+        // Every entered node is left, in order.
+        let walk = tree.walk(Scope::ChildrenOf(card));
+        assert_eq!(walk.len(), 8);
+        assert_eq!(walk[7], Visit::Leave(rows[2]));
+        assert!(tree.walk(Scope::ChildrenOf(usize::MAX)).is_empty());
+    }
+
+    #[test]
+    fn slider_at_names_only_a_slider_under_the_point() {
+        let t0 = Instant::now();
+        let mut tree = Tree::new(false, &Theme::dark());
+        let view = view::col(Key::named("card"))
+            .width(300.0)
+            .padding(20.0)
+            .child(row_view(0))
+            .child(
+                view::slider(Key::named("level"), Slider::new(50))
+                    .width(260.0)
+                    .height(24.0),
+            );
+        tree.apply(view, t0);
+        tree.layout_measured(AVAILABLE, fake_measure);
+        let slider = tree.rect(id(&tree, Key::named("level")));
+        let row = tree.rect(id(&tree, row_key(0)));
+        assert_eq!(
+            tree.slider_at(slider.x + 5.0, slider.y + 5.0, t0),
+            Some(Key::named("level"))
+        );
+        assert_eq!(tree.slider_at(row.x + 5.0, row.y + 5.0, t0), None);
+        assert_eq!(tree.slider_at(-10.0, -10.0, t0), None);
+        assert_eq!(tree.slider_at(f32::NAN, 5.0, t0), None);
     }
 
     #[test]

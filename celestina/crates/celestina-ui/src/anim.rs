@@ -3,7 +3,7 @@
 
 use std::time::{Duration, Instant};
 
-use crate::curve::{CubicBezier, LINEAR};
+use crate::curve::{Easing, LINEAR};
 
 /// How one animation honours reduced motion, chosen by the caller for the
 /// property it animates (DESIGN.md: reduced motion makes spatial and scale
@@ -36,7 +36,7 @@ pub struct Animated {
     to: f32,
     start: Instant,
     duration: Duration,
-    curve: CubicBezier,
+    curve: Easing,
 }
 
 impl Animated {
@@ -47,7 +47,7 @@ impl Animated {
             to: v,
             start: Instant::now(),
             duration: Duration::ZERO,
-            curve: LINEAR,
+            curve: Easing::Bezier(LINEAR),
         }
     }
 
@@ -72,7 +72,7 @@ impl Animated {
         &mut self,
         v: f32,
         duration: Duration,
-        curve: CubicBezier,
+        curve: impl Into<Easing>,
         now: Instant,
         reduced: Reduced,
     ) {
@@ -95,7 +95,7 @@ impl Animated {
         self.to = v;
         self.start = now;
         self.duration = duration;
-        self.curve = curve;
+        self.curve = curve.into();
     }
 
     pub fn value(&self, now: Instant) -> f32 {
@@ -127,7 +127,7 @@ impl Animated {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::{Motion, LINEAR, ONE_UI};
+    use crate::curve::{Easing, Motion, LINEAR, ONE_UI};
 
     const FULL: Reduced = Reduced::Opacity;
 
@@ -241,6 +241,26 @@ mod tests {
         assert_eq!(a.value(t0), 0.0);
         assert!(a.is_animating(ms(t0, 100)));
         assert!((a.value(ms(t0, 100)) - 0.5).abs() < 1e-3);
+    }
+
+    #[test]
+    fn an_animated_value_carries_an_overshoot_past_its_target() {
+        let t0 = Instant::now();
+        let mut a = Animated::new(0.0);
+        a.animate_to(
+            10.0,
+            Duration::from_millis(100),
+            Easing::OutBack(1.15),
+            t0,
+            FULL,
+        );
+        let peak = (1..100)
+            .map(|n| a.value(ms(t0, n)))
+            .fold(f32::MIN, f32::max);
+        assert!(peak > 10.0, "{peak}");
+        assert!(a.is_animating(ms(t0, 99)));
+        assert_eq!(a.value(ms(t0, 100)), 10.0);
+        assert!(!a.is_animating(ms(t0, 100)));
     }
 
     #[test]

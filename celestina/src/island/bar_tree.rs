@@ -277,8 +277,38 @@ impl BarTree {
         self.tree.take_fault().or_else(|| self.measure.take_fault())
     }
 
-    pub fn paint(&mut self, painter: &mut Painter, now: Instant) {
-        self.tree.paint(painter, now);
+    /// Paints the bar, without the capsule of zone `skip` when one is given
+    /// (a sheet draws that one itself).
+    pub fn paint(&mut self, painter: &mut Painter, now: Instant, skip: Option<usize>) {
+        match skip.and_then(|zone| self.zone_node(zone)) {
+            Some(id) => self.tree.paint_except(painter, now, id),
+            None => self.tree.paint(painter, now),
+        }
+    }
+
+    /// Paints only the pieces of zone `zone`'s capsule: not its box or Haze.
+    pub fn paint_row(&mut self, painter: &mut Painter, now: Instant, zone: usize) {
+        if let Some(id) = self.zone_node(zone) {
+            self.tree.paint_children(painter, now, id);
+        }
+    }
+
+    fn zone_node(&self, zone: usize) -> Option<celestina_ui::NodeId> {
+        self.tree.node_by_key(*zone_keys().get(zone)?)
+    }
+
+    /// The rect of zone `zone`'s capsule, when it has one.
+    #[must_use]
+    pub fn zone_rect(&self, zone: usize) -> Option<Rect> {
+        self.zone_node(zone).map(|id| self.tree.rect(id))
+    }
+
+    /// The zone whose capsule holds the centre of node `key`.
+    #[must_use]
+    pub fn zone_of(&self, key: Key) -> Option<usize> {
+        let r = self.piece_rect(key)?;
+        let (x, y) = (r.x + r.w / 2.0, r.y + r.h / 2.0);
+        (0..zone_keys().len()).find(|&zone| self.zone_rect(zone).is_some_and(|z| z.contains(x, y)))
     }
 
     #[must_use]
@@ -291,17 +321,21 @@ impl BarTree {
         self.tree.highlight()
     }
 
-    /// The capsules as they are painted at `now` (fading ones included),
-    /// with the haze's corner `radius`: what the blur and input regions
-    /// cover.
+    /// The capsules as they are painted at `now` (fading ones included, the
+    /// one of zone `skip` left out), with the haze's corner `radius`: what
+    /// the blur and input regions cover.
     #[must_use]
-    pub fn shapes(&self, now: Instant, radius: f32) -> Vec<Shape> {
+    pub fn shapes(&self, now: Instant, radius: f32, skip: Option<usize>) -> Vec<Shape> {
         let zones = zone_keys();
+        let skipped = skip.and_then(|zone| zones.get(zone).copied());
         self.tree
             .paint_order()
             .into_iter()
             .filter(|&id| {
-                zones.contains(&self.tree.key_of(id)) && self.tree.effective_opacity(id, now) > 0.0
+                let key = self.tree.key_of(id);
+                zones.contains(&key)
+                    && Some(key) != skipped
+                    && self.tree.effective_opacity(id, now) > 0.0
             })
             .map(|id| {
                 let r = self.tree.rect(id);
@@ -327,6 +361,27 @@ impl BarTree {
                 .node_by_key(key)
                 .is_some_and(|id| self.tree.rect(id).contains(x, y))
         })
+    }
+
+    /// Whether (`x`, `y`) is on a capsule other than zone `except`'s.
+    #[must_use]
+    pub fn contains_except(&self, x: f32, y: f32, except: Option<usize>) -> bool {
+        zone_keys().into_iter().enumerate().any(|(zone, key)| {
+            Some(zone) != except
+                && self
+                    .tree
+                    .node_by_key(key)
+                    .is_some_and(|id| self.tree.rect(id).contains(x, y))
+        })
+    }
+
+    /// The rect of the node `key` of a piece the bar still holds: `None`
+    /// once the piece is off the bar, though its node may still be fading
+    /// out of the tree.
+    #[must_use]
+    pub fn piece_rect(&self, key: Key) -> Option<Rect> {
+        self.views.owner(key)?;
+        self.node_rect(key)
     }
 
     /// The rect of the bar's node `key`, for a popup anchored to it.
@@ -473,7 +528,7 @@ mod tests {
             let mut bar = BarTree::new(&only(&["notifications"], &[]), cx.theme, false);
             bar.update(cx, 1920.0, 140.0, t0, &mut lay());
             let placed = bar.placement.and_then(|p| p.start);
-            let painted = bar.shapes(t0, cx.theme.radius_lg);
+            let painted = bar.shapes(t0, cx.theme.radius_lg, None);
             assert_eq!(painted.len(), 1);
             assert_eq!(Some(painted[0].0), placed);
             assert!(placed
@@ -487,10 +542,10 @@ mod tests {
             let t0 = Instant::now();
             let mut bar = BarTree::new(&only(&[], &["notifications"]), cx.theme, false);
             bar.update(cx, 1920.0, 140.0, t0, &mut lay());
-            let before = bar.shapes(t0, 0.0);
+            let before = bar.shapes(t0, 0.0, None);
             // A narrower surface moves the end capsule left.
             bar.update(cx, 1280.0, 140.0, t0, &mut lay());
-            let after = bar.shapes(t0, 0.0);
+            let after = bar.shapes(t0, 0.0, None);
             assert_eq!(before.len(), 1);
             assert_eq!(after.len(), 1);
             assert!(after[0].0.x < before[0].0.x);

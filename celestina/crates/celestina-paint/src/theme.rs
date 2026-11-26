@@ -165,6 +165,8 @@ pub struct Theme {
     pub motion: MotionMs,
     /// The press recoil scale.
     pub press_scale: f32,
+    /// The overshoot of the emphasized (OutBack) easing.
+    pub overshoot: f32,
     /// A linear track's height (slider, progress).
     pub linear_track_height: f32,
     /// A slider handle's diameter.
@@ -244,6 +246,7 @@ impl From<&Scheme> for Theme {
                 ceiling: motion::CEILING_MS,
             },
             press_scale: motion::PRESS_SCALE,
+            overshoot: motion::OVERSHOOT,
             linear_track_height: control::LINEAR_TRACK_HEIGHT,
             slider_handle_size: control::SLIDER_HANDLE_SIZE,
             disabled_opacity: opacity::DISABLED,
@@ -310,6 +313,11 @@ mod tests {
             Ok(c) => c,
             Err(err) => panic!("{s}: {err}"),
         }
+    }
+
+    #[test]
+    fn the_overshoot_is_the_tokens() {
+        assert_eq!(Theme::dark().overshoot, 1.15);
     }
 
     #[test]

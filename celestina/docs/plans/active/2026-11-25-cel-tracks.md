@@ -88,7 +88,7 @@ row closes on its own landing with its inventory and evidence.
 | CEL-I-004 | `celestina:` | done | [inventory](../../inventories/2026-11-25-cel-tracks/CEL-I-004.numstat.tsv) | 28 files, +4409/-147 | Add the output and input device selector and per-application volume and mute to the volume popup ([design](../../../../docs/superpowers/specs/2026-11-25-celestina-cel-i-004-audio-design.md), [plan](../../../../docs/superpowers/plans/2026-11-25-celestina-cel-i-004-audio-plan.md)); needs `CUP-WPCTL-STATUS` of Cuprita; absorbs `CEL-I-005` | [evidence](../../evidence/2026-11-25-cel-i-004-audio.md) | VAL-CEL-I-004 |
 | CEL-I-006 | `celestina:` | done | [inventory](../../inventories/2026-11-25-cel-tracks/CEL-I-006.numstat.tsv) | 27 files, +1703/-57 | Add a Session piece at the end of the bar whose menu locks, suspends (lock and suspend), logs out, reboots and powers off, the last three asking first in an inline danger card (preview approved 2026-11-25, variant A) | [evidence](../../evidence/2026-11-25-cel-i-006-session-menu.md) | VAL-CEL-I-006 |
 | CEL-D-001 | `celestina:` | done | [inventory](../../inventories/2026-11-25-cel-tracks/CEL-D-001.numstat.tsv) | 21 files, +305/-174 | Show each Island tab as its page's icon instead of its title: nine equal pills, the open one in the accent fill with its icon in accent ink (preview approved 2026-11-25, variant A); needs `STYLE-ICONS-1` for `calendar` | [evidence](../../evidence/2026-11-25-cel-d-001-tab-icons.md) | VAL-CEL-D-001 |
-| CEL-D-002 | `celestina:` | planned | `crates/celestina-ui/`, `src/island/`, `src/bar/` | pending | Add anchored panels inside the bar surface and the new hover and press language (design §6.2) | pending | VAL-CEL-D-002 |
+| CEL-D-002 | `celestina:` | done | [inventory](../../inventories/2026-11-25-cel-tracks/CEL-D-002.numstat.tsv) | 54 files, +5691/-322 | Add the capsule sheet: a bar capsule grows into the menu of the piece pressed (one open thing per output, OutBack morph, switching between the pieces of a capsule, the progressive blur where the sheet cuts the row, a spotlight under the open piece, scrolling), with the volume menu as its first content and its popup removed ([design](../../../../docs/superpowers/specs/2026-11-25-celestina-capsule-sheets-design.md), [plan](../../../../docs/superpowers/plans/2026-11-25-celestina-capsule-sheets-plan.md); preview approved 2026-11-25) | [evidence](../../evidence/2026-11-25-cel-d-002-capsule-sheets.md) | VAL-CEL-D-002 |
 | CEL-D-003 | `celestina:` | planned | `src/pieces/`, `src/osd/popup.rs`, `src/island/` | pending | Open every piece's menu as an anchored panel; tray menus stay `xdg_popup` (design §6.3) | pending | VAL-CEL-D-003 |
 | CEL-D-004 | `celestina:` | planned | `src/island/`, `src/pieces/` | pending | Merge clock and date into one centre capsule that is the Island (design §6.4) | pending | VAL-CEL-D-004 |
 | CEL-D-005 | `celestina:` | planned | `src/pieces/`, `src/overview/` | pending | Open a small workspaces panel with each workspace's app icons; the wheel still switches (design §6.5) | pending | VAL-CEL-D-005 |
@@ -103,7 +103,10 @@ row closes on its own landing with its inventory and evidence.
 Entries that are not yet ledger rows, and entries recorded outside this
 ledger.
 
-- **Design (`CEL-D`):** none beyond the ledger.
+- **Design (`CEL-D`):**
+  - Tint the hover and press fills of the bar's pieces with the wallpaper's
+    colours: the author's idea of 2026-11-25, to be a `CEL-D` entry after the
+    capsule sheets (`CEL-D-002` to `CEL-D-005`).
 - **Improvements (`CEL-I`):**
   - `CEL-I-001`: the lock and polkit default flip, landed as
     `CEL-2-M-LOCK-POLKIT` (1.15.0) in the

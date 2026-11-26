@@ -25,6 +25,7 @@ mod key;
 mod layout;
 mod paint;
 mod reconcile;
+mod scroll;
 mod secret;
 pub mod slider;
 #[cfg(test)]
@@ -33,12 +34,15 @@ mod tree;
 pub mod view;
 
 pub use anim::{Animated, Reduced};
-pub use curve::{CubicBezier, Motion, EXIT, LINEAR, ONE_UI, SINE_IN_OUT_80, SINE_IN_OUT_90};
+pub use curve::{
+    CubicBezier, Easing, Motion, EXIT, LINEAR, ONE_UI, SINE_IN_OUT_80, SINE_IN_OUT_90,
+};
 pub use ellipsis::{fit_middle, ELLIPSIS};
 pub use field::{EditOp, Field, FieldId, MAX_CHARS};
 pub use highlight::{focus_ring, Highlight, FOCUS_WIDTH};
 pub use input::{Interaction, UiEvent, BTN_LEFT};
 pub use key::Key;
+pub use scroll::Scroll;
 pub use secret::{
     Secret, SecretField, SecretFieldState, SecretKey, SecretRefused, MAX_SECRET_BYTES,
 };

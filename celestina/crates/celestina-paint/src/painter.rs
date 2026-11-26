@@ -12,13 +12,17 @@ use celestina_wayland::egl::{max_texture_side, EglError};
 use celestina_wayland::Rect;
 
 use crate::atlas::{Atlas, GlyphKey, PAGE};
-use crate::backend::{Backend, BackendInit, GlyphQuad, GpuError, ImageHandle, ImageKind};
+use crate::backend::{
+    Backend, BackendInit, GlyphQuad, GpuError, ImageHandle, ImageKind, SpotShape,
+};
 use crate::color::{unit, Color};
 use crate::haze::{grain_texels, GrainError, HazePlan, GRAIN_SIZE};
 use crate::icon::{
     default_icon_dirs, device_size, file_path, rasterise_file, semantic_path, theme_path,
     IconCache, IconKey, PixmapId,
 };
+use crate::soft_edge::{self, Cuts, SOFT_SIGMAS};
+use crate::spotlight;
 use crate::text::{TextRun, TextSystem};
 use crate::theme::Theme;
 
@@ -195,6 +199,20 @@ impl AtlasUsage {
     }
 }
 
+/// A row cut by a window: drawn whole into `image` (the row's rect, larger
+/// than the window so the blur has content past the edges), then shown
+/// through `window` with the progressive blur at the cut sides.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CutRow {
+    pub image: Rect,
+    pub window: Rect,
+    pub radius: f32,
+    pub cuts: Cuts,
+}
+
+/// The pill widths the spotlight image is built for, in device px.
+const SPOT_STEP_PX: f32 = 8.0;
+
 /// The one painter of the process.
 pub struct Painter {
     backend: Backend,
@@ -215,6 +233,10 @@ pub struct Painter {
     alpha: AlphaStack,
     dpr: f32,
     blur_available: bool,
+    /// Whether the missing row images were already warned about.
+    row_warned: bool,
+    /// Whether the missing spotlight image was already warned about.
+    spot_warned: bool,
 }
 
 impl std::fmt::Debug for Painter {
@@ -275,6 +297,8 @@ impl Painter {
             alpha: AlphaStack::new(),
             dpr: 1.0,
             blur_available: false,
+            row_warned: false,
+            spot_warned: false,
         })
     }
 
@@ -668,6 +692,161 @@ impl Painter {
     pub fn opacity(&mut self, multiply: f32) {
         let alpha = self.alpha.multiply(multiply);
         self.backend.set_global_alpha(alpha);
+    }
+
+    /// Moves subsequent draws by (`dx`, `dy`) logical px, rounded to device
+    /// px; scoped by the enclosing `push_state` / `pop_state`.
+    pub fn translate(&mut self, dx: f32, dy: f32) {
+        let snap = |v: f32| {
+            let px = (v * self.dpr).round() / self.dpr;
+            if px.is_finite() {
+                px
+            } else {
+                0.0
+            }
+        };
+        self.backend.translate(snap(dx), snap(dy));
+    }
+
+    /// Draws a row through a window that cuts it: `draw` paints the whole
+    /// row, and the window shows it with a progressive blur and fade at the
+    /// sides that cut. A side with no cut shows the row sharp to the window's
+    /// edge. If the GPU images cannot be made, the window hard-clips the row.
+    pub fn cut_row(&mut self, row: &CutRow, draw: &mut dyn FnMut(&mut Painter)) {
+        let window = row.window;
+        if !(window.w > 0.0 && window.h > 0.0) {
+            return;
+        }
+        if let Some(layers) = self.row_layers(row) {
+            let dpr = self.dpr;
+            let (ox, oy) = (
+                (row.image.x * dpr).floor() / dpr,
+                (row.image.y * dpr).floor() / dpr,
+            );
+            self.push_state();
+            self.backend.begin_row(&layers, (ox, oy), dpr);
+            self.alpha.current = 1.0;
+            draw(self);
+            self.backend.end_row();
+            self.pop_state();
+            let band = soft_edge::band_width(window.w);
+            let stops = [0, 1, 2, 3].map(|k| soft_edge::level_stops(k, window.w, band, row.cuts));
+            self.backend.compose_row(
+                &layers,
+                SOFT_SIGMAS.map(|s| s * dpr),
+                ((window.x - ox) * dpr, window.w * dpr),
+                &stops,
+            );
+            let (w, h) = layers.size();
+            let drawn = Rect {
+                x: ox,
+                y: oy,
+                w: w as f32 / dpr,
+                h: h as f32 / dpr,
+            };
+            self.push_clip(window, row.radius);
+            self.backend.draw_row(&layers, drawn);
+            self.pop_clip();
+        } else {
+            self.push_clip(window, row.radius);
+            draw(self);
+            self.pop_clip();
+        }
+    }
+
+    /// The offscreen images for `row`, or `None` for a hard clip: no cut, a
+    /// row too big for the GPU, or an image that cannot be made (warned
+    /// once per painter).
+    fn row_layers(&mut self, row: &CutRow) -> Option<crate::backend::RowLayers> {
+        if !(row.cuts.left || row.cuts.right) {
+            return None;
+        }
+        let dpr = self.dpr;
+        let side = |len: f32, at: f32| {
+            let origin = (at * dpr).floor();
+            let end = ((at + len) * dpr).ceil();
+            let px = end - origin;
+            (px.is_finite() && px >= 1.0 && px <= self.max_texture_side as f32).then_some(px as u32)
+        };
+        let (w, h) = (
+            side(row.image.w, row.image.x)?,
+            side(row.image.h, row.image.y)?,
+        );
+        let layers = self.backend.row_layers(w, h);
+        if layers.is_none() && !self.row_warned {
+            self.row_warned = true;
+            tracing::warn!(
+                w,
+                h,
+                "cannot make the row images; cut rows are hard-clipped"
+            );
+        }
+        layers
+    }
+
+    /// The spotlight under a sheet's `pill`: a faint cone and core of light,
+    /// blurred, at `alpha`. One cached image, remade when the pill's device
+    /// width (in steps of 8 px) or the ratio changes.
+    pub fn spotlight(&mut self, pill: Rect, alpha: f32) {
+        let alpha = unit(alpha);
+        if !(pill.w > 0.0 && pill.w.is_finite() && pill.x.is_finite() && pill.y.is_finite())
+            || alpha <= 0.0
+        {
+            return;
+        }
+        let dpr = self.dpr;
+        // Quantised, so a pill that slides and widens reuses one image for
+        // a run of frames: the light is blurred past the difference.
+        let width_px = ((pill.w * dpr / SPOT_STEP_PX).round() * SPOT_STEP_PX).max(SPOT_STEP_PX);
+        // Built for the rounded width, so the cache is exact for its key.
+        let built = Rect {
+            w: width_px / dpr,
+            ..pill
+        };
+        let bounds = spotlight::spot_bounds(built);
+        let size = (
+            (bounds.w * dpr).ceil().max(1.0) as u32,
+            (bounds.h * dpr).ceil().max(1.0) as u32,
+        );
+        if size.0.max(size.1) > self.max_texture_side {
+            return;
+        }
+        let margin = 3.0 * spotlight::CONE_SIGMA;
+        let at = |corners: [(f32, f32); 4]| corners.map(|(x, y)| (x + margin, y + margin));
+        let foot = Rect {
+            x: 0.0,
+            y: 0.0,
+            ..spotlight::foot(built)
+        };
+        let shapes = [
+            SpotShape {
+                corners: at(spotlight::cone_corners(foot)),
+                gradient: (margin, margin + spotlight::CONE_H),
+                stops: spotlight::CONE_STOPS.to_vec(),
+                sigma: spotlight::CONE_SIGMA,
+            },
+            SpotShape {
+                corners: at(spotlight::core_corners(foot)),
+                gradient: (margin, margin + spotlight::CORE_H),
+                stops: spotlight::CORE_STOPS.to_vec(),
+                sigma: spotlight::CORE_SIGMA,
+            },
+        ];
+        let key = (width_px as u32, dpr.to_bits());
+        let Some(image) = self.backend.spot_image(key, size, dpr, &shapes) else {
+            if !self.spot_warned {
+                self.spot_warned = true;
+                tracing::warn!("cannot make the spotlight image; it is not drawn");
+            }
+            return;
+        };
+        let drawn = Rect {
+            x: pill.x + pill.w / 2.0 - bounds.w / 2.0,
+            y: bounds.y,
+            w: size.0 as f32 / dpr,
+            h: size.1 as f32 / dpr,
+        };
+        self.backend.draw_spot(image, drawn, alpha);
     }
 
     /// Scales subsequent draws by `s` about (`cx`, `cy`), for the press

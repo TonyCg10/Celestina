@@ -234,6 +234,13 @@ pub struct Levels {
 /// jump from one end of the range to the other.
 pub const MAX_WHEEL_STEPS: u8 = 4;
 
+/// The menus a capsule can grow into (CEL-D-002). Part B adds the
+/// brightness, the session menu and the pages; Part D the workspaces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SheetKind {
+    Volume,
+}
+
 /// What the Volume piece asks for. The default output is the one it drives;
 /// the microphone is in the popup.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -242,8 +249,6 @@ pub enum AudioAction {
     Step(Direction, u8),
     /// Flip the output's mute.
     ToggleMute,
-    /// Open the slider popup below the piece.
-    Popup,
 }
 
 /// What the Brightness piece asks for.
@@ -311,6 +316,9 @@ pub enum PieceAction {
     None,
     /// Grow into (or switch to) the page.
     OpenPage(PageId),
+    /// Grow the piece's capsule into this sheet (or switch to it, or close
+    /// it when it is the open one's piece).
+    Sheet(SheetKind),
     /// Focus the niri workspace with this id.
     FocusWorkspace(u64),
     /// Something the tray host does for an item.

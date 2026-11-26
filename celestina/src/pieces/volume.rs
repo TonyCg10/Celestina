@@ -1,10 +1,10 @@
 //! The Volume piece: the default output's icon and level in the bar, absent
 //! until the audio worker has read it (so while the `osd` duty is off, and a
 //! piece that merely exists touches nothing). The wheel moves the level, a
-//! middle or right click flips the mute and a click opens the slider popup,
-//! which also holds the microphone.
+//! middle or right click flips the mute and a click grows the capsule into the
+//! volume sheet, which also holds the microphone.
 //!
-//! The piece only describes and asks: the popup is built and the worker
+//! The piece only describes and asks: the sheet is built and the worker
 //! commanded by the app.
 
 use celestina_shell::osd::{Kind, Reading, Shown};
@@ -12,7 +12,7 @@ use celestina_ui::{Key, View};
 
 use super::{
     level, wheel, AudioAction, Axis, BarCx, Gesture, PageEntry, Piece, PieceAction, PieceId,
-    PieceInput,
+    PieceInput, SheetKind,
 };
 use crate::{copy, osd::view::icon_of};
 
@@ -69,7 +69,7 @@ impl Piece for Volume {
             return PieceAction::None;
         }
         match input.gesture {
-            Gesture::Primary => PieceAction::Audio(AudioAction::Popup),
+            Gesture::Primary => PieceAction::Sheet(SheetKind::Volume),
             Gesture::Middle | Gesture::Context => PieceAction::Audio(AudioAction::ToggleMute),
             Gesture::Scroll(Axis::Vertical, steps) => wheel(steps)
                 .map_or(PieceAction::None, |(direction, count)| {
@@ -169,7 +169,7 @@ mod tests {
         let a = output(60, false);
         assert_eq!(
             ask(a, key(), Gesture::Primary),
-            PieceAction::Audio(AudioAction::Popup)
+            PieceAction::Sheet(SheetKind::Volume)
         );
         for gesture in [Gesture::Middle, Gesture::Context] {
             assert_eq!(

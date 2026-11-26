@@ -9,6 +9,8 @@ mod color;
 mod haze;
 mod icon;
 mod painter;
+pub mod soft_edge;
+pub mod spotlight;
 mod text;
 mod theme;
 
@@ -18,7 +20,8 @@ pub use color::{Color, ColorError};
 pub use haze::GrainError;
 pub use haze::{silhouette_slices, HazePlan};
 pub use icon::{default_icon_dirs, IconKey, PixmapId};
-pub use painter::{AtlasUsage, PaintError, Painter};
+pub use painter::{AtlasUsage, CutRow, PaintError, Painter};
+pub use soft_edge::Cuts;
 pub use text::{default_font_dirs, TextError, TextRun, TextStyle, TextSystem, Weight, LINE_HEIGHT};
 pub use theme::{MotionMs, Role, Spacing, Theme, TypeScale};
 

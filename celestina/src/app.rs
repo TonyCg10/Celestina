@@ -48,7 +48,7 @@ use crate::{
     message::Message,
     notifications::{self, NotificationsState},
     osd::{
-        control::{self, Controls, Opening},
+        control::{self, Controls, LevelRedraw, Opened, Opening, Place},
         verbs::{self as level_verbs, NoWorkers},
         Suppression,
     },
@@ -203,6 +203,15 @@ impl Islands {
             .collect();
         self.slots.retain(|s| s.output != output);
         gone
+    }
+
+    /// Closes the level sheets of `output`'s Islands, flushing what their
+    /// throttles hold. Their surfaces may be gone already: no surface is
+    /// touched.
+    pub fn close_level_sheets(&mut self, output: OutputId) {
+        for slot in self.slots.iter_mut().filter(|s| s.output == output) {
+            slot.island.close_level_sheet_now();
+        }
     }
 
     /// Gives the tray icons of `output`'s Islands back to `painter`.
@@ -782,6 +791,11 @@ impl App {
             self.redraw_all(ctl);
         }
         let theme = self.theme();
+        // The level sheet closes (and sends what its throttle holds) before
+        // the duty's workers are torn down.
+        if before.duties.osd == Duty::On && after.duties.osd == Duty::Off {
+            self.close_open_level_control(ctl);
+        }
         self.osds.settings_changed(&before, &after, ctl, &theme);
         self.levels_settings_changed(&before, &after, ctl);
         if before.duties != after.duties {
@@ -865,6 +879,67 @@ impl App {
         }
     }
 
+    /// Closes the level sheet or popup that is open, on its Island.
+    fn close_open_level_control(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        let Some(surface) = self.controls.open_surface() else {
+            return;
+        };
+        if let (Some(island), Some(mut surface_ctl)) =
+            (self.islands.get_mut(surface), ctl.surface(surface))
+        {
+            island.close_level_sheet(&mut surface_ctl);
+            island.close_level_popup(&mut surface_ctl);
+        }
+    }
+
+    /// Opens the level control of `kind` at `place` on `surface`'s Island and
+    /// tells the display: what was released first, then what is quiet now.
+    fn open_level(
+        &mut self,
+        kind: crate::osd::popup::Kind,
+        place: Place,
+        surface: SurfaceId,
+        shared: &SharedPainter,
+        ctl: &mut SurfaceCtl<'_>,
+    ) {
+        let opening = Opening {
+            surface,
+            painter: shared,
+            runtime: self.osds.runtime(),
+            reduced: self.appearance.reduced_motion,
+        };
+        let Some(island) = self.islands.get_mut(surface) else {
+            return;
+        };
+        let Opened { opened, released } = self.controls.open(kind, place, island, ctl, &opening);
+        if let Some(released) = released {
+            self.post(Message::OsdSuppressed(released.suppression));
+            if let Some(elsewhere) = released.elsewhere {
+                self.post(Message::CloseLevelSheet(elsewhere));
+            }
+        }
+        if opened {
+            self.post(Message::OsdSuppressed(Suppression::Open(
+                control::kinds_of(kind),
+            )));
+        }
+    }
+
+    /// The Island of `surface` says whether its level sheet is still open: a
+    /// sheet that closed (by any way) lets the display show again, once.
+    fn settle_level_sheet(&mut self, surface: SurfaceId) {
+        let Some(open) = self
+            .islands
+            .get_mut(surface)
+            .map(|island| island.level_sheet_open())
+        else {
+            return;
+        };
+        if let Some(released) = self.controls.settle(surface, open) {
+            self.post(Message::OsdSuppressed(released));
+        }
+    }
+
     /// The `osd` duty or the bar's layout changed: with the duty off the
     /// readings are forgotten (so the pieces vanish) and an open slider popup
     /// closes. Whether a layout holds the brightness piece is the runtime's
@@ -876,13 +951,6 @@ impl App {
         ctl: &mut RuntimeCtl<'_>,
     ) {
         if before.duties.osd == Duty::On && after.duties.osd == Duty::Off {
-            if let Some(surface) = self.controls.open_surface() {
-                if let (Some(island), Some(mut surface_ctl)) =
-                    (self.islands.get_mut(surface), ctl.surface(surface))
-                {
-                    island.close_level_popup(&mut surface_ctl);
-                }
-            }
             if let Some(released) = self.controls.closed() {
                 let theme = self.theme();
                 self.osds.set_suppressed(released, ctl, &theme);
@@ -914,10 +982,13 @@ impl App {
     /// An open slider popup shows what the readings and the audio graph hold
     /// now.
     fn popup_refreshed(&mut self, ctl: &mut RuntimeCtl<'_>) {
-        if let Some((_, popup)) = self.controls.refresh() {
-            if let Some(mut surface) = ctl.popup_surface(popup).and_then(|s| ctl.surface(s)) {
-                surface.request_redraw();
-            }
+        let surface = match self.controls.refresh() {
+            Some(LevelRedraw::Island(surface)) => Some(surface),
+            Some(LevelRedraw::Popup(popup)) => ctl.popup_surface(popup),
+            None => None,
+        };
+        if let Some(mut surface) = surface.and_then(|s| ctl.surface(s)) {
+            surface.request_redraw();
         }
     }
 
@@ -1704,21 +1775,11 @@ impl App {
                 IslandAction::Audio(_) | IslandAction::Brightness(_) => {
                     self.level_action(action, surface);
                 }
+                IslandAction::OpenLevelSheet { kind, piece } => {
+                    self.open_level(kind, Place::Sheet(piece), surface, shared, ctl);
+                }
                 IslandAction::OpenLevelPopup { kind, anchor } => {
-                    let opening = Opening {
-                        surface,
-                        painter: shared,
-                        runtime: self.osds.runtime(),
-                        reduced: self.appearance.reduced_motion,
-                    };
-                    let opened = self.islands.get_mut(surface).is_some_and(|island| {
-                        self.controls.open(kind, anchor, island, ctl, &opening)
-                    });
-                    if opened {
-                        self.post(Message::OsdSuppressed(Suppression::Open(
-                            control::kinds_of(kind),
-                        )));
-                    }
+                    self.open_level(kind, Place::Popup(anchor), surface, shared, ctl);
                 }
                 IslandAction::OpenSessionMenu { anchor } => {
                     let Ok(painter) = shared.try_borrow() else {
@@ -2487,7 +2548,7 @@ impl PromptHost for PolkitHost<'_, '_> {
             let Some(mut surface) = self.ctl.surface(slot.surface) else {
                 continue;
             };
-            if slot.island.page().is_some() {
+            if slot.island.anything_open() {
                 slot.island.command(&Verb::IslandClose, &mut surface);
             }
             // A menu hanging from the bar (a tray icon's) survives the page
@@ -2735,6 +2796,9 @@ impl Shell for App {
                         self.islands.release_icons(output, &mut painter);
                     }
                 }
+                // A level sheet closes (and sends what its throttle holds)
+                // while its Island still exists: `Sheets` has no Drop flush.
+                self.islands.close_level_sheets(output);
                 let gone = self.islands.remove_output(output);
                 // A session menu that went with its Island sends no close:
                 // a row chosen in it is dropped, never fired by a later
@@ -2923,6 +2987,8 @@ impl Shell for App {
             &state,
             self.appearance.reduced_motion,
         );
+        drop(painter);
+        self.settle_level_sheet(cx.surface);
     }
 
     fn input(&mut self, ev: InputEvent, ctl: &mut SurfaceCtl<'_>) {
@@ -2992,6 +3058,7 @@ impl Shell for App {
         let tray_menu_open = island.tray_menu_open();
         let level_popup_open = island.level_popup_open();
         self.act(actions, surface, &shared, ctl);
+        self.settle_level_sheet(surface);
         self.mark_read_if_viewed();
         // The menu is gone: a row chosen in it is made now. The Island has
         // one popup at a time, so the slot is that popup's.
@@ -3010,7 +3077,7 @@ impl Shell for App {
             if let Some((item, entry)) = chosen {
                 self.tray_command(TrayCommand::MenuEvent(item, entry));
             }
-            if !level_popup_open && self.controls.is_open_on(surface) {
+            if !level_popup_open && self.controls.popup_open_on(surface) {
                 self.level_popup_closed();
             }
             if !tray_menu_open
@@ -3170,6 +3237,14 @@ impl Shell for App {
                 let theme = self.theme();
                 self.osds
                     .brightness(event, focused_output(self.model.as_ref()), ctl, &theme);
+            }
+            Message::CloseLevelSheet(surface) => {
+                if let (Some(island), Some(mut surface_ctl)) =
+                    (self.islands.get_mut(surface), ctl.surface(surface))
+                {
+                    island.close_level_sheet(&mut surface_ctl);
+                    island.close_level_popup(&mut surface_ctl);
+                }
             }
             Message::OsdSuppressed(suppression) => {
                 let theme = self.theme();

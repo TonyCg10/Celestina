@@ -178,6 +178,7 @@ in [the handover note](docs/handover.md).
 | `crates/celestina-paint` | The `Painter` contract over femtovg, the Haze material, text and icons (§5.3) |
 | `crates/celestina-ui` | The node tree, taffy layout, keyed reconciliation, animation, hit-test, focus, the text field (§5.4) |
 | `src/` | The product: Island, launcher, notifications, tray, the bar and its pieces (including sysmon, weather and clock), and the providers on worker threads |
+| `src/sheet/` | The capsule sheets (CEL-D-002): the owner of the open sheet, its pure geometry and clocks, and the bodies a bar capsule grows into (the volume's level card first); the Island wires it in `src/island/sheets.rs` |
 | `src/lock/` | The shell's side of the lock: the supervisor of `celestina-lock`, the logind delay-inhibitor worker, the header-only backdrop bundle and the notices |
 | `crates/celestina-lock` | The lock binary: an `ext-session-lock-v1` client with covers, a CPU painter into `wl_shm`, the password field and the only unlock |
 | `crates/celestina-lock-verify` | The PAM verifier, one short-lived process per attempt; `pam.rs` is its one FFI module |

@@ -77,6 +77,42 @@ fn axis_derivative(t: f32, a: f32, b: f32) -> f32 {
     3.0 * u * u * a + 6.0 * u * t * (b - a) + 3.0 * t * t * (1.0 - b)
 }
 
+/// How a flight's progress follows its time fraction: a cubic bezier, or the
+/// emphasized OutBack that overshoots its target before landing on it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Easing {
+    Bezier(CubicBezier),
+    /// `f(t) = 1 + (s+1)(t-1)^3 + s(t-1)^2`, `s` the overshoot (the
+    /// theme's `overshoot`).
+    OutBack(f32),
+}
+
+impl Easing {
+    /// Progress at time fraction `x`: `x` clamped to 0..=1, NaN counting as
+    /// the end. A bezier stays within 0..=1; OutBack is not clamped above 1.
+    pub fn eval(&self, x: f32) -> f32 {
+        match self {
+            Easing::Bezier(c) => c.eval(x),
+            Easing::OutBack(s) => {
+                if x <= 0.0 {
+                    return 0.0;
+                }
+                if x >= 1.0 || x.is_nan() {
+                    return 1.0;
+                }
+                let u = x - 1.0;
+                1.0 + (s + 1.0) * u * u * u + s * u * u
+            }
+        }
+    }
+}
+
+impl From<CubicBezier> for Easing {
+    fn from(c: CubicBezier) -> Easing {
+        Easing::Bezier(c)
+    }
+}
+
 /// The duration ladder of the style.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Motion {
@@ -182,6 +218,31 @@ mod tests {
         assert_eq!(ONE_UI.eval(-1.0), 0.0);
         assert_eq!(ONE_UI.eval(2.0), 1.0);
         assert_eq!(ONE_UI.eval(f32::NAN), 1.0);
+    }
+
+    #[test]
+    fn out_back_overshoots_then_lands_on_one() {
+        let e = Easing::OutBack(1.15);
+        assert_eq!(e.eval(0.0), 0.0);
+        assert_eq!(e.eval(1.0), 1.0);
+        assert!((e.eval(0.5) - 1.01875).abs() < 1e-4, "{}", e.eval(0.5));
+        assert!(
+            (e.eval(0.6434) - 1.04874).abs() < 1e-4,
+            "{}",
+            e.eval(0.6434)
+        );
+        assert_eq!(e.eval(f32::NAN), 1.0);
+        assert_eq!(e.eval(-1.0), 0.0);
+        assert_eq!(e.eval(2.0), 1.0);
+    }
+
+    #[test]
+    fn a_bezier_easing_is_the_curve_itself() {
+        for c in ALL {
+            for x in [0.0, 0.1, 0.5, 0.9, 1.0] {
+                assert_eq!(Easing::from(c).eval(x), c.eval(x));
+            }
+        }
     }
 
     #[test]

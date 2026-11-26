@@ -170,6 +170,18 @@ impl View {
         self
     }
 
+    /// `top` above, `x` left and right, `bottom` below.
+    pub fn padding_sides(mut self, top: f32, x: f32, bottom: f32) -> View {
+        let x = LengthPercentage::length(x);
+        self.style.padding = taffy::Rect {
+            left: x,
+            right: x,
+            top: LengthPercentage::length(top),
+            bottom: LengthPercentage::length(bottom),
+        };
+        self
+    }
+
     /// The space between children, both ways.
     pub fn gap(mut self, g: f32) -> View {
         self.style.gap = length(g);

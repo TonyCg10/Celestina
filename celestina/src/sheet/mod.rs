@@ -1,0 +1,652 @@
+//! Capsule sheets: a bar capsule grows into its menu (CEL-D-002). The pure
+//! rules ([`geometry`]) and clocks ([`motion`]) hold no painter and no GL;
+//! [`Sheets`] owns what is open on one output: the sheet's rect, its body, the
+//! body being left in a switch, the open that waits for another thing to
+//! close, the scroll and the indicator. The Island wires it to the bar
+//! (`island::sheets`).
+//!
+//! Nothing here stores a measure: whatever cuts or measures text takes the
+//! caller's `Measure` for the length of the call, because the painter is
+//! already borrowed wherever a sheet is drawn or fed.
+
+pub mod body;
+pub mod geometry;
+pub mod motion;
+
+use std::time::{Duration, Instant};
+
+use celestina_paint::{CutRow, Painter, Rect, Role, TextStyle, Theme};
+use celestina_ui::{Key, Scroll, Tree};
+use celestina_wayland::InputEvent;
+
+pub use body::{BodyOutcome, SheetBody};
+use geometry::ROW_H;
+use motion::{Indicator, SheetMotion};
+
+use crate::pieces::{PageId, SheetKind};
+
+/// The text measure of the caller: `(text, style, max width)` to `(width,
+/// height)`.
+pub type Measure<'m> = dyn FnMut(&str, &TextStyle, Option<f32>) -> (f32, f32) + 'm;
+
+/// The indicator pill's corner radius (the pieces' hover pill).
+const PILL_RADIUS: f32 = 12.0;
+/// A change of a rect under this is no change.
+const EPS: f32 = 0.01;
+
+/// Where a sheet grows from: its capsule, the opening piece and the surface.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Anchor {
+    pub capsule: Rect,
+    pub piece: Rect,
+    pub surface: (f32, f32),
+}
+
+/// A sheet to open.
+#[derive(Debug)]
+pub struct Request {
+    /// The bar zone whose capsule it grows from.
+    pub zone: usize,
+    /// The piece that asked.
+    pub piece: Key,
+    pub kind: SheetKind,
+    pub body: SheetBody,
+}
+
+/// What waits for the open thing to finish closing.
+#[derive(Debug)]
+pub enum Next {
+    Sheet(Request),
+    Page(PageId),
+}
+
+/// The sheet on screen, from its first frame to the end of its close.
+#[derive(Debug)]
+struct OpenSheet {
+    zone: usize,
+    piece: Key,
+    kind: SheetKind,
+    body: SheetBody,
+    motion: SheetMotion,
+    /// The last anchor the bar gave (or the one it opened with).
+    anchor: Anchor,
+    /// The target rect the motion last knew.
+    target: Rect,
+    /// The body's size at the last look.
+    size: (f32, f32),
+}
+
+/// The body being left in a switch, with the scroll it had.
+#[derive(Debug)]
+struct Leaving {
+    body: SheetBody,
+    scroll: f32,
+}
+
+fn same(a: Rect, b: Rect) -> bool {
+    (a.x - b.x).abs() < EPS
+        && (a.y - b.y).abs() < EPS
+        && (a.w - b.w).abs() < EPS
+        && (a.h - b.h).abs() < EPS
+}
+
+/// `ev` with its pointer position moved by (`-dx`, `-dy`): the event in the
+/// body's own coordinates.
+fn translated(ev: &InputEvent, dx: f32, dy: f32) -> InputEvent {
+    match ev {
+        InputEvent::PointerMotion { x, y } => InputEvent::PointerMotion {
+            x: x - dx,
+            y: y - dy,
+        },
+        InputEvent::PointerPress {
+            x,
+            y,
+            button,
+            serial,
+        } => InputEvent::PointerPress {
+            x: x - dx,
+            y: y - dy,
+            button: *button,
+            serial: *serial,
+        },
+        InputEvent::PointerRelease {
+            x,
+            y,
+            button,
+            serial,
+        } => InputEvent::PointerRelease {
+            x: x - dx,
+            y: y - dy,
+            button: *button,
+            serial: *serial,
+        },
+        InputEvent::Axis {
+            x,
+            y,
+            horizontal,
+            vertical,
+        } => InputEvent::Axis {
+            x: x - dx,
+            y: y - dy,
+            horizontal: *horizontal,
+            vertical: *vertical,
+        },
+        other => other.clone(),
+    }
+}
+
+/// The owner of what is open on one output's bar: at most one sheet, plus
+/// the one thing that waits for it to close.
+#[derive(Debug, Default)]
+pub struct Sheets {
+    open: Option<OpenSheet>,
+    leaving: Option<Leaving>,
+    queued: Option<Next>,
+    scroll: Scroll,
+    indicator: Indicator,
+    /// The pointer was last over the body.
+    hovering: bool,
+    /// Counts what changed the look: the Island asks for a frame when it
+    /// moves.
+    revision: u32,
+}
+
+impl Sheets {
+    /// A sheet is open and not on its way out.
+    #[must_use]
+    pub fn is_open(&self) -> bool {
+        self.open.as_ref().is_some_and(|o| !o.motion.is_closing())
+    }
+
+    /// A sheet is painted: open, or closing and not yet gone.
+    #[must_use]
+    pub fn is_shown(&self, now: Instant) -> bool {
+        self.open.as_ref().is_some_and(|o| !o.motion.closed(now))
+    }
+
+    /// The zone of the sheet shown (open or closing).
+    #[must_use]
+    pub fn zone(&self, now: Instant) -> Option<usize> {
+        self.open
+            .as_ref()
+            .filter(|o| !o.motion.closed(now))
+            .map(|o| o.zone)
+    }
+
+    /// The zone and piece of the sheet held, whatever its state.
+    #[must_use]
+    pub fn anchor_ids(&self) -> Option<(usize, Key)> {
+        self.open.as_ref().map(|o| (o.zone, o.piece))
+    }
+
+    /// The piece of the open sheet.
+    #[must_use]
+    pub fn piece(&self) -> Option<Key> {
+        self.open
+            .as_ref()
+            .filter(|o| !o.motion.is_closing())
+            .map(|o| o.piece)
+    }
+
+    /// The open sheet's kind, else the queued one's.
+    #[must_use]
+    pub fn kind(&self) -> Option<SheetKind> {
+        match (&self.open, &self.queued) {
+            (Some(o), _) if !o.motion.is_closing() => Some(o.kind),
+            (_, Some(Next::Sheet(r))) => Some(r.kind),
+            _ => None,
+        }
+    }
+
+    /// A level body is open (not closing) or queued.
+    #[must_use]
+    pub fn has_level(&self) -> bool {
+        let open = self
+            .open
+            .as_ref()
+            .is_some_and(|o| !o.motion.is_closing() && o.body.is_level());
+        let queued = matches!(&self.queued, Some(Next::Sheet(r)) if r.body.is_level());
+        open || queued
+    }
+
+    /// Something waits for the open thing to close.
+    #[must_use]
+    pub fn has_queued(&self) -> bool {
+        self.queued.is_some()
+    }
+
+    /// What changed the look so far: it moves when something did.
+    #[must_use]
+    pub fn revision(&self) -> u32 {
+        self.revision
+    }
+
+    /// The last anchor the sheet knew: where it goes back to when its piece
+    /// vanishes.
+    #[must_use]
+    pub fn last_anchor(&self) -> Option<Anchor> {
+        self.open.as_ref().map(|o| o.anchor)
+    }
+
+    fn bump(&mut self) {
+        self.revision = self.revision.wrapping_add(1);
+    }
+
+    fn target_of(anchor: &Anchor, size: (f32, f32)) -> Rect {
+        geometry::target(anchor.capsule, anchor.piece, size, anchor.surface)
+    }
+
+    /// The sheet's rect at `now`, or `None` when none is shown. While it
+    /// closes the rect flies to the capsule of `anchor`.
+    #[must_use]
+    pub fn rect(&self, anchor: &Anchor, now: Instant) -> Option<Rect> {
+        let o = self.open.as_ref().filter(|o| !o.motion.closed(now))?;
+        let to = if o.motion.is_closing() {
+            anchor.capsule
+        } else {
+            Sheets::target_of(anchor, o.body.size())
+        };
+        Some(o.motion.rect(now, to, anchor.surface))
+    }
+
+    /// Drops what has finished: a sheet whose close flight ended, a body
+    /// that has faded out.
+    fn reap(&mut self, now: Instant) {
+        if self.open.as_ref().is_some_and(|o| o.motion.closed(now)) {
+            self.open = None;
+            self.leaving = None;
+            self.scroll = Scroll::default();
+            self.hovering = false;
+            self.bump();
+        }
+        let faded = match &self.open {
+            Some(o) => o.motion.leaving_opacity(now) <= 0.0,
+            None => true,
+        };
+        if faded {
+            self.leaving = None;
+        }
+    }
+
+    /// Sets the scroll's extent: the body's height in the sheet's viewport.
+    fn refresh_extent(&mut self) {
+        if let Some(o) = &self.open {
+            self.scroll
+                .set_extent(o.size.1, (o.target.h - ROW_H).max(0.0));
+        }
+    }
+
+    /// Opens `request` from `anchor`, or, with a sheet already open (not
+    /// closing), switches it to the request's body: one morph, the old body
+    /// fading out. What the old body held goes out first.
+    pub fn open(
+        &mut self,
+        request: Request,
+        anchor: &Anchor,
+        theme: &Theme,
+        now: Instant,
+        reduced: bool,
+    ) {
+        self.reap(now);
+        // A sheet opened directly supersedes a waiting sheet, not a waiting
+        // page.
+        if matches!(self.queued, Some(Next::Sheet(_))) {
+            self.queued = None;
+        }
+        let Request {
+            zone,
+            piece,
+            kind,
+            body,
+        } = request;
+        let size = body.size();
+        let target = Sheets::target_of(anchor, size);
+        if let Some(o) = self.open.as_mut().filter(|o| !o.motion.is_closing()) {
+            let shown = o.motion.rect(now, o.target, anchor.surface);
+            let mut old = std::mem::replace(&mut o.body, body);
+            old.flush(now);
+            self.leaving = Some(Leaving {
+                body: old,
+                scroll: self.scroll.offset(),
+            });
+            o.zone = zone;
+            o.piece = piece;
+            o.kind = kind;
+            o.anchor = *anchor;
+            o.target = target;
+            o.size = size;
+            o.motion.switch(shown, now);
+            self.scroll = Scroll::default();
+            self.indicator.slide(anchor.piece, now);
+        } else {
+            if let Some(mut old) = self.open.take() {
+                old.body.flush(now);
+            }
+            self.open = Some(OpenSheet {
+                zone,
+                piece,
+                kind,
+                body,
+                motion: SheetMotion::open(anchor.capsule, theme, now, reduced),
+                anchor: *anchor,
+                target,
+                size,
+            });
+            self.leaving = None;
+            self.scroll = Scroll::default();
+            self.indicator.show(anchor.piece, theme, now, reduced);
+        }
+        self.hovering = false;
+        self.refresh_extent();
+        self.bump();
+    }
+
+    /// Starts the close: the sheet flies back to its capsule. What its body
+    /// holds goes out first. Does nothing without an open sheet.
+    pub fn close(&mut self, anchor: &Anchor, now: Instant) {
+        let Some(shown) = self.rect(anchor, now) else {
+            return;
+        };
+        let Some(o) = self.open.as_mut().filter(|o| !o.motion.is_closing()) else {
+            return;
+        };
+        o.body.flush(now);
+        o.motion.close(shown, now);
+        self.indicator.hide(now);
+        self.hovering = false;
+        self.bump();
+    }
+
+    /// Makes `next` wait for the open thing to finish closing (it replaces
+    /// what waited).
+    pub fn queue(&mut self, next: Next) {
+        self.queued = Some(next);
+        self.bump();
+    }
+
+    /// Gives up what waited.
+    pub fn drop_queue(&mut self) {
+        if self.queued.take().is_some() {
+            self.bump();
+        }
+    }
+
+    /// What waited, once the sheet is gone and, for a sheet, the Island's
+    /// page too (`island_closed`).
+    pub fn take_due(&mut self, now: Instant, island_closed: bool) -> Option<Next> {
+        self.reap(now);
+        let ready = !self.is_shown(now)
+            && match &self.queued {
+                Some(Next::Sheet(_)) => island_closed,
+                Some(Next::Page(_)) => true,
+                None => false,
+            };
+        if ready {
+            self.bump();
+            self.queued.take()
+        } else {
+            None
+        }
+    }
+
+    /// The bar moved or changed under the sheet: it follows its capsule and
+    /// piece, on the resize morph.
+    pub fn follow(&mut self, anchor: &Anchor, now: Instant) {
+        let Some(o) = self.open.as_mut() else {
+            return;
+        };
+        let piece_moved = !same(o.anchor.piece, anchor.piece);
+        o.anchor = *anchor;
+        if o.motion.is_closing() {
+            return;
+        }
+        if piece_moved {
+            self.indicator.slide(anchor.piece, now);
+        }
+        self.retarget(now);
+    }
+
+    /// Recomputes the target from the stored anchor and the body's size, and
+    /// morphs to it when it moved.
+    fn retarget(&mut self, now: Instant) {
+        let Some(o) = self.open.as_mut().filter(|o| !o.motion.is_closing()) else {
+            return;
+        };
+        let size = o.body.size();
+        let target = Sheets::target_of(&o.anchor, size);
+        if !same(target, o.target) {
+            let shown = o.motion.rect(now, o.target, o.anchor.surface);
+            o.motion.resize(shown, now);
+            o.target = target;
+            self.revision = self.revision.wrapping_add(1);
+        }
+        o.size = size;
+        self.refresh_extent();
+    }
+
+    /// Handles `ev` for the open sheet's body (a key, or a pointer event
+    /// over the body or during its drag): the wheel scrolls unless it is
+    /// over a slider. `measure` is in hand for this call only.
+    pub fn input(
+        &mut self,
+        ev: &InputEvent,
+        anchor: &Anchor,
+        now: Instant,
+        measure: &mut Measure<'_>,
+    ) -> BodyOutcome {
+        let Some(rect) = self.rect(anchor, now) else {
+            return BodyOutcome::Keep { changed: false };
+        };
+        let (dx, dy) = (rect.x, rect.y + ROW_H - self.scroll.offset());
+        let Some(o) = self.open.as_mut().filter(|o| !o.motion.is_closing()) else {
+            return BodyOutcome::Keep { changed: false };
+        };
+        let pointer = !matches!(ev, InputEvent::Key { .. } | InputEvent::FocusLost);
+        if pointer {
+            self.hovering = !matches!(ev, InputEvent::PointerLeave);
+        }
+        if let InputEvent::Axis { x, y, vertical, .. } = *ev {
+            if !o.body.takes_wheel(x - dx, y - dy, now) {
+                let moved = self.scroll.wheel(vertical);
+                if moved {
+                    self.bump();
+                }
+                return BodyOutcome::Keep { changed: moved };
+            }
+        }
+        let outcome = o.body.input(&translated(ev, dx, dy), now, measure);
+        self.retarget(now);
+        if matches!(outcome, BodyOutcome::Keep { changed: true }) {
+            self.bump();
+        }
+        outcome
+    }
+
+    /// The pointer is no longer over the body: its hover ends.
+    pub fn leave_body(&mut self, now: Instant, measure: &mut Measure<'_>) {
+        if !std::mem::take(&mut self.hovering) {
+            return;
+        }
+        if let Some(o) = self.open.as_mut() {
+            o.body.input(&InputEvent::PointerLeave, now, measure);
+            self.bump();
+        }
+    }
+
+    /// Whether a drag is held on the body.
+    #[must_use]
+    pub fn body_holds_pointer(&self) -> bool {
+        self.open
+            .as_ref()
+            .is_some_and(|o| !o.motion.is_closing() && o.body.held())
+    }
+
+    /// Takes in a new theme and the readings, sends what is due, notices a
+    /// body that changed size and drops what has finished. Whether the look
+    /// changed. `measure` is the frame's own, in hand for this call only.
+    pub fn sync(&mut self, theme: &Theme, now: Instant, measure: &mut Measure<'_>) -> bool {
+        self.reap(now);
+        let mut changed = false;
+        if let Some(o) = self.open.as_mut().filter(|o| !o.motion.is_closing()) {
+            changed = o.body.sync(theme, now, measure);
+        }
+        self.retarget(now);
+        if changed {
+            self.bump();
+        }
+        changed
+    }
+
+    /// Lays the bodies out (the open one and the one being left).
+    pub fn layout(&mut self, lay: &mut dyn FnMut(&mut Tree, (f32, f32))) {
+        if let Some(o) = self.open.as_mut() {
+            o.body.layout(lay);
+        }
+        if let Some(l) = self.leaving.as_mut() {
+            l.body.layout(lay);
+        }
+    }
+
+    /// Paints the sheet: its Haze, the row through the window (blurred where
+    /// the window cuts it, under the indicator pill), the spotlight and the
+    /// bodies. `row` paints the capsule's pieces.
+    pub fn paint(
+        &mut self,
+        painter: &mut Painter,
+        anchor: &Anchor,
+        now: Instant,
+        row: &mut dyn FnMut(&mut Painter),
+    ) {
+        let Some(rect) = self.rect(anchor, now) else {
+            return;
+        };
+        if rect.w <= 0.0 || rect.h <= 0.0 {
+            return;
+        }
+        let radius = painter.theme().radius_lg;
+        let hover = painter.theme().color(Role::ControlHover);
+        painter.haze(rect, radius);
+        // The row, through the window.
+        let window = geometry::row_window(rect);
+        let cuts = geometry::cuts(anchor.capsule, rect);
+        let pill = self.indicator.pill(now);
+        let mut draw = |p: &mut Painter| {
+            if let Some((r, alpha)) = pill {
+                p.push_state();
+                p.opacity(alpha);
+                p.fill_rounded(r, PILL_RADIUS, hover);
+                p.pop_state();
+            }
+            row(p);
+        };
+        if cuts.left || cuts.right {
+            let cut = CutRow {
+                image: geometry::row_image(anchor.capsule, anchor.surface),
+                window,
+                radius,
+                cuts,
+            };
+            painter.cut_row(&cut, &mut draw);
+        } else {
+            painter.push_clip(window, radius);
+            draw(painter);
+            painter.pop_clip();
+        }
+        // The spotlight falls from the pill into the menu.
+        if let Some((pill, _)) = pill {
+            let spot = self.indicator.spot_opacity(now);
+            if spot > 0.0 {
+                painter.push_clip(rect, radius);
+                painter.spotlight(pill, spot);
+                painter.pop_clip();
+            }
+        }
+        // The bodies, each under one rounded clip of the viewport.
+        let view = geometry::viewport(rect);
+        let at = (rect.x, rect.y + ROW_H);
+        if let (Some(l), Some(o)) = (self.leaving.as_mut(), self.open.as_ref()) {
+            let alpha = o.motion.leaving_opacity(now);
+            if alpha > 0.0 {
+                paint_body(painter, view, radius, (at.0, at.1 - l.scroll), alpha, |p| {
+                    l.body.paint(p, now);
+                });
+            }
+        }
+        let offset = self.scroll.offset();
+        if let Some(o) = self.open.as_mut() {
+            let alpha = o.motion.body_opacity(now);
+            if alpha > 0.0 {
+                paint_body(painter, view, radius, (at.0, at.1 - offset), alpha, |p| {
+                    o.body.paint(p, now);
+                });
+            }
+        }
+    }
+
+    /// The scroll offset (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn scroll(&self) -> &Scroll {
+        &self.scroll
+    }
+
+    /// The open body's node `key`, in body coordinates (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn body_node_rect(&self, key: Key) -> Option<Rect> {
+        self.open.as_ref().and_then(|o| o.body.node_rect(key))
+    }
+
+    /// The open body's size (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn body_size(&self) -> Option<(f32, f32)> {
+        self.open.as_ref().map(|o| o.body.size())
+    }
+
+    /// Whether a body is being left in a switch (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn is_leaving(&self) -> bool {
+        self.leaving.is_some()
+    }
+
+    /// Whether a clock runs and the surface needs a frame. A sheet at rest
+    /// asks for none.
+    #[must_use]
+    pub fn wants_frame(&self, now: Instant) -> bool {
+        let open = self.open.as_ref().is_some_and(|o| {
+            o.motion.wants_frame(now) || o.motion.closed(now) || o.body.is_animating(now)
+        });
+        open || self.indicator.wants_frame(now) || self.leaving.is_some()
+    }
+
+    /// How long until the body's throttle or an asked-level hold is due;
+    /// `None` at rest.
+    #[must_use]
+    pub fn wait(&self, now: Instant) -> Option<Duration> {
+        self.open
+            .as_ref()
+            .filter(|o| !o.motion.is_closing())
+            .and_then(|o| o.body.wait(now))
+    }
+}
+
+/// Paints one body under one rounded clip of `view`, translated to `at`, at
+/// `alpha`.
+fn paint_body(
+    painter: &mut Painter,
+    view: Rect,
+    radius: f32,
+    at: (f32, f32),
+    alpha: f32,
+    paint: impl FnOnce(&mut Painter),
+) {
+    painter.push_clip(view, radius);
+    painter.push_state();
+    painter.translate(at.0, at.1);
+    painter.opacity(alpha);
+    paint(painter);
+    painter.pop_state();
+    painter.pop_clip();
+}

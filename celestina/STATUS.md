@@ -68,9 +68,11 @@
   2026-11-24 ([evidence](docs/evidence/2026-11-23-cutover.md), "The author's
   switch-over"); both default flips above have landed, and what is left is
   the rows the author has not run. The shell is at 1.15.4.
-- **In progress:** `CEL-I-004`, the first entry of the standing
-  [CEL-TRACKS](docs/plans/active/2026-11-25-cel-tracks.md) plan: the device
-  selector and per-application volume in the volume popup.
+- **In progress:** `CEL-D-002` to `CEL-D-005`, entries of the standing
+  [CEL-TRACKS](docs/plans/active/2026-11-25-cel-tracks.md) plan: the capsule
+  sheets, where a bar capsule grows into the menu of the piece pressed
+  ([design](../docs/superpowers/specs/2026-11-25-celestina-capsule-sheets-design.md),
+  [plan](../docs/superpowers/plans/2026-11-25-celestina-capsule-sheets-plan.md)).
 - **Author validation:** the author ran most rows live on 1.13.0 to 1.13.5
   between 2026-11-23 and 2026-11-24 and reported them through the
   coordinating session; the cutover's evidence lists what was reported to

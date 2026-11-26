@@ -1525,3 +1525,29 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-I-009](docs/evidence/2026-11-25-cel-i-009-brightness-gaps.md)
+
+## VAL-CEL-D-002 — The volume menu grows out of the bar's end capsule
+
+- **Status:** pending
+- **Related implementation:** CEL-D-002 (the capsule sheet and the volume menu
+  as its first content;
+  [design](../docs/superpowers/specs/2026-11-25-celestina-capsule-sheets-design.md),
+  [plan](../docs/superpowers/plans/2026-11-25-celestina-capsule-sheets-plan.md))
+- **Requires:** the deployed shell after the landing of CEL-D-002, the
+  `volume` piece in the bar, an application playing sound, and a second
+  output for the last step
+- **Procedure:** press the volume piece. Look at the opening and at the bar's
+  icons cut by the menu's edge. Press a cut icon. Unfold every section of the
+  menu and scroll it. Turn the wheel over a slider. Drag a slider. Press
+  Escape, then open the menu again and press outside it. Open the menu on one
+  output, then on the second
+- **Pass condition:** the end capsule grows into the menu with a small bounce
+  and the row of icons stays where it was; icons cut by the menu's edge blur
+  and fade toward the edge, and a cut icon still opens its menu; the
+  spotlight falls from the volume piece; with every section unfolded the menu
+  scrolls; the wheel over a slider moves the slider and does not scroll the
+  menu; Escape and a press outside close it; dragging a slider shows no
+  on-screen display; opening the menu on the second output closes the first
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-002](docs/evidence/2026-11-25-cel-d-002-capsule-sheets.md)

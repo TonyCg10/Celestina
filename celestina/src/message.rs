@@ -108,6 +108,10 @@ pub enum Message {
     /// arrive after it closed. Posted by the loop to itself, because an
     /// input call controls only its own surface.
     OsdSuppressed(crate::osd::Suppression),
+    /// Close the level sheet (or popup) of this surface's Island: another
+    /// output opened its own, and an input call controls only its own
+    /// surface.
+    CloseLevelSheet(celestina_wayland::SurfaceId),
     /// One of the on-screen display's timers came due (posted by its
     /// calloop timer, which has no `RuntimeCtl`).
     Osd(crate::osd::OsdTick),

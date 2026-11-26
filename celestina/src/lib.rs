@@ -31,6 +31,7 @@ pub mod pieces;
 pub mod polkit;
 pub mod providers;
 pub mod session_menu;
+pub mod sheet;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub mod tray;

@@ -34,7 +34,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use celestina_paint::{silhouette_slices, Rect, Role, Theme, Weight};
+use celestina_paint::{silhouette_slices, Rect, Role, TextStyle, Theme, Weight};
 use celestina_shell::audio::AudioGraph;
 use celestina_ui::{fit_middle, slider, view, Interaction, Key, Slider, Tree, UiEvent, View};
 use celestina_wayland::{
@@ -72,12 +72,23 @@ pub const POPUP_W: f32 = 280.0;
 /// The card's width when it lists devices and applications: room for an
 /// application's name beside its switch and slider.
 pub const AUDIO_W: f32 = 320.0;
+/// The width of a level body in a capsule sheet (CEL-D-002).
+pub const SHEET_W: f32 = 320.0;
 /// The shortest gap between two sends of one slider while it is dragged.
 pub const SEND_INTERVAL: Duration = Duration::from_millis(80);
 /// The arrow keys' step, as the verbs' and the wheel's.
 const STEP: u8 = celestina_shell::audio::STEP_PERCENT;
 /// The icon beside a heading, logical px.
 pub(super) const ICON: f32 = 18.0;
+
+/// What surrounds the card's rows: a popup draws its own Haze card; a
+/// capsule sheet is the glass already, so its body draws none and pads less
+/// above (the row of the capsule sits over it).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CardFrame {
+    Popup,
+    Sheet,
+}
 
 /// What the popup is for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,9 +181,6 @@ pub fn commands(request: Request, targets: &[Target]) -> Vec<Command> {
             .collect(),
     }
 }
-
-/// Cuts a name to a width, as the text system measures it.
-type Fit = Box<dyn FnMut(&str, f32) -> String>;
 
 /// Where the app receives the popup's requests.
 pub type Sink = Rc<dyn Fn(Request)>;
@@ -289,6 +297,36 @@ pub fn popup_size(theme: &Theme, kind: Kind, microphone: bool, shape: Shape) -> 
     )
 }
 
+/// The size of a level body in a capsule sheet: 320 wide, the space above
+/// its first row, the rows and the gaps between them, and the space below.
+/// `shape` is ignored for brightness.
+#[must_use]
+pub fn body_size(theme: &Theme, kind: Kind, microphone: bool, shape: Shape) -> (f32, f32) {
+    let heights = children_h(theme, kind, microphone, shape);
+    let gaps = heights.len() - 1;
+    (
+        SHEET_W,
+        theme.spacing.xs
+            + heights.iter().sum::<f32>()
+            + gaps as f32 * theme.spacing.sm
+            + theme.spacing.md,
+    )
+}
+
+/// The size of the card in `frame`.
+fn frame_size(
+    theme: &Theme,
+    frame: CardFrame,
+    kind: Kind,
+    microphone: bool,
+    shape: Shape,
+) -> (f32, f32) {
+    match frame {
+        CardFrame::Popup => popup_size(theme, kind, microphone, shape),
+        CardFrame::Sheet => body_size(theme, kind, microphone, shape),
+    }
+}
+
 /// The popup hangs centred below the piece's node `anchor` (logical px of the
 /// Island's surface), a small gap under it; the compositor slides and flips
 /// it to stay on the output.
@@ -368,7 +406,7 @@ pub(super) fn level_slider(control: Control, percent: Option<u8>, muted: bool) -
     )
 }
 
-/// The card for `levels` and `audio`: `microphone` says whether the
+/// The card for `levels` and `audio` in `frame`: `microphone` says whether the
 /// microphone's section is part of this popup and `shape` how many device and
 /// application rows it shows (the microphone decided when it opened, the rows
 /// when a section last folded or unfolded).
@@ -380,14 +418,27 @@ pub fn card(
     levels: Levels,
     audio: Audio<'_>,
     shape: Shape,
+    frame: CardFrame,
 ) -> View {
-    let (w, h) = popup_size(theme, kind, microphone, shape);
     let lists = Lists::of(kind, microphone, shape);
-    let mut card = view::col(card_key())
-        .haze(theme.radius_md)
-        .size(w, h)
-        .padding(theme.spacing.md)
-        .gap(theme.spacing.sm);
+    let mut card = match frame {
+        CardFrame::Popup => {
+            let (w, h) = popup_size(theme, kind, microphone, shape);
+            view::col(card_key())
+                .haze(theme.radius_md)
+                .size(w, h)
+                .padding(theme.spacing.md)
+        }
+        CardFrame::Sheet => {
+            let (w, h) = body_size(theme, kind, microphone, shape);
+            view::col(card_key()).size(w, h).padding_sides(
+                theme.spacing.xs,
+                theme.spacing.md,
+                theme.spacing.md,
+            )
+        }
+    }
+    .gap(theme.spacing.sm);
     match kind {
         Kind::Volume => {
             let out = levels.audio.output;
@@ -544,6 +595,14 @@ impl Throttle {
     }
 }
 
+/// What a level card reads: the app's levels, the audio worker's graph and
+/// the monitors a brightness card lists.
+pub struct Feeds {
+    pub cell: SharedLevels,
+    pub graph: SharedGraph,
+    pub monitors: MonitorFeed,
+}
+
 /// The popup without its painter: the tree, the pointer and keyboard state
 /// and what it shows.
 pub struct LevelCore {
@@ -551,8 +610,7 @@ pub struct LevelCore {
     microphone: bool,
     /// The devices and streams: the rows listed and what they show.
     mirror: GraphMirror,
-    /// Cuts a name to a column when a section lists its rows again.
-    fit: Fit,
+    frame: CardFrame,
     /// The size the compositor was last asked for (or opened at).
     asked: (f32, f32),
     theme: Theme,
@@ -598,25 +656,32 @@ impl std::fmt::Debug for LevelCore {
 
 impl LevelCore {
     /// The popup of `kind` over `cell`'s readings and `graph`'s devices and
-    /// streams in `theme`, under `reduced` motion. The microphone's section
-    /// is part of a volume popup when the microphone has a reading now, and
-    /// the rows it lists are those `graph` holds now, every section folded.
+    /// streams in `theme`, under `reduced` motion, in `frame`. The
+    /// microphone's section is part of a volume popup when the microphone has
+    /// a reading now, and the rows it lists are those `graph` holds now,
+    /// every section folded. `fit` cuts the names to their columns during
+    /// this call only: nothing stores a measure, so none can borrow a painter
+    /// that is in use.
     #[must_use]
     pub fn new(
         theme: &Theme,
         kind: Kind,
-        cell: SharedLevels,
-        graph: SharedGraph,
-        monitors: MonitorFeed,
+        frame: CardFrame,
+        feeds: Feeds,
         sink: Sink,
         reduced: bool,
         now: Instant,
-        mut fit: impl FnMut(&str, f32) -> String + 'static,
+        fit: &mut dyn FnMut(&str, f32) -> String,
     ) -> LevelCore {
+        let Feeds {
+            cell,
+            graph,
+            monitors,
+        } = feeds;
         let shown = cell.get();
         let microphone = kind == Kind::Volume && shown.audio.input.is_some();
         let mirror = match kind {
-            Kind::Volume => GraphMirror::open(&graph.borrow(), theme, &mut fit),
+            Kind::Volume => GraphMirror::open(&graph.borrow(), theme, &mut *fit),
             Kind::Brightness => GraphMirror::default(),
         };
         let monitor_cell = Rc::clone(&monitors.levels);
@@ -636,20 +701,22 @@ impl LevelCore {
                     shown,
                     mirror.audio(),
                     mirror.shape(),
+                    frame,
                 )
             },
             now,
         );
+        let asked = if monitors.is_multi() {
+            monitors_size(theme, monitors.row_count())
+        } else {
+            frame_size(theme, frame, kind, microphone, mirror.shape())
+        };
         LevelCore {
             kind,
             microphone,
-            asked: if monitors.is_multi() {
-                monitors_size(theme, monitors.row_count())
-            } else {
-                popup_size(theme, kind, microphone, mirror.shape())
-            },
+            asked,
             mirror,
-            fit: Box::new(fit),
+            frame,
             theme: theme.clone(),
             tree,
             input: Interaction::new(),
@@ -680,13 +747,19 @@ impl LevelCore {
         self.mirror.shape()
     }
 
-    /// The size the card has now, logical px.
+    /// The size the card has now in its frame, logical px.
     #[must_use]
     pub fn size(&self) -> (f32, f32) {
         if self.monitors.is_multi() {
             monitors_size(&self.theme, self.monitors.row_count())
         } else {
-            popup_size(&self.theme, self.kind, self.microphone, self.shape())
+            frame_size(
+                &self.theme,
+                self.frame,
+                self.kind,
+                self.microphone,
+                self.shape(),
+            )
         }
     }
 
@@ -722,7 +795,8 @@ impl LevelCore {
 
     /// Whether a press is held on the card (a drag): readings then do not
     /// move the sliders.
-    fn held(&self) -> bool {
+    #[must_use]
+    pub fn held(&self) -> bool {
         self.tree.highlight().pressed.is_some()
     }
 
@@ -737,6 +811,7 @@ impl LevelCore {
                 self.shown,
                 self.mirror.audio(),
                 self.shape(),
+                self.frame,
             )
         };
         self.tree.apply(view, now);
@@ -823,6 +898,52 @@ impl LevelCore {
             (self.sink)(request);
         }
         self.throttle.wait(now)
+    }
+
+    /// The style a device or application name is cut with in this card.
+    #[must_use]
+    pub fn name_style(&self) -> TextStyle {
+        name_style(&self.theme)
+    }
+
+    /// How long until something the throttle holds is due.
+    #[must_use]
+    pub fn throttle_wait(&self, now: Instant) -> Option<Duration> {
+        self.throttle.wait(now)
+    }
+
+    /// Lays the card out in its size with `lay` (a body is laid out in its
+    /// own coordinates, (0, 0) at its top-left).
+    pub fn layout_in(&mut self, lay: &mut dyn FnMut(&mut Tree, (f32, f32))) {
+        let size = self.size();
+        lay(&mut self.tree, size);
+        if let Some(fault) = self.tree.take_fault() {
+            tracing::warn!(%fault, "level body: layout fault");
+        }
+    }
+
+    /// Paints the card at its own coordinates.
+    pub fn paint(&mut self, painter: &mut celestina_paint::Painter, now: Instant) {
+        self.tree.paint(painter, now);
+    }
+
+    /// Whether the card's own animations (hover, a handle) still run.
+    #[must_use]
+    pub fn is_animating(&self, now: Instant) -> bool {
+        self.tree.is_animating(now)
+    }
+
+    /// The rect of the card's node `key` (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn node_rect(&self, key: Key) -> Option<Rect> {
+        self.tree.node_by_key(key).map(|id| self.tree.rect(id))
+    }
+
+    /// The key of the slider under (`x`, `y`) of the card, if one is.
+    #[must_use]
+    pub fn slider_at(&self, x: f32, y: f32, now: Instant) -> Option<Key> {
+        self.tree.slider_at(x, y, now)
     }
 
     fn set_shown(&mut self, control: Control, percent: u8, now: Instant) {
@@ -952,8 +1073,14 @@ impl LevelCore {
 
     /// Handles one event: Escape closes; a slider moved sends its level; a
     /// click or Enter on a mute row flips it, on a device row makes it the
-    /// default, on a section's header folds or unfolds the section.
-    pub fn input(&mut self, ev: &InputEvent, now: Instant) -> Outcome {
+    /// default, on a section's header folds or unfolds the section (`fit`
+    /// cuts the names of the rows it lists, during this call only).
+    pub fn input(
+        &mut self,
+        ev: &InputEvent,
+        now: Instant,
+        fit: &mut dyn FnMut(&str, f32) -> String,
+    ) -> Outcome {
         let before = self.tree.highlight();
         let events = match ev {
             InputEvent::Key { .. } | InputEvent::FocusLost => self.input.key(&mut self.tree, ev),
@@ -981,7 +1108,7 @@ impl LevelCore {
                         (self.sink)(Request::ToggleMute(control));
                         moved = true;
                     } else if let Some(section) = section_of(*key) {
-                        self.mirror.toggle(section, &self.theme, &mut *self.fit);
+                        self.mirror.toggle(section, &self.theme, &mut *fit);
                         moved = true;
                     } else if let Some(id) = self.mirror.device_of(*key) {
                         // The row answers only while the worker lists it;
@@ -1036,28 +1163,21 @@ impl LevelPopup {
         reduced: bool,
     ) -> LevelPopup {
         // Names are cut as the text system measures them, when a list opens.
-        let style = text_style(theme.type_scale.body, Weight::Regular, false, Role::TextHi);
-        let measuring = Rc::clone(&painter);
-        let fit = move |name: &str, width: f32| match measuring.try_borrow_mut() {
-            Ok(mut painter) => fit_middle(name, width, |text| {
-                painter.text().measure(text, &style, None, 1.0).0
-            }),
-            Err(_) => name.to_owned(),
-        };
-        LevelPopup {
-            core: LevelCore::new(
-                theme,
-                kind,
+        let core = LevelCore::new(
+            theme,
+            kind,
+            CardFrame::Popup,
+            Feeds {
                 cell,
                 graph,
                 monitors,
-                sink,
-                reduced,
-                Instant::now(),
-                fit,
-            ),
-            painter,
-        }
+            },
+            sink,
+            reduced,
+            Instant::now(),
+            &mut shared_fit(&painter, name_style(theme)),
+        );
+        LevelPopup { core, painter }
     }
 
     /// How many device and application rows the card shows, for the size it
@@ -1077,6 +1197,27 @@ impl LevelPopup {
     #[must_use]
     pub fn size(&self) -> (f32, f32) {
         self.core.size()
+    }
+}
+
+/// The style a device or application name is cut with.
+pub(crate) fn name_style(theme: &Theme) -> TextStyle {
+    text_style(theme.type_scale.body, Weight::Regular, false, Role::TextHi)
+}
+
+/// A cutter that measures with the shared `painter` for the length of one
+/// call: it finds the painter borrowed (a frame is drawing) and then leaves a
+/// name whole. Built per call, never stored.
+pub(crate) fn shared_fit(
+    painter: &SharedPainter,
+    style: TextStyle,
+) -> impl FnMut(&str, f32) -> String {
+    let painter = Rc::clone(painter);
+    move |name: &str, width: f32| match painter.try_borrow_mut() {
+        Ok(mut painter) => fit_middle(name, width, |text| {
+            painter.text().measure(text, &style, None, 1.0).0
+        }),
+        Err(_) => name.to_owned(),
     }
 }
 
@@ -1131,7 +1272,10 @@ impl PopupShell for LevelPopup {
 
     fn input(&mut self, ev: InputEvent, ctl: &mut SurfaceCtl<'_>) -> PopupAction {
         let now = Instant::now();
-        let outcome = self.core.input(&ev, now);
+        let style = name_style(&self.core.theme);
+        let outcome = self
+            .core
+            .input(&ev, now, &mut shared_fit(&self.painter, style));
         match outcome {
             Outcome::Close => {
                 // What waits is the last thing the person chose.
@@ -1272,12 +1416,12 @@ mod tests {
         rig_with_fit(kind, levels, graph, cut)
     }
 
-    /// A rig whose popup holds `fit` as its own cutter.
+    /// A rig whose popup opens with `fit` as its cutter.
     fn rig_with_fit(
         kind: Kind,
         levels: Levels,
         graph: AudioGraph,
-        fit: impl FnMut(&str, f32) -> String + 'static,
+        fit: impl FnMut(&str, f32) -> String,
     ) -> Rig {
         rig_full(kind, levels, graph, MonitorFeed::default(), fit)
     }
@@ -1287,7 +1431,7 @@ mod tests {
         levels: Levels,
         graph: AudioGraph,
         monitors: MonitorFeed,
-        fit: impl FnMut(&str, f32) -> String + 'static,
+        mut fit: impl FnMut(&str, f32) -> String,
     ) -> Rig {
         let theme = Theme::dark();
         let sent = Rc::new(std::cell::RefCell::new(Vec::new()));
@@ -1301,13 +1445,16 @@ mod tests {
         let mut core = LevelCore::new(
             &theme,
             kind,
-            Rc::clone(&cell),
-            Rc::clone(&graph),
-            monitors,
+            CardFrame::Popup,
+            Feeds {
+                cell: Rc::clone(&cell),
+                graph: Rc::clone(&graph),
+                monitors,
+            },
             sink,
             false,
             Instant::now(),
-            fit,
+            &mut fit,
         );
         let size = core.size();
         core.tree.layout_measured(size, fake_measure);
@@ -1349,8 +1496,8 @@ mod tests {
     fn click(rig: &mut Rig, key: Key) {
         let (x, y) = centre_of(&rig.core, key);
         let now = Instant::now();
-        rig.core.input(&press(x, y), now);
-        rig.core.input(&release(x, y), now);
+        rig.core.input(&press(x, y), now, &mut cut);
+        rig.core.input(&release(x, y), now, &mut cut);
     }
 
     fn rect_of(core: &LevelCore, key: Key) -> Rect {
@@ -1521,6 +1668,91 @@ mod tests {
         assert_eq!(popup_size(&theme, Kind::Volume, false, shape).0, POPUP_W);
     }
 
+    /// A rig whose card is a capsule sheet's body.
+    fn sheet_rig(levels: Levels, graph: AudioGraph) -> Rig {
+        let theme = Theme::dark();
+        let sent = Rc::new(std::cell::RefCell::new(Vec::new()));
+        let sink: Sink = {
+            let sent = Rc::clone(&sent);
+            Rc::new(move |request| sent.borrow_mut().push(request))
+        };
+        let cell: SharedLevels = Rc::new(Cell::new(levels));
+        let graph: SharedGraph = Rc::new(RefCell::new(graph));
+        let monitors = MonitorFeed::default();
+        let monitor_cell = Rc::clone(&monitors.levels);
+        let mut core = LevelCore::new(
+            &theme,
+            Kind::Volume,
+            CardFrame::Sheet,
+            Feeds {
+                cell: Rc::clone(&cell),
+                graph: Rc::clone(&graph),
+                monitors,
+            },
+            sink,
+            false,
+            Instant::now(),
+            &mut cut,
+        );
+        let size = core.size();
+        core.tree.layout_measured(size, fake_measure);
+        Rig {
+            core,
+            sent,
+            cell,
+            graph,
+            monitor_cell,
+        }
+    }
+
+    #[test]
+    fn the_volume_body_is_320_wide_and_as_tall_as_its_rows() {
+        let theme = Theme::dark();
+        let shape = Shape::default();
+        for (levels, mic) in [
+            (audio(Some((30, false)), None), false),
+            (audio(Some((30, false)), Some((80, true))), true),
+        ] {
+            let rig = sheet_rig(levels, AudioGraph::default());
+            assert_eq!(rig.core.has_microphone(), mic);
+            let size = body_size(&theme, Kind::Volume, mic, shape);
+            assert_eq!(size.0, SHEET_W);
+            assert_eq!(rig.core.size(), size);
+            let card = rect_of(&rig.core, card_key());
+            assert_eq!((card.x, card.y, card.w, card.h), (0.0, 0.0, size.0, size.1));
+            // The rows: the space above is `xs`, the space below `md`, and
+            // the first row starts at the top padding.
+            let first = rect_of(&rig.core, Key::named("level-heading-output"));
+            assert_eq!(first.y, theme.spacing.xs);
+            assert_eq!(first.x, theme.spacing.md);
+            let last = [Key::named("level-mute-output"), mute_key(Control::Input)]
+                .into_iter()
+                .rev()
+                .filter_map(|k| {
+                    rig.core
+                        .tree
+                        .node_by_key(k)
+                        .map(|id| rig.core.tree.rect(id))
+                })
+                .next();
+            let last = last.map_or(0.0, |r| r.y + r.h);
+            assert_eq!(last + theme.spacing.md, size.1);
+        }
+        // No Haze: the sheet is the glass. Wider with lists or not, always 320.
+        assert_eq!(
+            body_size(&theme, Kind::Volume, true, shape).0,
+            body_size(&theme, Kind::Volume, false, Shape::default()).0
+        );
+        assert!(
+            body_size(&theme, Kind::Volume, true, shape).1
+                > body_size(&theme, Kind::Volume, false, shape).1
+        );
+        // The popup's frame is unchanged: its card pads `md` all round.
+        let (_, popup) = popup_size(&theme, Kind::Volume, false, shape);
+        let (_, body) = body_size(&theme, Kind::Volume, false, shape);
+        assert_eq!(popup - body, theme.spacing.md - theme.spacing.xs);
+    }
+
     #[test]
     fn the_microphone_section_exists_only_if_it_has_a_reading_at_open() {
         assert!(!rig(Kind::Volume, audio(Some((30, false)), None))
@@ -1545,6 +1777,7 @@ mod tests {
         let out = rig.core.input(
             &press(track.x + track.w - 1.0, track.y + track.h / 2.0),
             now,
+            &mut cut,
         );
         assert_eq!(out, Outcome::Keep { changed: true });
         assert_eq!(*rig.sent.borrow(), [Request::Set(Control::Brightness, 100)]);
@@ -1564,10 +1797,10 @@ mod tests {
         let track = rect_of(&rig.core, slider_key(Control::Brightness));
         let y = track.y + track.h / 2.0;
         let t0 = Instant::now();
-        rig.core.input(&press(track.x + 20.0, y), t0);
+        rig.core.input(&press(track.x + 20.0, y), t0, &mut cut);
         // Moves inside the interval wait; none is sent twice.
         for dx in [40.0, 80.0, 120.0] {
-            rig.core.input(&motion(track.x + dx, y), t0);
+            rig.core.input(&motion(track.x + dx, y), t0, &mut cut);
         }
         assert_eq!(rig.sent.borrow().len(), 1, "one send within the interval");
         let waiting = rig.core.throttle.wait(t0);
@@ -1577,9 +1810,10 @@ mod tests {
         assert!(rig.core.flush(later, false).is_none());
         assert_eq!(rig.sent.borrow().len(), 2);
         // More motion, then the release sends the last level at once.
-        rig.core.input(&motion(track.x + 150.0, y), later);
+        rig.core.input(&motion(track.x + 150.0, y), later, &mut cut);
         let before = rig.sent.borrow().len();
-        rig.core.input(&release(track.x + 150.0, y), later);
+        rig.core
+            .input(&release(track.x + 150.0, y), later, &mut cut);
         let sent = rig.sent.borrow();
         assert_eq!(sent.len(), before + 1);
         let Some(Request::Set(Control::Brightness, last)) = sent.last().copied() else {
@@ -1598,11 +1832,13 @@ mod tests {
         let track = rect_of(&rig.core, slider_key(Control::Brightness));
         let y = track.y + track.h / 2.0;
         let now = Instant::now();
-        rig.core.input(&press(track.x + track.w - 1.0, y), now);
+        rig.core
+            .input(&press(track.x + track.w - 1.0, y), now, &mut cut);
         rig.cell.set(brightness(Some(33)));
         assert!(!rig.core.sync(&Theme::dark(), now, cut), "held: no change");
         assert_eq!(rig.core.shown.brightness, Some(100));
-        rig.core.input(&release(track.x + track.w - 1.0, y), now);
+        rig.core
+            .input(&release(track.x + track.w - 1.0, y), now, &mut cut);
         // After the release the monitor has not read 100 back yet: the
         // slider keeps it until the hold passes (CEL-I-009), then follows.
         rig.core.sync(&Theme::dark(), now, cut);
@@ -1626,16 +1862,16 @@ mod tests {
         let now = Instant::now();
         let row = rect_of(&rig.core, mute_key(Control::Output));
         let (x, y) = (row.x + 10.0, row.y + row.h / 2.0);
-        rig.core.input(&press(x, y), now);
-        rig.core.input(&release(x, y), now);
+        rig.core.input(&press(x, y), now, &mut cut);
+        rig.core.input(&release(x, y), now, &mut cut);
         assert_eq!(*rig.sent.borrow(), [Request::ToggleMute(Control::Output)]);
         assert_eq!(rig.core.shown.audio.output.map(|l| l.muted), Some(true));
         assert_eq!(rig.core.shown.audio.output.map(|l| l.percent), Some(30));
         // The microphone's row is its own.
         let row = rect_of(&rig.core, mute_key(Control::Input));
         let (x, y) = (row.x + 10.0, row.y + row.h / 2.0);
-        rig.core.input(&press(x, y), now);
-        rig.core.input(&release(x, y), now);
+        rig.core.input(&press(x, y), now, &mut cut);
+        rig.core.input(&release(x, y), now, &mut cut);
         assert_eq!(
             rig.sent.borrow().last(),
             Some(&Request::ToggleMute(Control::Input))
@@ -1648,10 +1884,10 @@ mod tests {
         let mut rig = rig(Kind::Brightness, brightness(Some(50)));
         let now = Instant::now();
         // Tab focuses the slider (the only control); Right steps by 5.
-        rig.core.input(&key(TAB), now);
-        rig.core.input(&key(RIGHT), now);
+        rig.core.input(&key(TAB), now, &mut cut);
+        rig.core.input(&key(RIGHT), now, &mut cut);
         assert_eq!(*rig.sent.borrow(), [Request::Set(Control::Brightness, 55)]);
-        assert_eq!(rig.core.input(&key(ESCAPE), now), Outcome::Close);
+        assert_eq!(rig.core.input(&key(ESCAPE), now, &mut cut), Outcome::Close);
     }
 
     #[test]
@@ -1659,11 +1895,11 @@ mod tests {
         // Keyboard: the cell still holds the old reading after a step.
         let mut rig = rig(Kind::Brightness, brightness(Some(50)));
         let now = Instant::now();
-        rig.core.input(&key(TAB), now);
-        rig.core.input(&key(RIGHT), now);
+        rig.core.input(&key(TAB), now, &mut cut);
+        rig.core.input(&key(RIGHT), now, &mut cut);
         rig.core.sync(&Theme::dark(), now, cut);
         assert_eq!(rig.core.shown.brightness, Some(55));
-        rig.core.input(&key(RIGHT), now);
+        rig.core.input(&key(RIGHT), now, &mut cut);
         rig.core.sync(&Theme::dark(), now, cut);
         assert_eq!(rig.core.shown.brightness, Some(60), "steps accumulate");
         // The reading catching up is adopted.
@@ -1675,8 +1911,10 @@ mod tests {
         let mut rig = rig_drag();
         let track = rect_of(&rig.core, slider_key(Control::Brightness));
         let y = track.y + track.h / 2.0;
-        rig.core.input(&press(track.x + track.w - 1.0, y), now);
-        rig.core.input(&release(track.x + track.w - 1.0, y), now);
+        rig.core
+            .input(&press(track.x + track.w - 1.0, y), now, &mut cut);
+        rig.core
+            .input(&release(track.x + track.w - 1.0, y), now, &mut cut);
         rig.core.sync(&Theme::dark(), now, cut);
         assert_eq!(rig.core.shown.brightness, Some(100));
 
@@ -1684,8 +1922,8 @@ mod tests {
         let mut rig = rig_mute();
         let row = rect_of(&rig.core, mute_key(Control::Output));
         let (x, y) = (row.x + 10.0, row.y + row.h / 2.0);
-        rig.core.input(&press(x, y), now);
-        rig.core.input(&release(x, y), now);
+        rig.core.input(&press(x, y), now, &mut cut);
+        rig.core.input(&release(x, y), now, &mut cut);
         rig.core.sync(&Theme::dark(), now, cut);
         assert_eq!(rig.core.shown.audio.output.map(|l| l.muted), Some(true));
     }
@@ -1706,8 +1944,8 @@ mod tests {
         let slider = rect_of(&rig.core, slider_key(Control::Output));
         for r in [row, slider] {
             let (x, y) = (r.x + r.w / 2.0, r.y + r.h / 2.0);
-            rig.core.input(&press(x, y), now);
-            rig.core.input(&release(x, y), now);
+            rig.core.input(&press(x, y), now, &mut cut);
+            rig.core.input(&release(x, y), now, &mut cut);
         }
         assert!(rig.sent.borrow().is_empty());
         assert_eq!(rig.core.shown, audio(None, None));
@@ -1728,6 +1966,7 @@ mod tests {
             core.shown,
             core.mirror.audio(),
             core.shape(),
+            core.frame,
         )
     }
 
@@ -2058,14 +2297,20 @@ mod tests {
 
     #[test]
     fn a_default_that_appeared_is_cut_with_the_frames_measure_not_the_stored_one() {
-        // The stored cutter stands for one that finds the painter borrowed
-        // (a frame is drawing): it can only return the name whole.
+        // No cutter is stored: the one given at open is used during that
+        // call only (here it would leave every name whole), and a later sync
+        // cuts with the measure it is handed.
         let mut rig = rig_with_fit(
             Kind::Volume,
             audio(Some((30, false)), None),
             full_graph(),
             |name, _| name.to_owned(),
         );
+        let used = std::cell::Cell::new(0_u32);
+        let mut counting = |name: &str, width: f32| {
+            used.set(used.get() + 1);
+            cut(name, width)
+        };
         let long = "USB headset with a name that runs far past the column of a row";
         let mut graph = full_graph();
         graph.outputs = vec![
@@ -2074,7 +2319,8 @@ mod tests {
             device(7, long, true),
         ];
         *rig.graph.borrow_mut() = graph;
-        assert!(rig.core.sync(&Theme::dark(), Instant::now(), cut));
+        assert!(rig.core.sync(&Theme::dark(), Instant::now(), &mut counting));
+        assert!(used.get() > 0, "the measure passed in is the one used");
         let label = rig
             .core
             .mirror
@@ -2146,15 +2392,15 @@ mod tests {
         assert!(!has_node(&rig, device_key(6)));
         // Tab stops: the output's slider and mute row, then its header.
         for _ in 0..3 {
-            rig.core.input(&key(TAB), now);
+            rig.core.input(&key(TAB), now, &mut cut);
         }
-        rig.core.input(&key(ENTER), now);
+        rig.core.input(&key(ENTER), now, &mut cut);
         relayout(&mut rig);
         assert!(rig.core.mirror.audio().folds.is_open(Section::Output));
         assert!(has_node(&rig, device_key(6)));
         assert!(rig.core.resize_wanted().is_some());
         // The header keeps the focus: Space folds it again.
-        rig.core.input(&key(0x20), now);
+        rig.core.input(&key(0x20), now, &mut cut);
         relayout(&mut rig);
         assert!(!rig.core.mirror.audio().folds.is_open(Section::Output));
         assert!(!has_node(&rig, device_key(6)));
@@ -2263,9 +2509,9 @@ mod tests {
         toggle(&mut keyed, Section::Output);
         let now = Instant::now();
         for _ in 0..5 {
-            keyed.core.input(&key(TAB), now);
+            keyed.core.input(&key(TAB), now, &mut cut);
         }
-        keyed.core.input(&key(ENTER), now);
+        keyed.core.input(&key(ENTER), now, &mut cut);
         assert_eq!(*keyed.sent.borrow(), [Request::SetDefault(6)]);
     }
 
@@ -2315,6 +2561,7 @@ mod tests {
         rig.core.input(
             &press(track.x + track.w - 1.0, track.y + track.h / 2.0),
             now,
+            &mut cut,
         );
         assert_eq!(*rig.sent.borrow(), [Request::Set(Control::Stream(21), 100)]);
         assert_eq!(
@@ -2336,6 +2583,7 @@ mod tests {
         rig.core.input(
             &release(track.x + track.w - 1.0, track.y + track.h / 2.0),
             now,
+            &mut cut,
         );
         // A click on a stream's mute button flips its mute, and only its.
         click(&mut rig, mute_key(Control::Stream(20)));
@@ -2365,16 +2613,16 @@ mod tests {
         let y = track.y + track.h / 2.0;
         let t0 = Instant::now();
         // A drag: the first value goes at once, the next ones wait.
-        rig.core.input(&press(track.x + 10.0, y), t0);
-        rig.core.input(&motion(track.x + 40.0, y), t0);
-        rig.core.input(&motion(track.x + 60.0, y), t0);
+        rig.core.input(&press(track.x + 10.0, y), t0, &mut cut);
+        rig.core.input(&motion(track.x + 40.0, y), t0, &mut cut);
+        rig.core.input(&motion(track.x + 60.0, y), t0, &mut cut);
         assert_eq!(rig.sent.borrow().len(), 1);
         assert!(rig.core.throttle.wait(t0).is_some(), "a value waits");
         // The stream ends while the slider is held.
         rig.graph.borrow_mut().streams.remove(0);
         // Nothing panics; the release would send the last value, but its id
         // is gone: dropped, and nothing is left waiting.
-        rig.core.input(&release(track.x + 60.0, y), t0);
+        rig.core.input(&release(track.x + 60.0, y), t0, &mut cut);
         assert_eq!(rig.sent.borrow().len(), 1, "{:?}", rig.sent.borrow());
         assert!(rig.core.throttle.wait(t0).is_none());
         // The row greys out after the release, and takes no input.
@@ -2384,8 +2632,8 @@ mod tests {
         relayout(&mut rig);
         click(&mut rig, mute_key(Control::Stream(20)));
         let (x, y) = centre_of(&rig.core, slider_key(Control::Stream(20)));
-        rig.core.input(&press(x, y), t0);
-        rig.core.input(&release(x, y), t0);
+        rig.core.input(&press(x, y), t0, &mut cut);
+        rig.core.input(&release(x, y), t0, &mut cut);
         assert_eq!(rig.sent.borrow().len(), 1, "a gone row sends nothing");
         // The other stream is untouched, and the row is still there.
         assert_eq!(
@@ -2405,7 +2653,7 @@ mod tests {
     }
 
     #[test]
-    fn folded_or_not_the_popup_fits_eight_rows_each_within_1080() {
+    fn the_tallest_volume_body_scrolls_inside_a_544_sheet() {
         let theme = Theme::dark();
         let graph = |n: u32| AudioGraph {
             outputs: (0..n).map(|id| device(id, "d", id == 0)).collect(),
@@ -2424,7 +2672,9 @@ mod tests {
             }
             (folds, mirror.shape())
         };
-        let room = 1080.0 - theme.top_bar - theme.spacing.sm;
+        // The sheet's viewport: the surface's room (544) under the 40 px row.
+        let viewport =
+            crate::sheet::geometry::max_height((1920.0, 560.0)) - crate::sheet::geometry::ROW_H;
         // Folded: one device each and the streams that play.
         let (_, folded) = open(&[]);
         assert_eq!(
@@ -2436,11 +2686,11 @@ mod tests {
                 listed: true
             }
         );
-        let (w, folded_h) = popup_size(&theme, Kind::Volume, true, folded);
-        assert_eq!(w, AUDIO_W);
+        let (w, folded_h) = body_size(&theme, Kind::Volume, true, folded);
+        assert_eq!(w, SHEET_W);
         // Everything unfolded: eight devices, eight sources and eight
-        // streams (twelve of each were listed), headers included, still on a
-        // 1080 px output below the bar and the gap under it.
+        // streams (twelve of each were listed), headers included: taller
+        // than the sheet's viewport, so the body scrolls.
         let (_, full) = open(&[Section::Output, Section::Input, Section::Apps]);
         assert_eq!(
             full,
@@ -2451,15 +2701,24 @@ mod tests {
                 listed: true
             }
         );
-        let (_, full_h) = popup_size(&theme, Kind::Volume, true, full);
+        let (_, full_h) = body_size(&theme, Kind::Volume, true, full);
         assert!(
-            full_h <= room,
-            "{full_h} px does not fit the {room} px under the bar"
+            full_h > viewport,
+            "{full_h} px fits the {viewport} px viewport: nothing to scroll"
         );
+        let mut scroll = celestina_ui::Scroll::default();
+        scroll.set_extent(full_h, viewport);
+        assert!(scroll.can_scroll());
+        assert!(scroll.wheel(1000.0));
+        assert_eq!(scroll.offset(), full_h - viewport);
+        // The plain body (no lists, no microphone) fits and never scrolls.
+        let (_, plain) = body_size(&theme, Kind::Volume, false, Shape::default());
+        scroll.set_extent(plain, viewport);
+        assert!(!scroll.can_scroll());
         assert!(folded_h < full_h);
         // Each fold adds only its rows: seven devices, seven sources.
         let (_, out_only) = open(&[Section::Output]);
-        let (_, out_h) = popup_size(&theme, Kind::Volume, true, out_only);
+        let (_, out_h) = body_size(&theme, Kind::Volume, true, out_only);
         assert_eq!(out_h - folded_h, 7.0 * compact_h(&theme));
         // The compact rows keep the touch target of the slider's own height,
         // and so does a header.
@@ -2467,26 +2726,29 @@ mod tests {
         assert!(header_h(&theme) >= slider_h(&theme));
         // Brightness ignores the shape.
         assert_eq!(
-            popup_size(&theme, Kind::Brightness, false, full),
-            popup_size(&theme, Kind::Brightness, false, Shape::default())
+            body_size(&theme, Kind::Brightness, false, full),
+            body_size(&theme, Kind::Brightness, false, Shape::default())
         );
 
-        // Twelve sinks: unfolded, eight rows show, the card is the size that
-        // fits.
+        // Twelve sinks: unfolded, eight rows show and the body is the size of
+        // its rows, whatever the viewport.
         let mut graph = AudioGraph::default();
         for id in 0..12 {
             graph
                 .outputs
                 .push(device(100 + id, &format!("Sink {id}"), id == 0));
         }
-        let mut rig = rig_with(Kind::Volume, audio(Some((30, false)), None), graph);
+        let mut rig = sheet_rig(audio(Some((30, false)), None), graph);
         toggle(&mut rig, Section::Output);
         let rows = (100..112)
             .filter(|id| rig.core.tree.node_by_key(device_key(*id)).is_some())
             .count();
         assert_eq!(rows, 8);
         assert_eq!(rig.core.shape().outputs, 8);
-        assert!(rig.core.size().1 <= 1080.0);
+        assert_eq!(
+            rig.core.size(),
+            body_size(&theme, Kind::Volume, false, rig.core.shape())
+        );
     }
 
     #[test]
@@ -2642,9 +2904,9 @@ mod tests {
         assert!(rig.core.graph_wait(past).is_some(), "due once it is over");
         let track = rect_of(&rig.core, slider_key(Control::Stream(20)));
         let y = track.y + track.h / 2.0;
-        rig.core.input(&press(track.x + 10.0, y), past);
+        rig.core.input(&press(track.x + 10.0, y), past, &mut cut);
         assert!(rig.core.graph_wait(past).is_none(), "held: nothing to ask");
-        rig.core.input(&release(track.x + 10.0, y), past);
+        rig.core.input(&release(track.x + 10.0, y), past, &mut cut);
         assert!(rig.core.graph_wait(past).is_some());
         assert!(rig.core.sync(&Theme::dark(), past, cut));
         assert!(rig.core.graph_wait(past).is_none());
@@ -2664,7 +2926,15 @@ mod tests {
         let shape = mirror.shape();
         let mut tree = Tree::new(false, &theme);
         tree.apply(
-            card(&theme, Kind::Volume, true, levels, mirror.audio(), shape),
+            card(
+                &theme,
+                Kind::Volume,
+                true,
+                levels,
+                mirror.audio(),
+                shape,
+                CardFrame::Popup,
+            ),
             Instant::now(),
         );
         tree.layout_measured(popup_size(&theme, Kind::Volume, true, shape), fake_measure);
@@ -2797,6 +3067,7 @@ mod tests {
                 vertical,
             },
             now,
+            &mut cut,
         );
     }
 
@@ -2878,8 +3149,11 @@ mod tests {
         let mut rig = rig_monitors(&three());
         let track = rect_of(&rig.core, monitor_slider(1));
         let now = Instant::now();
-        rig.core
-            .input(&press(track.x + 1.0, track.y + track.h / 2.0), now);
+        rig.core.input(
+            &press(track.x + 1.0, track.y + track.h / 2.0),
+            now,
+            &mut cut,
+        );
         let dragged = rig.core.monitors.level(1);
         wheel_over(&mut rig, monitor_slider(0), 15.0, now);
         assert_eq!(rig.core.monitors.level(0), Some(30));
@@ -2892,8 +3166,8 @@ mod tests {
         let t0 = Instant::now();
         let track = rect_of(&rig.core, slider_key(Control::Brightness));
         let (x, y) = (track.x + track.w - 1.0, track.y + track.h / 2.0);
-        rig.core.input(&press(x, y), t0);
-        rig.core.input(&release(x, y), t0);
+        rig.core.input(&press(x, y), t0, &mut cut);
+        rig.core.input(&release(x, y), t0, &mut cut);
         assert_eq!(rig.core.shown_level(Control::Brightness), Some(100));
         // A read-back of an earlier write of the drag: the slider stays.
         rig.cell.set(brightness(Some(70)));
@@ -2958,6 +3232,7 @@ mod tests {
         rig.core.input(
             &press(track.x + track.w - 1.0, track.y + track.h / 2.0),
             now,
+            &mut cut,
         );
         assert_eq!(
             *rig.sent.borrow(),
@@ -2985,8 +3260,8 @@ mod tests {
         let slider = rect_of(&rig.core, monitor_slider(2));
         let (x, y) = (slider.x + slider.w - 1.0, slider.y + slider.h / 2.0);
         let now = Instant::now();
-        rig.core.input(&press(x, y), now);
-        rig.core.input(&release(x, y), now);
+        rig.core.input(&press(x, y), now, &mut cut);
+        rig.core.input(&release(x, y), now, &mut cut);
         assert!(rig.sent.borrow().is_empty());
         assert_eq!(rig.core.monitors.known(), [0, 1]);
         assert!(!rig
@@ -3007,15 +3282,15 @@ mod tests {
         let all = rect_of(&rig.core, slider_key(Control::AllMonitors));
         let t0 = Instant::now();
         rig.core
-            .input(&press(all.x + 20.0, all.y + all.h / 2.0), t0);
+            .input(&press(all.x + 20.0, all.y + all.h / 2.0), t0, &mut cut);
         rig.core
-            .input(&release(all.x + 20.0, all.y + all.h / 2.0), t0);
+            .input(&release(all.x + 20.0, all.y + all.h / 2.0), t0, &mut cut);
         rig.sent.borrow_mut().clear();
         // Then the second row alone.
         let row = rect_of(&rig.core, monitor_slider(1));
         let (x, y) = (row.x + row.w - 1.0, row.y + row.h / 2.0);
-        rig.core.input(&press(x, y), t0);
-        rig.core.input(&release(x, y), t0);
+        rig.core.input(&press(x, y), t0, &mut cut);
+        rig.core.input(&release(x, y), t0, &mut cut);
         assert_eq!(*rig.sent.borrow(), [Request::Set(Control::Monitor(1), 100)]);
         // Mixed within one interval: each monitor's newest value is sent
         // once, at the release.
@@ -3023,11 +3298,11 @@ mod tests {
         let t1 = t0 + SEND_INTERVAL * 2;
         let all = rect_of(&rig.core, slider_key(Control::AllMonitors));
         let ay = all.y + all.h / 2.0;
-        rig.core.input(&press(all.x + 30.0, ay), t1);
+        rig.core.input(&press(all.x + 30.0, ay), t1, &mut cut);
         rig.sent.borrow_mut().clear();
-        rig.core.input(&motion(all.x + 90.0, ay), t1);
-        rig.core.input(&motion(all.x + 150.0, ay), t1);
-        rig.core.input(&release(all.x + 150.0, ay), t1);
+        rig.core.input(&motion(all.x + 90.0, ay), t1, &mut cut);
+        rig.core.input(&motion(all.x + 150.0, ay), t1, &mut cut);
+        rig.core.input(&release(all.x + 150.0, ay), t1, &mut cut);
         let sent = rig.sent.borrow().clone();
         assert_eq!(sent.len(), 2, "{sent:?}");
         let (Request::Set(Control::Monitor(0), a), Request::Set(Control::Monitor(1), b)) =
@@ -3074,7 +3349,8 @@ mod tests {
         // A reading does not move a row under the pointer.
         let track = rect_of(&rig.core, monitor_slider(0));
         let y = track.y + track.h / 2.0;
-        rig.core.input(&press(track.x + 20.0, y), Instant::now());
+        rig.core
+            .input(&press(track.x + 20.0, y), Instant::now(), &mut cut);
         *rig.monitor_cell.borrow_mut() = vec![Some(99), Some(80), Some(55)];
         let shown = rig.core.monitors.known();
         assert!(!rig.core.sync(&Theme::dark(), Instant::now(), cut));
@@ -3127,8 +3403,8 @@ mod tests {
         let all = rect_of(&rig.core, slider_key(Control::AllMonitors));
         let (x, y) = (all.x + all.w - 1.0, all.y + all.h / 2.0);
         let now = Instant::now();
-        rig.core.input(&press(x, y), now);
-        rig.core.input(&release(x, y), now);
+        rig.core.input(&press(x, y), now, &mut cut);
+        rig.core.input(&release(x, y), now, &mut cut);
         let value = |rig: &Rig, at| rig.core.tree.slider(monitor_slider(at)).map(Slider::value);
         assert_eq!((value(&rig, 0), value(&rig, 1)), (Some(100), Some(100)));
         // A read-back of an earlier write of the drag arrives for the second

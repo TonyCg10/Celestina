@@ -31,17 +31,19 @@
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
+    time::Instant,
 };
 
 use celestina_paint::Rect;
 use celestina_shell::audio::AudioGraph;
 use celestina_shell::osd::Kind as OsdKind;
 use celestina_shell::settings::{BarLayout, Duty, Settings};
+use celestina_ui::Key;
 use celestina_wayland::{PopupId, SurfaceCtl, SurfaceId};
 
 use super::monitor_rows::{MonitorFeed, MonitorRow, SharedMonitors};
 use super::popup::{
-    self, Command, Control, Kind, LevelPopup, Request, SharedGraph, SharedLevels, Sink,
+    self, Command, Control, Kind, LevelCore, LevelPopup, Request, SharedGraph, SharedLevels, Sink,
 };
 use super::readings::{Readings, Target};
 use super::verbs::Workers;
@@ -168,7 +170,6 @@ pub fn audio_commands(action: AudioAction) -> Vec<AudioCommand> {
         AudioAction::ToggleMute => vec![AudioCommand::ToggleMute {
             device: Device::Output,
         }],
-        AudioAction::Popup => Vec::new(),
     }
 }
 
@@ -219,11 +220,53 @@ pub struct Opening<'a> {
     pub reduced: bool,
 }
 
-/// The slider popup that is open.
+/// Where the level control is shown.
+#[derive(Clone, Copy, Debug)]
+pub enum Place {
+    /// A capsule sheet grown from the bar's piece `Key`.
+    Sheet(Key),
+    /// An `xdg_popup` below the piece at the rect (brightness, until the
+    /// brightness sheet).
+    Popup(Rect),
+}
+
+/// What an open control is held in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Held {
+    Sheet,
+    Popup(PopupId),
+}
+
+/// A control released by an open: what the display must hear, and the
+/// surface it was open on when that is not the one opening (its Island is to
+/// be told to close it, `Message::CloseLevelSheet`).
+#[derive(Debug, PartialEq)]
+pub struct Released {
+    pub suppression: Suppression,
+    pub elsewhere: Option<SurfaceId>,
+}
+
+/// What [`Controls::open`] did: whether the new control opened and what it
+/// released first.
+#[derive(Debug, Default, PartialEq)]
+pub struct Opened {
+    pub opened: bool,
+    pub released: Option<Released>,
+}
+
+/// What to redraw because the readings changed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LevelRedraw {
+    /// The Island's surface (the sheet is painted by it).
+    Island(SurfaceId),
+    Popup(PopupId),
+}
+
+/// The level control that is open.
 #[derive(Debug)]
 struct Open {
     surface: SurfaceId,
-    popup: PopupId,
+    held: Held,
     output: String,
     kind: Kind,
     cell: SharedLevels,
@@ -236,6 +279,15 @@ struct Open {
     /// What each of `targets` last read, shared with the popup; used only
     /// when the popup lists several.
     monitors: SharedMonitors,
+}
+
+/// Why a level control is not opened.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Refusal {
+    NoMonitor,
+    NoBrightnessSheet,
+    PieceGone,
+    PopupBlocked,
 }
 
 /// The readings and the slider popup.
@@ -283,38 +335,52 @@ impl Controls {
         );
     }
 
-    /// Opens the slider popup of `kind` below the piece at `anchor` of
-    /// `island` (controlled by `ctl`). Returns whether it opened; then the
-    /// display must be suppressed until [`Controls::closed`] says it is gone.
+    /// Opens the level control of `kind` at `place` of `island` (controlled
+    /// by `ctl`): a capsule sheet grown from a piece, or a popup below a
+    /// rect. A control already held is released first: one on another surface
+    /// is named in `elsewhere` (the app closes it there), one on this surface
+    /// is closed here when the new one is a popup, or switched by the Island
+    /// when it is a sheet. When it opened, the display must be suppressed
+    /// until [`Controls::settle`] or [`Controls::closed`] releases it.
     pub fn open(
         &mut self,
         kind: Kind,
-        anchor: Rect,
+        place: Place,
         island: &mut Island,
         ctl: &mut SurfaceCtl<'_>,
         with: &Opening<'_>,
-    ) -> bool {
+    ) -> Opened {
         let Opening {
             surface,
             painter,
             runtime,
             reduced,
         } = *with;
-        if self.open.is_some() {
-            return false;
-        }
+        // Every check that can refuse comes before anything is released: a
+        // refused open leaves what is held as it was.
         let Ok(borrowed) = painter.try_borrow() else {
-            tracing::warn!("the painter is in use; the level popup is not opened");
-            return false;
+            tracing::warn!("the painter is in use; the level control is not opened");
+            return Opened {
+                opened: false,
+                released: None,
+            };
         };
         let theme = borrowed.theme().clone();
         drop(borrowed);
+        if let Err(refusal) = self.precheck(kind, place, island) {
+            tracing::debug!(?refusal, "the level control is not opened");
+            return Opened {
+                opened: false,
+                released: None,
+            };
+        }
+        let released = self.release_for(surface, place, island, ctl);
+        let none = |released| Opened {
+            opened: false,
+            released,
+        };
         let output = island.output().to_owned();
         let target = self.readings.target(&output);
-        if kind == Kind::Brightness && target.is_none() {
-            tracing::debug!(%output, "no monitor for this output; no brightness popup");
-            return false;
-        }
         // Several monitors make a list; one keeps the single slider. The
         // list is fixed now: a monitor that appears later is listed the next
         // time the popup opens.
@@ -360,23 +426,53 @@ impl Controls {
                 }
             })
         };
-        let shell = LevelPopup::new(
-            Rc::clone(painter),
-            &theme,
-            kind,
-            Rc::clone(&cell),
-            Rc::clone(&graph),
-            feed,
-            sink,
-            reduced,
-        );
-        let size = shell.size();
-        let Some(popup) = island.open_level_popup(anchor, size, Box::new(shell), ctl) else {
-            return false;
+        let held = match place {
+            Place::Popup(anchor) => {
+                let shell = LevelPopup::new(
+                    Rc::clone(painter),
+                    &theme,
+                    kind,
+                    Rc::clone(&cell),
+                    Rc::clone(&graph),
+                    feed,
+                    sink,
+                    reduced,
+                );
+                let size = shell.size();
+                let Some(popup) = island.open_level_popup(anchor, size, Box::new(shell), ctl)
+                else {
+                    return none(released);
+                };
+                Held::Popup(popup)
+            }
+            Place::Sheet(piece) => {
+                // The painter is lent to the body's name cutter for this
+                // call only: `act` runs after `Island::input` gave it back.
+                let core = LevelCore::new(
+                    &theme,
+                    kind,
+                    popup::CardFrame::Sheet,
+                    popup::Feeds {
+                        cell: Rc::clone(&cell),
+                        graph: Rc::clone(&graph),
+                        monitors: feed,
+                    },
+                    sink,
+                    reduced,
+                    Instant::now(),
+                    &mut popup::shared_fit(painter, popup::name_style(&theme)),
+                );
+                if !island.open_level_sheet(piece, core, ctl) {
+                    // Nothing may stay open untracked.
+                    island.close_level_sheet(ctl);
+                    return none(released);
+                }
+                Held::Sheet
+            }
         };
         self.open = Some(Open {
             surface,
-            popup,
+            held,
             output,
             kind,
             cell,
@@ -386,8 +482,8 @@ impl Controls {
             written,
             monitors,
         });
-        // A fresh reading for what the popup shows; the DDC worker reads one
-        // monitor at a time and never on a timer.
+        // A fresh reading for what the control shows; the DDC worker reads
+        // one monitor at a time and never on a timer.
         if let Some(runtime) = runtime.get() {
             if kind == Kind::Volume {
                 runtime.retry_graph_gate();
@@ -398,7 +494,60 @@ impl Controls {
             };
             deliver(runtime, vec![read]);
         }
-        true
+        Opened {
+            opened: true,
+            released,
+        }
+    }
+
+    /// What would refuse the open of `kind` at `place` on `island`, decided
+    /// before anything is released.
+    fn precheck(&self, kind: Kind, place: Place, island: &Island) -> Result<(), Refusal> {
+        if kind == Kind::Brightness && self.readings.target(island.output()).is_none() {
+            return Err(Refusal::NoMonitor);
+        }
+        match place {
+            Place::Sheet(_) if kind == Kind::Brightness => Err(Refusal::NoBrightnessSheet),
+            Place::Sheet(piece) if !island.can_open_level_sheet(piece) => Err(Refusal::PieceGone),
+            Place::Popup(_) if !island.level_popup_fits() => Err(Refusal::PopupBlocked),
+            _ => Ok(()),
+        }
+    }
+
+    /// Releases the control held on a surface other than `surface`: the
+    /// display hears it now and the app closes it there.
+    fn release_elsewhere(&mut self, surface: SurfaceId) -> Option<Released> {
+        let held_on = self.open_surface().filter(|held| *held != surface)?;
+        Some(Released {
+            suppression: self.closed()?,
+            elsewhere: Some(held_on),
+        })
+    }
+
+    /// Releases the control held, if any, for a new one at `place` on
+    /// `surface`.
+    fn release_for(
+        &mut self,
+        surface: SurfaceId,
+        place: Place,
+        island: &mut Island,
+        ctl: &mut SurfaceCtl<'_>,
+    ) -> Option<Released> {
+        if let Some(released) = self.release_elsewhere(surface) {
+            return Some(released);
+        }
+        self.open_surface()?;
+        // Here: a popup in the way closes; a held sheet is switched or
+        // closed by the Island (a sheet opening on it, or a popup below).
+        match (self.open.as_ref().map(|o| o.held), place) {
+            (Some(Held::Popup(_)), _) => island.close_level_popup(ctl),
+            (Some(Held::Sheet), Place::Popup(_)) => island.close_level_sheet(ctl),
+            _ => {}
+        }
+        Some(Released {
+            suppression: self.closed()?,
+            elsewhere: None,
+        })
     }
 
     /// The audio worker's graph arrived: taken in only while the duty's
@@ -410,10 +559,10 @@ impl Controls {
         live && self.readings.audio_graph(graph)
     }
 
-    /// The popup (and its surface) to redraw because the readings changed:
-    /// the cell it reads is brought up to date first.
+    /// What to redraw because the readings changed: the cell the open control
+    /// reads is brought up to date first.
     #[must_use]
-    pub fn refresh(&self) -> Option<(SurfaceId, PopupId)> {
+    pub fn refresh(&self) -> Option<LevelRedraw> {
         let open = self.open.as_ref()?;
         let levels = self.levels_for(&open.output);
         let mut changed = false;
@@ -438,13 +587,37 @@ impl Controls {
             open.graph.replace(self.readings.graph().clone());
             changed = true;
         }
-        changed.then_some((open.surface, open.popup))
+        changed.then_some(match open.held {
+            Held::Sheet => LevelRedraw::Island(open.surface),
+            Held::Popup(popup) => LevelRedraw::Popup(popup),
+        })
+    }
+
+    /// The Island of `surface` says whether its level sheet is still open (or
+    /// waits to open): a held sheet that no longer is has closed, by any way,
+    /// and the display hears it once. A popup is released by its close
+    /// event instead.
+    pub fn settle(&mut self, surface: SurfaceId, level_open: bool) -> Option<Suppression> {
+        let open = self.open.as_ref()?;
+        if open.surface != surface || open.held != Held::Sheet || level_open {
+            return None;
+        }
+        self.closed()
     }
 
     /// Whether the open popup hangs from `surface`.
     #[must_use]
     pub fn is_open_on(&self, surface: SurfaceId) -> bool {
         self.open.as_ref().is_some_and(|o| o.surface == surface)
+    }
+
+    /// Whether the control held is a popup hanging from `surface`: only its
+    /// close event releases it (a sheet's lifecycle is the Island's).
+    #[must_use]
+    pub fn popup_open_on(&self, surface: SurfaceId) -> bool {
+        self.open
+            .as_ref()
+            .is_some_and(|o| o.surface == surface && matches!(o.held, Held::Popup(_)))
     }
 
     /// The popup is gone (closed, dismissed, or its Island with it): what
@@ -535,7 +708,6 @@ mod tests {
                 device: Device::Output
             }]
         );
-        assert!(audio_commands(AudioAction::Popup).is_empty());
     }
 
     #[test]
@@ -587,12 +759,67 @@ mod tests {
         assert!(!controls.is_open_on(SurfaceId(1)));
     }
 
-    /// A popup as `Controls::open` records it, without an Island.
+    #[test]
+    fn a_refused_open_releases_nothing_and_leaves_no_orphan() {
+        use crate::island::Island;
+        use celestina_shell::settings::BarLayout;
+        let mut controls = Controls::new();
+        let held = opened(&mut controls, Kind::Volume, SurfaceId(1));
+        let _ = held;
+        let place_sheet = Place::Sheet(Key::named("volume"));
+        let place_popup = Place::Popup(Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 10.0,
+            h: 10.0,
+        });
+        // No bar: the piece is not on it, and no popup fits.
+        let mut island = Island::new("DP-1", (1920.0, 560.0));
+        assert_eq!(
+            controls.precheck(Kind::Volume, place_sheet, &island),
+            Err(Refusal::PieceGone)
+        );
+        assert_eq!(
+            controls.precheck(Kind::Volume, place_popup, &island),
+            Err(Refusal::PopupBlocked)
+        );
+        // A bar without the piece: still gone.
+        island.set_bar(&BarLayout::default());
+        assert_eq!(
+            controls.precheck(Kind::Volume, place_sheet, &island),
+            Err(Refusal::PieceGone)
+        );
+        // No monitor for this output; and the brightness has no sheet.
+        assert_eq!(
+            controls.precheck(Kind::Brightness, place_popup, &island),
+            Err(Refusal::NoMonitor)
+        );
+        assert_eq!(
+            controls.precheck(Kind::Brightness, place_sheet, &island),
+            Err(Refusal::NoMonitor)
+        );
+        assert_eq!(
+            controls.precheck(Kind::Volume, place_popup, &island),
+            Ok(())
+        );
+        // Every refusal left the held control as it was: tracked, on its
+        // surface, to be released by its own end.
+        assert!(controls.is_open_on(SurfaceId(1)));
+        assert!(!controls.popup_open_on(SurfaceId(1)), "a sheet is no popup");
+        assert!(controls.closed().is_some());
+    }
+
+    /// A control as `Controls::open` records it, without an Island: the
+    /// volume in a sheet, the brightness in a popup.
     fn opened(controls: &mut Controls, kind: Kind, surface: SurfaceId) -> Asked {
+        let held = match kind {
+            Kind::Volume => Held::Sheet,
+            Kind::Brightness => Held::Popup(PopupId(7)),
+        };
         let asked = Asked::default();
         controls.open = Some(Open {
             surface,
-            popup: celestina_wayland::PopupId(7),
+            held,
             output: "DP-1".to_owned(),
             kind,
             cell: Rc::new(Cell::new(Levels::default())),
@@ -666,7 +893,7 @@ mod tests {
     }
 
     #[test]
-    fn a_new_graph_refreshes_only_an_open_volume_popup() {
+    fn a_new_graph_redraws_the_island_of_an_open_volume_sheet() {
         let mut controls = Controls::new();
         let sinks = AudioGraph {
             outputs: vec![device(5, true)],
@@ -675,7 +902,7 @@ mod tests {
         assert!(controls.readings.audio_graph(sinks.clone()));
         assert!(controls.refresh().is_none(), "no popup, nothing to redraw");
         opened(&mut controls, Kind::Volume, SurfaceId(3));
-        assert_eq!(controls.refresh(), Some((SurfaceId(3), PopupId(7))));
+        assert_eq!(controls.refresh(), Some(LevelRedraw::Island(SurfaceId(3))));
         assert_eq!(
             controls.open.as_ref().map(|o| o.graph.borrow().clone()),
             Some(sinks)
@@ -706,7 +933,7 @@ mod tests {
         // redraws.
         assert!(controls.audio_graph(graph.clone(), true));
         assert_eq!(controls.readings.graph(), &graph);
-        assert_eq!(controls.refresh(), Some((SurfaceId(3), PopupId(7))));
+        assert_eq!(controls.refresh(), Some(LevelRedraw::Island(SurfaceId(3))));
         assert_eq!(
             controls.open.as_ref().map(|o| o.graph.borrow().clone()),
             Some(graph.clone())
@@ -734,6 +961,94 @@ mod tests {
                 written: 0,
             })
         );
+    }
+
+    #[test]
+    fn a_volume_sheet_quiets_its_kinds_and_releases_them_once() {
+        let mut controls = Controls::new();
+        let asked = opened(&mut controls, Kind::Volume, SurfaceId(3));
+        record(
+            &asked,
+            Request::Set(popup::Control::Output, 55),
+            &AudioGraph::default(),
+        );
+        assert_eq!(
+            kinds_of(Kind::Volume),
+            &[OsdKind::Volume, OsdKind::Microphone]
+        );
+        // Open on its Island: nothing to release; another Island's answer is
+        // not this sheet's.
+        assert!(controls.settle(SurfaceId(3), true).is_none());
+        assert!(controls.settle(SurfaceId(4), false).is_none());
+        assert_eq!(
+            controls.settle(SurfaceId(3), false),
+            Some(Suppression::Closed {
+                kinds: &[OsdKind::Volume, OsdKind::Microphone],
+                asked: vec![(OsdKind::Volume, Some(55))],
+                written: 0,
+            })
+        );
+        assert!(controls.settle(SurfaceId(3), false).is_none(), "once");
+        assert!(controls.closed().is_none());
+    }
+
+    #[test]
+    fn every_way_a_level_sheet_closes_releases_the_display_once() {
+        // Escape, an outside press, a switch to the Island page, another
+        // piece, the piece vanishing: the Island's sheet is no longer open.
+        let mut controls = Controls::new();
+        opened(&mut controls, Kind::Volume, SurfaceId(3));
+        assert!(controls.settle(SurfaceId(3), false).is_some());
+        assert!(controls.settle(SurfaceId(3), false).is_none());
+        assert!(controls.closed().is_none());
+        // The duty off closes the sheet and then `closed` releases.
+        opened(&mut controls, Kind::Volume, SurfaceId(3));
+        assert!(controls.closed().is_some());
+        assert!(controls.settle(SurfaceId(3), false).is_none());
+        // The output gone.
+        opened(&mut controls, Kind::Volume, SurfaceId(3));
+        assert!(controls.surfaces_gone(&[SurfaceId(3)]).is_some());
+        assert!(controls.settle(SurfaceId(3), false).is_none());
+        assert!(controls.surfaces_gone(&[SurfaceId(3)]).is_none());
+        // Another output opens its own: the first is released, named for the
+        // app to close, and releases nothing a second time.
+        opened(&mut controls, Kind::Volume, SurfaceId(3));
+        let released = controls.release_elsewhere(SurfaceId(4));
+        assert!(matches!(
+            released,
+            Some(Released {
+                suppression: Suppression::Closed { .. },
+                elsewhere: Some(SurfaceId(3)),
+            })
+        ));
+        assert!(controls.settle(SurfaceId(3), false).is_none());
+        assert!(controls.closed().is_none());
+        // A switch on the same surface releases the old kinds; the new one
+        // is quieted by the app's `Suppression::Open`.
+        opened(&mut controls, Kind::Volume, SurfaceId(3));
+        assert!(controls.release_elsewhere(SurfaceId(3)).is_none());
+        assert!(controls.open_surface().is_some(), "still held");
+        assert!(controls.closed().is_some());
+        opened(&mut controls, Kind::Volume, SurfaceId(3));
+        assert!(controls.settle(SurfaceId(3), true).is_none(), "still open");
+        // A popup is released by its close event, never by `settle`.
+        controls.closed();
+        opened(&mut controls, Kind::Brightness, SurfaceId(3));
+        assert!(controls.settle(SurfaceId(3), false).is_none());
+        assert!(controls.closed().is_some());
+        assert!(controls.closed().is_none());
+    }
+
+    #[test]
+    fn opening_a_level_sheet_on_another_output_closes_the_first() {
+        let mut controls = Controls::new();
+        opened(&mut controls, Kind::Volume, SurfaceId(3));
+        let released = controls.release_elsewhere(SurfaceId(5)).expect("released");
+        assert_eq!(released.elsewhere, Some(SurfaceId(3)));
+        assert!(matches!(released.suppression, Suppression::Closed { .. }));
+        assert!(!controls.is_open_on(SurfaceId(3)));
+        // Nothing held: nothing to release.
+        assert!(controls.release_elsewhere(SurfaceId(5)).is_none());
     }
 
     #[test]
@@ -854,7 +1169,7 @@ mod tests {
             source: BrightnessSource::Ddc,
         });
         // Only the second monitor moved, and it is not the bar's own.
-        assert_eq!(controls.refresh(), Some((SurfaceId(3), PopupId(7))));
+        assert_eq!(controls.refresh(), Some(LevelRedraw::Popup(PopupId(7))));
         assert_eq!(*levels.borrow(), [Some(20), Some(45)]);
         assert!(controls.refresh().is_none());
         controls.readings.brightness_event(&BrightnessEvent {
@@ -862,7 +1177,7 @@ mod tests {
             percent: None,
             source: BrightnessSource::Ddc,
         });
-        assert_eq!(controls.refresh(), Some((SurfaceId(3), PopupId(7))));
+        assert_eq!(controls.refresh(), Some(LevelRedraw::Popup(PopupId(7))));
         assert_eq!(*levels.borrow(), [None, Some(45)]);
     }
 }

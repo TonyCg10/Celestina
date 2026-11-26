@@ -21,7 +21,7 @@ use celestina_paint::{Painter, Rect, Role, Theme};
 use crate::{
     highlight::{box_fill, box_wash, focus_ring, FOCUS_WIDTH},
     slider::{self, SliderPaint},
-    tree::{NodeId, Slot, Tree, Visit},
+    tree::{NodeId, Scope, Slot, Tree, Visit},
     view::ViewKind,
 };
 
@@ -41,6 +41,23 @@ impl Tree {
     /// to its subtree; a clip after its own fill; the focus ring on top of
     /// its children (a text field shows its caret instead). Leaving nodes whose fade settled are pruned first.
     pub fn paint(&mut self, painter: &mut Painter, now: Instant) {
+        self.paint_scoped(painter, now, Scope::All);
+    }
+
+    /// [`Tree::paint`] without the node `skip` and its subtree: the rest of
+    /// the walk is unchanged.
+    pub fn paint_except(&mut self, painter: &mut Painter, now: Instant, skip: NodeId) {
+        self.paint_scoped(painter, now, Scope::Except(skip));
+    }
+
+    /// Paints only the subtrees of `parent`'s children: not the node's own
+    /// box, haze or ring. The slides of `parent` and its ancestors still
+    /// shift them; their recoil scale and opacity do not apply.
+    pub fn paint_children(&mut self, painter: &mut Painter, now: Instant, parent: NodeId) {
+        self.paint_scoped(painter, now, Scope::ChildrenOf(parent));
+    }
+
+    fn paint_scoped(&mut self, painter: &mut Painter, now: Instant, scope: Scope) {
         self.prune(now);
         let dpr = self.dpr;
         for slot in self.slots.iter_mut().flatten() {
@@ -69,20 +86,38 @@ impl Tree {
             }
         }
         let theme = painter.theme().clone();
-        let mut shifts: Vec<(f32, f32)> = vec![(0.0, 0.0)];
-        self.visit(&mut |v| match v {
-            Visit::Enter(id) => {
-                let base = shifts.last().copied().unwrap_or((0.0, 0.0));
-                let own = self.offset(id, now);
-                let shift = (base.0 + own.0, base.1 + own.1);
-                shifts.push(shift);
-                self.paint_enter(id, painter, &theme, shift, now);
+        let base = match scope {
+            Scope::ChildrenOf(parent) => self.slide_of(parent, now),
+            _ => (0.0, 0.0),
+        };
+        let mut shifts: Vec<(f32, f32)> = vec![base];
+        for v in self.walk(scope) {
+            match v {
+                Visit::Enter(id) => {
+                    let base = shifts.last().copied().unwrap_or((0.0, 0.0));
+                    let own = self.offset(id, now);
+                    let shift = (base.0 + own.0, base.1 + own.1);
+                    shifts.push(shift);
+                    self.paint_enter(id, painter, &theme, shift, now);
+                }
+                Visit::Leave(id) => {
+                    let shift = shifts.pop().unwrap_or((0.0, 0.0));
+                    self.paint_leave(id, painter, &theme, shift);
+                }
             }
-            Visit::Leave(id) => {
-                let shift = shifts.pop().unwrap_or((0.0, 0.0));
-                self.paint_leave(id, painter, &theme, shift);
-            }
-        });
+        }
+    }
+
+    /// The accumulated slide of `id` and its ancestors.
+    fn slide_of(&self, id: NodeId, now: Instant) -> (f32, f32) {
+        let mut sum = (0.0, 0.0);
+        let mut at = Some(id);
+        while let Some(n) = at {
+            let own = self.offset(n, now);
+            sum = (sum.0 + own.0, sum.1 + own.1);
+            at = self.slot(n).and_then(|s| s.parent);
+        }
+        sum
     }
 
     fn paint_enter(
