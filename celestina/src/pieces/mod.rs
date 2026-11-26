@@ -234,8 +234,7 @@ pub struct Levels {
 /// jump from one end of the range to the other.
 pub const MAX_WHEEL_STEPS: u8 = 4;
 
-/// The menus a capsule can grow into (CEL-D-002, CEL-D-003). Part D adds the
-/// workspaces.
+/// The menus a capsule can grow into (CEL-D-002, CEL-D-003, CEL-D-005).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SheetKind {
     Volume,
@@ -245,6 +244,8 @@ pub enum SheetKind {
     /// An Island page, with its overflow button: what a bar piece that asked
     /// for a page opens.
     Page(PageId),
+    /// The workspaces list (CEL-D-005).
+    Workspaces,
 }
 
 /// What the Volume piece asks for. The default output is the one it drives;

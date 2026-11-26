@@ -12,6 +12,7 @@
 pub mod body;
 pub mod geometry;
 pub mod motion;
+pub mod workspaces;
 
 use std::time::{Duration, Instant};
 
@@ -19,7 +20,7 @@ use celestina_paint::{CutRow, Painter, Rect, Role, TextStyle, Theme};
 use celestina_ui::{Key, Scroll, Tree};
 use celestina_wayland::InputEvent;
 
-pub use body::{BodyOutcome, PageBody, SheetBody};
+pub use body::{BodyOutcome, PageBody, SheetBody, WorkspacesBody};
 use geometry::ROW_H;
 use motion::{Indicator, SheetMotion};
 
@@ -224,6 +225,14 @@ impl Sheets {
             .as_mut()
             .filter(|o| !o.motion.is_closing())
             .and_then(|o| o.body.page_body_mut())
+    }
+
+    /// The open workspaces body (not closing), when the sheet is one.
+    pub fn workspaces_body_mut(&mut self) -> Option<&mut WorkspacesBody> {
+        self.open
+            .as_mut()
+            .filter(|o| !o.motion.is_closing())
+            .and_then(|o| o.body.workspaces_body_mut())
     }
 
     /// Something waits for the open thing to close.

@@ -455,7 +455,7 @@ fn workspace(
     let body = if tiles.is_empty() {
         body.child(view::text(
             Key::indexed("overview-ws-empty", ws.id),
-            copy::OVERVIEW_WORKSPACE_EMPTY,
+            copy::WORKSPACE_EMPTY,
             style(theme.type_scale.body, Role::TextFaint),
         ))
     } else {

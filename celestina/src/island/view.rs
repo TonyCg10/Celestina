@@ -430,6 +430,8 @@ mod tests {
         Row {
             id,
             text: copy::workspace_number(u8::try_from(id).unwrap_or(0)),
+            idx: u8::try_from(id).unwrap_or(0),
+            named: false,
             active,
             columns: 0,
         }

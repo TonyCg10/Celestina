@@ -1,11 +1,15 @@
 //! The Workspaces piece: this output's workspaces as dots, the active one a
-//! wider accent pill, and the Activity page. A dot is a hit target taller
-//! than its mark; the keys are the capsule's (`("dot", workspace id)`).
+//! wider accent pill, in one hit target. A click opens the workspaces sheet,
+//! the wheel steps to the neighbouring workspace, open or not; the piece
+//! keeps its Activity page. The dots are plain children
+//! (`("dot", workspace id)`).
 
 use celestina_paint::Role;
 use celestina_ui::{view, Key, View};
 
-use super::{BarCx, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput};
+use super::{
+    Axis, BarCx, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput, SheetKind,
+};
 use crate::{
     copy,
     island::{
@@ -15,15 +19,46 @@ use crate::{
     },
 };
 
-/// The space around a dot's mark that still counts as the dot, on each
-/// side. Two of them make the gap between marks [`DOT_GAP`].
+/// The space around a dot's mark, on each side. Two of them make the gap
+/// between marks [`DOT_GAP`].
 const HIT_PAD: f32 = DOT_GAP / 2.0;
-/// A dot's hit target is this tall.
+/// A dot's box is this tall.
 const HIT_H: f32 = 20.0;
+/// The space around the dots that still counts as the piece.
+const PIECE_PAD: f32 = 5.0;
+/// The piece's node.
+const ID: &str = "workspaces";
 
 /// The Workspaces piece.
 #[derive(Clone, Copy, Debug)]
 pub struct Workspaces;
+
+/// The piece's one hit target.
+#[must_use]
+pub fn key() -> Key {
+    Key::named(ID)
+}
+
+/// The workspace `steps` away from the active one in niri's order, clamped
+/// to the ends with no wrap (the Wayland sign: positive is down, the next
+/// workspace). `None` when nothing is active or the step would not move.
+#[must_use]
+pub fn step(rows: &[Row], steps: i32) -> Option<u64> {
+    step_from(rows, None, steps)
+}
+
+/// [`step`] from the workspace `from` when it is one of `rows` (the last
+/// target a wheel burst asked for), else from the active one.
+#[must_use]
+pub fn step_from(rows: &[Row], from: Option<u64>, steps: i32) -> Option<u64> {
+    let from = from
+        .and_then(|id| rows.iter().position(|r| r.id == id))
+        .or_else(|| rows.iter().position(|r| r.active))?;
+    let last = i64::try_from(rows.len()).ok()? - 1;
+    let to = (i64::try_from(from).ok()? + i64::from(steps)).clamp(0, last);
+    let to = usize::try_from(to).ok()?;
+    (to != from).then(|| rows[to].id)
+}
 
 /// The node of workspace `id`.
 fn dot_key(id: u64) -> Key {
@@ -31,13 +66,16 @@ fn dot_key(id: u64) -> Key {
 }
 
 impl Workspaces {
-    /// The accessible name of the node `key` of the widget built from `cx`:
-    /// the workspace's label, saying whether it is the current one.
+    /// The accessible name of the node `node` of the widget built from `cx`:
+    /// the current workspace's label.
     #[must_use]
-    pub fn label(key: Key, cx: &BarCx<'_>) -> Option<String> {
+    pub fn label(node: Key, cx: &BarCx<'_>) -> Option<String> {
+        if node != key() {
+            return None;
+        }
         let rows = rows_of(cx);
-        let row = rows.iter().find(|r| dot_key(r.id) == key)?;
-        Some(copy::bar_workspace_name(&row.text, row.active))
+        let row = rows.iter().find(|r| r.active)?;
+        Some(copy::bar_workspace_name(&row.text, true))
     }
 }
 
@@ -58,8 +96,6 @@ fn dot(row: &Row) -> View {
     centred(view::row(dot_key(row.id)))
         .height(HIT_H)
         .padding_xy(HIT_PAD, 0.0)
-        .interactive()
-        .focusable()
         .child(mark)
 }
 
@@ -79,7 +115,14 @@ impl Piece for Workspaces {
         if rows.is_empty() {
             return None;
         }
-        Some(centred(view::row(Key::named("workspaces"))).children(rows.iter().map(dot)))
+        Some(
+            centred(view::row(key()))
+                .padding(PIECE_PAD)
+                .radius(cx.theme.radius_md)
+                .interactive()
+                .focusable()
+                .children(rows.iter().map(dot)),
+        )
     }
 
     fn page(&self) -> Option<PageEntry> {
@@ -89,16 +132,20 @@ impl Piece for Workspaces {
         })
     }
 
-    /// A click on a dot focuses its workspace, if it is still one
-    /// of the output's; nothing else does anything.
+    /// A click opens the workspaces sheet; the wheel steps to the
+    /// neighbouring workspace, if it moves. Nothing else does anything.
     fn activate(&self, input: &PieceInput<'_>) -> PieceAction {
-        if input.gesture != Gesture::Primary {
+        if input.key != key() {
             return PieceAction::None;
         }
-        rows_of(input.cx)
-            .iter()
-            .find(|r| dot_key(r.id) == input.key)
-            .map_or(PieceAction::None, |r| PieceAction::FocusWorkspace(r.id))
+        match input.gesture {
+            Gesture::Primary => PieceAction::Sheet(SheetKind::Workspaces),
+            Gesture::Scroll(Axis::Vertical, steps) => step(&rows_of(input.cx), steps)
+                .map_or(PieceAction::None, PieceAction::FocusWorkspace),
+            Gesture::Middle | Gesture::Context | Gesture::Scroll(Axis::Horizontal, _) => {
+                PieceAction::None
+            }
+        }
     }
 }
 
@@ -183,7 +230,24 @@ mod tests {
                 ..
             }
         ));
-        assert!(v.children.iter().all(|d| d.interactive && d.focusable));
+        assert!(v.children.iter().all(|d| !d.interactive && !d.focusable));
+    }
+
+    #[test]
+    fn the_piece_is_one_hit_target_with_one_pill() {
+        let m = model();
+        let v = with(Some(&m), "DP-1", |cx| Workspaces.bar(cx)).expect("dots");
+        assert!(v.interactive && v.focusable);
+        let mut interactive = 0;
+        let mut pills = 0;
+        let mut stack = vec![&v];
+        while let Some(n) = stack.pop() {
+            interactive += usize::from(n.interactive);
+            pills += usize::from(n.style.size.width == Dimension::length(PILL_W));
+            stack.extend(n.children.iter());
+        }
+        assert_eq!(interactive, 1);
+        assert_eq!(pills, 1);
     }
 
     #[test]
@@ -202,15 +266,71 @@ mod tests {
     }
 
     #[test]
-    fn a_primary_input_on_a_dot_focuses_its_workspace() {
+    fn a_primary_input_anywhere_opens_the_workspaces_sheet() {
         let m = model();
         assert_eq!(
+            act(key(), Gesture::Primary, Some(&m)),
+            PieceAction::Sheet(SheetKind::Workspaces)
+        );
+        // A dot is no target of its own any more.
+        assert_eq!(
             act(dot_key(11), Gesture::Primary, Some(&m)),
+            PieceAction::None
+        );
+    }
+
+    fn rows(n: u64, active: u64) -> Vec<Row> {
+        (1..=n)
+            .map(|i| Row {
+                id: i * 10,
+                text: copy::workspace_number(u8::try_from(i).unwrap_or(0)),
+                idx: u8::try_from(i).unwrap_or(0),
+                named: false,
+                active: i == active,
+                columns: 0,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_wheel_steps_to_the_neighbour_and_stops_at_the_ends() {
+        let r = rows(6, 1);
+        assert_eq!(step(&r, 1), Some(20));
+        assert_eq!(step(&r, -1), None);
+        assert_eq!(step(&r, 9), Some(60));
+        assert_eq!(step(&r, 0), None);
+        let last = rows(6, 6);
+        assert_eq!(step(&last, 1), None);
+        assert_eq!(step(&last, -2), Some(40));
+        assert_eq!(step(&last, i32::MIN), Some(10));
+        assert_eq!(step(&last, i32::MAX), None);
+        assert_eq!(step(&rows(3, 0), 1), None, "no active workspace");
+        assert_eq!(step(&[], 1), None);
+    }
+
+    #[test]
+    fn a_step_from_a_pending_target_counts_from_it() {
+        let r = rows(6, 2);
+        assert_eq!(step_from(&r, Some(30), 1), Some(40));
+        assert_eq!(
+            step_from(&r, Some(999), 1),
+            Some(30),
+            "a gone target is ignored"
+        );
+        assert_eq!(step_from(&r, Some(60), 1), None);
+    }
+
+    #[test]
+    fn the_piece_turns_the_wheel_into_a_focus_request() {
+        let m = model();
+        // DP-1: workspace 11 (idx 1), 12 (idx 2, active).
+        assert_eq!(
+            act(key(), Gesture::Scroll(Axis::Vertical, -1), Some(&m)),
             PieceAction::FocusWorkspace(11)
         );
         assert_eq!(
-            act(dot_key(12), Gesture::Primary, Some(&m)),
-            PieceAction::FocusWorkspace(12)
+            act(key(), Gesture::Scroll(Axis::Vertical, 1), Some(&m)),
+            PieceAction::None
         );
     }
 
@@ -220,40 +340,33 @@ mod tests {
         for gesture in [
             Gesture::Middle,
             Gesture::Context,
-            Gesture::Scroll(Axis::Vertical, 1),
+            Gesture::Scroll(Axis::Horizontal, 1),
             Gesture::Scroll(Axis::Horizontal, -1),
         ] {
-            assert_eq!(act(dot_key(11), gesture, Some(&m)), PieceAction::None);
+            assert_eq!(act(key(), gesture, Some(&m)), PieceAction::None);
         }
-        // Another output's workspace, a stale one, a foreign key, no model.
         assert_eq!(
-            act(dot_key(31), Gesture::Primary, Some(&m)),
+            act(Key::named("other"), Gesture::Primary, Some(&m)),
             PieceAction::None
         );
         assert_eq!(
-            act(dot_key(99), Gesture::Primary, Some(&m)),
-            PieceAction::None
+            act(key(), Gesture::Primary, None),
+            PieceAction::Sheet(SheetKind::Workspaces)
         );
-        assert_eq!(
-            act(Key::named("workspaces"), Gesture::Primary, Some(&m)),
-            PieceAction::None
-        );
-        assert_eq!(act(dot_key(11), Gesture::Primary, None), PieceAction::None);
     }
 
     #[test]
-    fn the_labels_name_the_workspace_and_say_which_is_current() {
+    fn the_label_names_the_current_workspace() {
         let m = model();
         with(Some(&m), "DP-1", |cx| {
             assert_eq!(
-                Workspaces::label(dot_key(11), cx),
-                Some(copy::bar_workspace_name(&copy::workspace_number(1), false))
-            );
-            assert_eq!(
-                Workspaces::label(dot_key(12), cx),
+                Workspaces::label(key(), cx),
                 Some(copy::bar_workspace_name("web", true))
             );
-            assert_eq!(Workspaces::label(dot_key(31), cx), None);
+            assert_eq!(Workspaces::label(dot_key(11), cx), None);
+        });
+        with(None, "DP-1", |cx| {
+            assert_eq!(Workspaces::label(key(), cx), None);
         });
     }
 

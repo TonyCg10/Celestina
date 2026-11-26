@@ -39,11 +39,17 @@ pub enum Role {
     DangerBorder,
     /// Text on the danger card (the scheme's `danger_fill_ink`).
     DangerFillInk,
+    /// The soft accent wash behind the current row (the scheme's
+    /// `accent_soft`).
+    AccentSoft,
+    /// The one-px outline of the soft accent wash (the scheme's
+    /// `accent_soft_border`).
+    AccentSoftBorder,
 }
 
 impl Role {
     /// Every role, in declaration order.
-    pub const ALL: [Role; 20] = [
+    pub const ALL: [Role; 22] = [
         Role::Canvas,
         Role::Card,
         Role::TextHi,
@@ -64,6 +70,8 @@ impl Role {
         Role::DangerFill,
         Role::DangerBorder,
         Role::DangerFillInk,
+        Role::AccentSoft,
+        Role::AccentSoftBorder,
     ];
 }
 
@@ -149,6 +157,10 @@ pub struct Theme {
     pub danger_border: Color,
     /// Text on the danger card.
     pub danger_fill_ink: Color,
+    /// The soft accent wash behind the current row.
+    pub accent_soft: Color,
+    /// The outline of the soft accent wash.
+    pub accent_soft_border: Color,
     /// The dim a modal layer lays over the output.
     pub scrim: Color,
     /// Haze's grain alpha, drawn under the tint.
@@ -220,6 +232,8 @@ impl From<&Scheme> for Theme {
             danger_fill: color_of(scheme.danger_fill),
             danger_border: color_of(scheme.danger_border),
             danger_fill_ink: color_of(scheme.danger_fill_ink),
+            accent_soft: color_of(scheme.accent_soft),
+            accent_soft_border: color_of(scheme.accent_soft_border),
             scrim: color_of(scheme.scrim),
             grain_alpha: haze::GRAIN,
             radius_lg: radius::LG,
@@ -285,6 +299,8 @@ impl Theme {
             Role::DangerFill => self.danger_fill,
             Role::DangerBorder => self.danger_border,
             Role::DangerFillInk => self.danger_fill_ink,
+            Role::AccentSoft => self.accent_soft,
+            Role::AccentSoftBorder => self.accent_soft_border,
         }
     }
 
@@ -366,7 +382,7 @@ mod tests {
             let c = t.color(role);
             assert!((0.0..=1.0).contains(&c.3), "{role:?} alpha {}", c.3);
         }
-        assert_eq!(Role::ALL.len(), 20);
+        assert_eq!(Role::ALL.len(), 22);
     }
 
     #[test]
@@ -411,6 +427,8 @@ mod tests {
                 Role::DangerFill => DARK.danger_fill,
                 Role::DangerBorder => DARK.danger_border,
                 Role::DangerFillInk => DARK.danger_fill_ink,
+                Role::AccentSoft => DARK.accent_soft,
+                Role::AccentSoftBorder => DARK.accent_soft_border,
             };
             assert_eq!(
                 t.color(role),
@@ -459,5 +477,18 @@ mod tests {
         for f in [0.0, -1.0, f64::NAN, f64::INFINITY] {
             assert_eq!(base.scaled(f), base, "{f}");
         }
+    }
+
+    #[test]
+    fn the_accent_soft_roles_are_the_tokens() {
+        use celestina_tokens::DARK;
+        let t = Theme::dark();
+        let c = |r: celestina_tokens::Rgba| Color(r.r, r.g, r.b, r.a);
+        assert_eq!(t.color(Role::AccentSoft), c(DARK.accent_soft));
+        assert_eq!(t.color(Role::AccentSoftBorder), c(DARK.accent_soft_border));
+        assert_eq!(t.accent_soft, t.color(Role::AccentSoft));
+        assert_eq!(t.accent_soft_border, t.color(Role::AccentSoftBorder));
+        assert!(Role::ALL.contains(&Role::AccentSoft));
+        assert!(Role::ALL.contains(&Role::AccentSoftBorder));
     }
 }

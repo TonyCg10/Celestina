@@ -1125,8 +1125,9 @@ pub const OVERVIEW_TAB_SHORTCUTS: &str = "Atajos";
 /// ("There are no workspaces to show").
 pub const OVERVIEW_EMPTY: &str = "No hay espacios de trabajo que mostrar";
 
-/// Shown inside a workspace that holds no window ("Empty").
-pub const OVERVIEW_WORKSPACE_EMPTY: &str = "Vacío";
+/// Shown inside a workspace that holds no window ("Empty"): the overview's
+/// strip and the workspaces sheet's row.
+pub const WORKSPACE_EMPTY: &str = "Vacío";
 
 /// The title of a window that has none ("Untitled").
 pub const OVERVIEW_WINDOW_UNTITLED: &str = "Sin título";
@@ -1221,9 +1222,23 @@ pub const SESSION_ASK_LOG_OUT: &str = "¿Cerrar la sesión? Se cerrarán todas l
 pub const SESSION_ASK_REBOOT: &str = "¿Reiniciar el equipo ahora?";
 pub const SESSION_ASK_POWER_OFF: &str = "¿Apagar el equipo ahora?";
 
+/// What the workspaces sheet's row says when `n` windows did not fit its
+/// icons ("+3").
+#[must_use]
+pub fn more_windows(n: usize) -> String {
+    format!("+{n}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vacio_is_the_empty_workspaces_copy() {
+        assert_eq!(WORKSPACE_EMPTY, "Vacío");
+        assert_eq!(more_windows(3), "+3");
+        assert_eq!(more_windows(12), "+12");
+    }
 
     #[test]
     fn the_session_menu_copy_is_pinned() {

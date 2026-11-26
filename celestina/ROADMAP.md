@@ -16,8 +16,11 @@ each tried live by the author the day it lands. **Plan:**
 whose ledger is the source of each entry's status and exit. **Design:**
 [the standing-tracks design](../docs/superpowers/specs/2026-11-24-celestina-standing-tracks-design.md).
 
-**In progress:** `CEL-D-002` to `CEL-D-005`, the capsule sheets: a bar capsule
-grows into the menu of the piece pressed, starting with the volume menu
+**In progress:** the capsule sheets series, `CEL-D-002` to `CEL-D-005`, has
+its last unit, `CEL-D-005`, ready to land: a bar capsule grows into the menu of the piece pressed (volume,
+brightness, session, workspaces), and the centre capsule shows the time, the
+date and the weather. Landed as 1.20.0, 1.21.0 and 1.22.0; `CEL-D-005`
+lands next
 ([design](../docs/superpowers/specs/2026-11-25-celestina-capsule-sheets-design.md),
 [plan](../docs/superpowers/plans/2026-11-25-celestina-capsule-sheets-plan.md)).
 

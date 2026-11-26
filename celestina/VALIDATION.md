@@ -1607,3 +1607,28 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-004](docs/evidence/2026-11-25-cel-d-004-centre-capsule.md)
+
+## VAL-CEL-D-005 — The workspaces list
+
+- **Status:** pending
+- **Related implementation:** CEL-D-005 (a press on the workspaces piece
+  opens a list sheet with one row per workspace of the output, its windows'
+  icons and the current one marked; a click focuses a workspace and closes
+  the list; the wheel over the piece steps workspaces, open or not;
+  [design](../docs/superpowers/specs/2026-11-25-celestina-capsule-sheets-design.md),
+  [plan](../docs/superpowers/plans/2026-11-25-celestina-capsule-sheets-plan.md))
+- **Requires:** the deployed shell after the landing of CEL-D-005, the
+  `workspaces` piece in the bar, and windows on at least two workspaces
+- **Procedure:** press the workspaces piece at the start of the bar. Read the
+  list against the workspaces and windows of that output. Click another row.
+  Open the list again and turn the wheel over the piece; close it and turn
+  the wheel once more
+- **Pass condition:** the list matches the output's workspaces and windows
+  (one row each, the icons of its windows, the empty-workspace label on an
+  empty one, the current row in the soft accent with its border); a click
+  on a row focuses that workspace and closes the list; the wheel moves the active
+  workspace one step per notch, clamped at the first and last, with the list
+  open or closed, and never closes the list
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-005](docs/evidence/2026-11-25-cel-d-005-workspaces-list.md)

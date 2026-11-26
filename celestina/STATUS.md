@@ -68,9 +68,13 @@
   2026-11-24 ([evidence](docs/evidence/2026-11-23-cutover.md), "The author's
   switch-over"); both default flips above have landed, and what is left is
   the rows the author has not run. The shell is at 1.15.4.
-- **In progress:** `CEL-D-002` to `CEL-D-005`, entries of the standing
-  [CEL-TRACKS](docs/plans/active/2026-11-25-cel-tracks.md) plan: the capsule
-  sheets, where a bar capsule grows into the menu of the piece pressed
+- **In progress:** the capsule sheets series, `CEL-D-002` to `CEL-D-005`,
+  entries of the standing
+  [CEL-TRACKS](docs/plans/active/2026-11-25-cel-tracks.md) plan, has its last
+  unit, `CEL-D-005`, ready to land: a
+  bar capsule grows into the menu of the piece pressed (volume, brightness,
+  session, workspaces), and the centre capsule shows the time, the date and
+  the weather. Landed as 1.20.0, 1.21.0 and 1.22.0; `CEL-D-005` lands next
   ([design](../docs/superpowers/specs/2026-11-25-celestina-capsule-sheets-design.md),
   [plan](../docs/superpowers/plans/2026-11-25-celestina-capsule-sheets-plan.md)).
 - **Author validation:** the author ran most rows live on 1.13.0 to 1.13.5

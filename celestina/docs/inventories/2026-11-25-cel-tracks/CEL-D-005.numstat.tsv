@@ -1,0 +1,63 @@
+# CEL-D-005 exact change inventory
+
+Base revision	c75371c8c7156bb4463da6ef118c794e800efac7
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/ROADMAP.md
+Pathspec	celestina/STATUS.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-paint/src/theme.rs
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list.md
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/01-piece-at-rest.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/02-piece-hover-pill.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/03-list-open.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/04-list-row-hover.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/05-after-row-click.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/06-wheel-closed.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/07-wheel-open.jpg
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-005.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/sheets.rs
+Pathspec	celestina/src/island/view.rs
+Pathspec	celestina/src/island/workspaces.rs
+Pathspec	celestina/src/overview/view.rs
+Pathspec	celestina/src/pieces/mod.rs
+Pathspec	celestina/src/pieces/workspaces.rs
+Pathspec	celestina/src/sheet/body.rs
+Pathspec	celestina/src/sheet/mod.rs
+Pathspec	celestina/src/sheet/workspaces.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	d27c42f4f1b2339cf65ae54daaf5de22298a24c54b09786af01d1245923d9298	celestina/Cargo.lock
+1	1	eaf7ebc154f88d139d6a042a5fcb7db50657294409df7fe7cd42281ca977dbb1	celestina/Cargo.toml
+5	2	4980cb5b0ce83509fdb2dc093e2acafb42c26af4aaf3c54f020e1b18d1053956	celestina/ROADMAP.md
+7	3	a3cd24a518f135ab2976c687714214e5eefc0af922b83c2649980732a0358da2	celestina/STATUS.md
+25	0	afe5a1a2afb836159db68b74849306471c9cd461fbbe6901412a090fc14ff5e2	celestina/VALIDATION.md
+33	2	bbb5dba199f033dd46d1edbc584f62cc2b39668b3f46eecec9977762465a78bb	celestina/crates/celestina-paint/src/theme.rs
+74	0	338a242cc19ba3b6c99c2fbe8f9766142887e5a1b1de84269665719c6a7ed4c7	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list.md
+-	-	1fbe40cc341b5896672a0ce8a02d942c344e947b249d9632a0089bccd32e6286	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/01-piece-at-rest.jpg
+-	-	a52bbda467072618419fdc7db2fc7bea8835f8b25305acd406d52b59ce163a4f	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/02-piece-hover-pill.jpg
+-	-	f0f2eb14214825926c6477ba76a67e4950dcbfaf6a4a08ce69dee79bdeefb763	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/03-list-open.jpg
+-	-	e84099aeccee3b2a7d694d7aefda86ad52157238b7cdd9f453dd7841a7986f0f	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/04-list-row-hover.jpg
+-	-	7d8b09f3ab3ac52e14ad57ea15c306771501343bc58b8ab955591910b46f591f	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/05-after-row-click.jpg
+-	-	5af2dfc0c9cb5c11a4cc05b98a2bac86b5eb8c8d3e1574fe9af2094e6d73ee96	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/06-wheel-closed.jpg
+-	-	7f77d30b3bd2b725993b416292e0554394acd6f474c7f7f4566a8c6309f981e2	celestina/docs/evidence/2026-11-25-cel-d-005-workspaces-list/07-wheel-open.jpg
+63	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-005.numstat.tsv
+1	1	9f3827f6e9c076c213d523302d3929c032be416707cf5ce96a316a55efe7bf27	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+17	2	8abbdf3ed8750a318a3da53bd127daa6bc455f3b58638544aafb0f35b6cc03c7	celestina/src/copy.rs
+281	14	ab7d64f1f719243a4b3bfb3f24e3287bd9a155ef21732fb692ae36e93d1a4998	celestina/src/island/mod.rs
+60	4	a55c4d56ba2af44837fb2a0cc6973e496c60e6105df2fdf793259bacf794848a	celestina/src/island/sheets.rs
+2	0	4dc6086c1e333da281b059f1c5557d71db53b76608d774155c92d165e3172769	celestina/src/island/view.rs
+7	0	b278c3622021c703e146bb2542d87a025f608bf6213aeeae9d7780135f289a56	celestina/src/island/workspaces.rs
+1	1	002a452c6242f10e9d2133412e2d6c9262446afef4f132130df21bb83b7eeac1	celestina/src/overview/view.rs
+3	2	76960e2508f02916b6470874b3bfcb401ee37f4f58ab56fc437b6fad60c7d0b1	celestina/src/pieces/mod.rs
+156	43	b53442e2376e831fbb43d59f95500ef152043e51cbf1dffb2bc560de0d822e87	celestina/src/pieces/workspaces.rs
+119	8	488527bb1befc2303933aac16dec3bb7555cdbb373e75261f15b5e9b632a42a0	celestina/src/sheet/body.rs
+10	1	b8d420aa5d4a1527f6f52609bb7b4fe8be04aa655940a8e77b7221bbc56cc5a6	celestina/src/sheet/mod.rs
+410	0	fdfff8393653aed36c9a24cd91c75099344535e027500461815a4504c51bb98f	celestina/src/sheet/workspaces.rs
+1	0	00f1da30c66548deebc5b5909572c86a58ff1e276bad406991b90e5c7d5b92b8	docs/version-history.tsv

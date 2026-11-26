@@ -11,6 +11,11 @@ pub struct Row {
     pub id: u64,
     /// The workspace's name, or its numbered label.
     pub text: String,
+    /// niri's 1-based index of the workspace on its output.
+    pub idx: u8,
+    /// Whether the workspace has a name of its own (`text` is then the name,
+    /// not the numbered label).
+    pub named: bool,
     /// The workspace shown on the output.
     pub active: bool,
     /// How many columns of the scrolling layout hold its tiled windows.
@@ -30,6 +35,8 @@ pub fn rows_for(model: &NiriModel, output: &str) -> Vec<Row> {
                 .name
                 .clone()
                 .unwrap_or_else(|| copy::workspace_number(w.idx)),
+            idx: w.idx,
+            named: w.name.is_some(),
             active: w.is_active,
             columns: w.columns,
         })

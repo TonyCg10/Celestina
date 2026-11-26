@@ -48,8 +48,8 @@ use crate::{
     media::{cover::Cover, MediaCommand, PlayerView},
     osd::popup as level_popup,
     pieces::{
-        self, AudioAction, AudioLevels, BarCx, BrightnessAction, Gesture, Levels, PageId,
-        PieceAction, SheetKind,
+        self, workspaces as workspaces_piece, AudioAction, AudioLevels, Axis, BarCx,
+        BrightnessAction, Gesture, Levels, PageId, PieceAction, SheetKind,
     },
     providers::{
         magnetita::MediaKind, niri::NiriModel, notifications::NotificationsCommand,
@@ -242,6 +242,10 @@ fn argb_of(cover: &Cover) -> Option<Vec<u8>> {
     )
 }
 
+/// How long after a wheel notch over the workspaces piece the next one steps
+/// from the workspace that notch asked for (the slider wheel's burst).
+const WORKSPACE_WHEEL_BURST: std::time::Duration = std::time::Duration::from_millis(1500);
+
 /// The wheel's pixels not yet worth a step, per axis, for the row they
 /// were spent on.
 #[derive(Debug, Default)]
@@ -344,6 +348,10 @@ pub struct Island {
     tray_menu_on_bar: bool,
     /// The last tray menu asked for was a bar icon's.
     bar_menu_asked: bool,
+    /// The workspace the wheel over the workspaces piece last asked for and
+    /// when: a notch within [`WORKSPACE_WHEEL_BURST`] steps from it, not from
+    /// the model's active workspace, which may not have caught up.
+    workspace_wheel: Option<(u64, Instant)>,
     /// The system monitor's reading as the bar shows it: refreshed at most
     /// once per [`SYSMON_BAR_PERIOD`].
     bar_sysmon: Cadence<SysReading>,
@@ -415,6 +423,7 @@ impl Island {
             media: MediaState::default(),
             covers: HashMap::new(),
             scroll: ScrollRemainder::default(),
+            workspace_wheel: None,
             bar: None,
             sheets: Sheets::default(),
             levels: Levels::default(),
@@ -808,7 +817,8 @@ impl Island {
             }
         }
         if seen {
-            self.stale |= self.page_shown().is_some();
+            self.stale |=
+                self.page_shown().is_some() || self.sheets.kind() == Some(SheetKind::Workspaces);
             self.invalidate_bar();
         }
         if self.menu.is_some() && self.page_shown().is_none() {
@@ -997,6 +1007,7 @@ impl Island {
             self.page.set_reduced_motion(self.reduced);
         }
         self.apply_page_sheet(now);
+        self.apply_workspaces_sheet(now);
         if let Some(key) = self.pending_focus.take() {
             if self.shows_clipboard_page() {
                 if let Some((tree, input)) = self.shown_page_input() {
@@ -1426,6 +1437,12 @@ impl Island {
         for (key, gesture, action) in input.asked {
             let scroll = matches!(gesture, Gesture::Scroll(..));
             let request = matches!(action, PieceAction::OpenPage(_) | PieceAction::Sheet(_));
+            let action = match gesture {
+                Gesture::Scroll(Axis::Vertical, steps) if key == workspaces_piece::key() => {
+                    self.workspace_wheel_action(steps, now)
+                }
+                _ => action,
+            };
             match action {
                 PieceAction::None => {}
                 PieceAction::OpenPage(page) => {
@@ -1464,6 +1481,29 @@ impl Island {
             }
         }
         out
+    }
+
+    /// What `steps` wheel notches over the workspaces piece ask for: the
+    /// workspace that far from the last target of this burst, else from the
+    /// active one. A notch that would not move asks for nothing.
+    fn workspace_wheel_action(&mut self, steps: i32, now: Instant) -> PieceAction {
+        let Some(model) = self.model.as_ref() else {
+            return PieceAction::None;
+        };
+        let rows = rows_for(model, &self.output);
+        let pending = self
+            .workspace_wheel
+            .filter(|&(_, at)| now.duration_since(at) < WORKSPACE_WHEEL_BURST)
+            .map(|(id, _)| id)
+            // The model caught up: it is the truth again.
+            .filter(|&id| !rows.iter().any(|r| r.id == id && r.active));
+        match workspaces_piece::step_from(&rows, pending, steps) {
+            Some(id) => {
+                self.workspace_wheel = Some((id, now));
+                PieceAction::FocusWorkspace(id)
+            }
+            None => PieceAction::None,
+        }
     }
 
     /// Opens the overflow `menu` of `size` below the overflow button at
@@ -2384,10 +2424,26 @@ mod tests {
     fn the_bars_pieces_act_at_rest() {
         let (mut island, t0) = bar_island(1920.0);
         let id = island.tray_rows[0].id.clone();
-        // A dot focuses its workspace.
+        // The workspaces piece opens its sheet, and the wheel over it steps
+        // to the next workspace (the second is active).
         let dot = centre(bar_rect(&island, Key::indexed("dot", 3)));
+        assert!(click_at(&mut island, dot, BTN_LEFT, t0).is_empty());
+        step(&mut island, t0);
         assert_eq!(
-            click_at(&mut island, dot, BTN_LEFT, t0),
+            island.sheets.kind(),
+            Some(crate::pieces::SheetKind::Workspaces)
+        );
+        island.close_sheet(t0);
+        step(&mut island, t0 + ms(400));
+        let t0 = t0 + ms(400);
+        let wheel_down = InputEvent::Axis {
+            x: dot.0,
+            y: dot.1,
+            horizontal: 0.0,
+            vertical: 15.0,
+        };
+        assert_eq!(
+            feed(&mut island, wheel_down, t0),
             [IslandAction::FocusWorkspace(3)]
         );
         // The tray icon: activate, secondary activate, the menu below the
@@ -2558,6 +2614,217 @@ mod tests {
         assert!(!island.sheets.is_open());
     }
 
+    /// The workspaces sheet open on the bar's piece and settled.
+    fn workspaces_sheet() -> (Island, Instant) {
+        let (mut island, t0) = bar_island(1920.0);
+        let at = centre(bar_rect(&island, Key::named("workspaces")));
+        assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
+        step(&mut island, t0);
+        let t = t0 + ms(400);
+        step(&mut island, t);
+        (island, t)
+    }
+
+    /// The centre of the workspaces row of `id`, in surface coordinates.
+    fn ws_row_at(island: &Island, id: u64, now: Instant) -> (f32, f32) {
+        let sheet = shown_rect(island, now);
+        let Some(r) = island
+            .sheets
+            .body_node_rect(crate::sheet::workspaces::row_key(id))
+        else {
+            panic!("no workspaces row {id}");
+        };
+        (
+            sheet.x + r.x + r.w / 2.0,
+            sheet.y + geometry::ROW_H + r.y + r.h / 2.0,
+        )
+    }
+
+    #[test]
+    fn the_workspaces_sheet_is_wider_than_the_start_capsule_so_it_grows() {
+        let (island, t) = workspaces_sheet();
+        assert_eq!(
+            island.sheets.kind(),
+            Some(crate::pieces::SheetKind::Workspaces)
+        );
+        assert_eq!(island.sheets.piece(), Some(Key::named("workspaces")));
+        assert!(!island.state.is_open(), "no page opened");
+        let start = start_zone(&island);
+        let sheet = shown_rect(&island, t);
+        assert_eq!(sheet.w, crate::sheet::workspaces::LIST_W);
+        assert!(start.w < sheet.w, "premise: the capsule is narrower");
+        assert!(sheet.w > start.w, "it grows past the capsule");
+        assert_eq!(
+            island.sheets.body_size(),
+            Some(crate::sheet::workspaces::list_size(3))
+        );
+    }
+
+    #[test]
+    fn a_polkit_prompt_holding_the_keyboard_refuses_the_workspaces_sheet() {
+        let (mut island, t0) = bar_island(1920.0);
+        island.set_keyboard_claimed(true);
+        let at = centre(bar_rect(&island, Key::named("workspaces")));
+        assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
+        step(&mut island, t0);
+        assert!(!island.sheets.is_open() && !island.sheets.has_queued());
+    }
+
+    #[test]
+    fn a_row_click_focuses_its_workspace_and_closes_the_sheet() {
+        let (mut island, t) = workspaces_sheet();
+        let at = ws_row_at(&island, 3, t);
+        assert_eq!(
+            click_at(&mut island, at, BTN_LEFT, t),
+            [IslandAction::FocusWorkspace(3)]
+        );
+        assert!(!island.sheets.is_open(), "the sheet is closing");
+        assert!(!island.sheets.has_queued());
+    }
+
+    #[test]
+    fn the_wheel_steps_with_the_sheet_open_and_keeps_it_open() {
+        let (mut island, t) = workspaces_sheet();
+        // The second workspace is active: down is the third, up the first.
+        let piece = centre(bar_rect(&island, Key::named("workspaces")));
+        let wheel = |vertical: f32| InputEvent::Axis {
+            x: piece.0,
+            y: piece.1,
+            horizontal: 0.0,
+            vertical,
+        };
+        feed(
+            &mut island,
+            InputEvent::PointerMotion {
+                x: piece.0,
+                y: piece.1,
+            },
+            t,
+        );
+        assert_eq!(
+            feed(&mut island, wheel(15.0), t),
+            [IslandAction::FocusWorkspace(3)]
+        );
+        assert!(island.sheets.is_open());
+        // The model has not caught up: up from the target (3) is 2.
+        assert_eq!(
+            feed(&mut island, wheel(-15.0), t),
+            [IslandAction::FocusWorkspace(2)]
+        );
+        assert!(island.sheets.is_open());
+        assert_eq!(
+            island.sheets.kind(),
+            Some(crate::pieces::SheetKind::Workspaces)
+        );
+    }
+
+    #[test]
+    fn fast_wheel_notches_step_from_the_last_target_not_the_stale_model() {
+        let (mut island, t0) = wide_start_island();
+        let piece = centre(bar_rect(&island, Key::named("workspaces")));
+        feed(
+            &mut island,
+            InputEvent::PointerMotion {
+                x: piece.0,
+                y: piece.1,
+            },
+            t0,
+        );
+        let notch = |island: &mut Island, at: Instant| {
+            feed(
+                island,
+                InputEvent::Axis {
+                    x: piece.0,
+                    y: piece.1,
+                    horizontal: 0.0,
+                    vertical: 15.0,
+                },
+                at,
+            )
+        };
+        // Workspace 2 is active and the model never catches up.
+        for (i, want) in [3, 4, 5].into_iter().enumerate() {
+            assert_eq!(
+                notch(&mut island, t0 + ms(50 * i as u64)),
+                [IslandAction::FocusWorkspace(want)]
+            );
+        }
+        // The burst over, a notch counts from the model again.
+        assert_eq!(
+            notch(&mut island, t0 + ms(5000)),
+            [IslandAction::FocusWorkspace(3)]
+        );
+    }
+
+    #[test]
+    fn a_queued_workspaces_sheet_opens_with_the_list_of_that_moment() {
+        let (mut island, t0) = bar_island(1920.0);
+        island.set_reduced_motion(true);
+        island.open(PageId::ACTIVITY, t0);
+        let at = centre(bar_rect(&island, Key::named("workspaces")));
+        assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
+        assert!(island.sheets.has_queued());
+        let mut more = model("DP-1", 3);
+        more.workspaces.push(celestina_shell_workspace(4));
+        island.rows = rows_for(&more, "DP-1");
+        island.model = Some(more);
+        island.stale = true;
+        island.invalidate_bar();
+        let t1 = t0 + ms(50);
+        step(&mut island, t1);
+        let t2 = t0 + ms(600);
+        step(&mut island, t2);
+        step(&mut island, t2 + ms(16));
+        assert_eq!(
+            island.sheets.kind(),
+            Some(crate::pieces::SheetKind::Workspaces)
+        );
+        assert_eq!(
+            island.sheets.body_size(),
+            Some(crate::sheet::workspaces::list_size(4))
+        );
+        assert!(island
+            .sheets
+            .body_node_rect(crate::sheet::workspaces::row_key(4))
+            .is_some());
+    }
+
+    #[test]
+    fn a_model_change_rebuilds_the_open_list() {
+        let (mut island, t) = workspaces_sheet();
+        let before = island.sheets.body_size();
+        let mut more = model("DP-1", 2);
+        more.workspaces.push(celestina_shell_workspace(4));
+        island.rows = rows_for(&more, "DP-1");
+        island.model = Some(more);
+        island.stale = true;
+        island.invalidate_bar();
+        step(&mut island, t);
+        let after = island.sheets.body_size();
+        assert_eq!(after, Some(crate::sheet::workspaces::list_size(4)));
+        assert_ne!(before, after);
+        assert!(island
+            .sheets
+            .body_node_rect(crate::sheet::workspaces::row_key(4))
+            .is_some());
+        assert!(island.sheets.is_open());
+        // The height follows on the resize motion.
+        let settle = t + ms(400);
+        step(&mut island, settle);
+        assert!(
+            (shown_rect(&island, settle).h
+                - geometry::target(
+                    zone(island.bar.as_ref().and_then(|b| b.zone_rect(0))),
+                    bar_rect(&island, Key::named("workspaces")),
+                    after.unwrap_or_default(),
+                    island.size
+                )
+                .h)
+                .abs()
+                < 0.5
+        );
+    }
+
     /// The session sheet open and settled, with its first look done.
     fn session_sheet() -> (Island, Instant) {
         let (mut island, t0) = bar_island(1920.0);
@@ -2700,12 +2967,11 @@ mod tests {
         };
         assert_eq!(feed(&mut island, wheel, t1).len(), 1);
         assert!(island.sheets.is_open());
-        // A dot focuses its workspace and closes the sheet, as a click
-        // outside it does.
-        let dot = centre(bar_rect(&island, Key::indexed("dot", 1)));
+        // A tray icon acts and closes the sheet, as a click outside it does.
+        let id = island.tray_rows[0].id.clone();
         assert_eq!(
-            click_at(&mut island, dot, BTN_LEFT, t1),
-            [IslandAction::FocusWorkspace(1)]
+            click_at(&mut island, icon, BTN_LEFT, t1),
+            [IslandAction::Tray(TrayCommand::Activate(id))]
         );
         assert!(!island.sheets.is_open());
         // A right click on the icon asks for its menu and closes the page.
@@ -4946,7 +5212,8 @@ mod tests {
         assert!(!sheet.contains(far.0, far.1));
         assert!(click_at(&mut island, far, BTN_LEFT, settle).is_empty());
         assert!(!island.sheets.is_open());
-        // A piece in the window acts, and the sheet closes.
+        // A piece in the window acts: the workspaces piece switches the
+        // sheet to its own list.
         let (mut island, t0) = wide_start_island();
         assert!(open_on(&mut island, bell, t0));
         let settle = t0 + ms(400);
@@ -4954,11 +5221,11 @@ mod tests {
         let sheet = shown_rect(&island, settle);
         let near = centre(bar_rect(&island, Key::indexed("dot", 30)));
         assert!(sheet.contains(near.0, near.1));
+        assert!(click_at(&mut island, near, BTN_LEFT, settle).is_empty());
         assert_eq!(
-            click_at(&mut island, near, BTN_LEFT, settle),
-            [IslandAction::FocusWorkspace(30)]
+            island.sheets.kind(),
+            Some(crate::pieces::SheetKind::Workspaces)
         );
-        assert!(!island.sheets.is_open());
     }
 
     #[test]

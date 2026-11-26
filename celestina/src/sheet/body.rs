@@ -8,7 +8,7 @@ use celestina_paint::{Painter, Rect, Role, Theme, Weight};
 use celestina_ui::{fit_middle, Interaction, Key, Tree, UiEvent, View};
 use celestina_wayland::InputEvent;
 
-use super::Measure;
+use super::{workspaces, Measure};
 use crate::{
     island::view::{sheet_more_key, text_style},
     osd::popup::{LevelCore, Outcome},
@@ -121,6 +121,92 @@ impl PageBody {
     }
 }
 
+/// The workspaces list shown as a capsule sheet (CEL-D-005): the list's tree
+/// and its pointer and keyboard state. A row chosen is a workspace to focus.
+pub struct WorkspacesBody {
+    theme: Theme,
+    size: (f32, f32),
+    /// The workspaces the rows show, by id.
+    ids: Vec<u64>,
+    tree: Tree,
+    input: Interaction,
+}
+
+impl std::fmt::Debug for WorkspacesBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorkspacesBody")
+            .field("size", &self.size)
+            .field("ids", &self.ids)
+            .finish_non_exhaustive()
+    }
+}
+
+impl WorkspacesBody {
+    /// The body showing `view`, one row for each of `ids`.
+    #[must_use]
+    pub fn new(theme: &Theme, reduced: bool, view: View, ids: Vec<u64>, now: Instant) -> Self {
+        let mut tree = Tree::new(reduced, theme);
+        tree.apply(view, now);
+        WorkspacesBody {
+            theme: theme.clone(),
+            size: workspaces::list_size(ids.len()),
+            ids,
+            tree,
+            input: Interaction::new(),
+        }
+    }
+
+    /// Shows `view` again, one row for each of `ids`: what the pointer and
+    /// keyboard held stays, the sheet follows the new height.
+    pub fn apply(&mut self, view: View, ids: Vec<u64>, now: Instant) {
+        self.size = workspaces::list_size(ids.len());
+        self.ids = ids;
+        self.tree.apply(view, now);
+    }
+
+    /// The workspace of the row `key`, when it is one.
+    fn workspace_of(&self, key: Key) -> Option<u64> {
+        self.ids
+            .iter()
+            .copied()
+            .find(|&id| workspaces::row_key(id) == key)
+    }
+
+    fn set_theme(&mut self, theme: &Theme) -> bool {
+        if *theme == self.theme {
+            return false;
+        }
+        self.theme = theme.clone();
+        self.tree.set_theme(theme);
+        true
+    }
+
+    fn input(&mut self, ev: &InputEvent, now: Instant) -> BodyOutcome {
+        let before = self.tree.highlight();
+        let events = match ev {
+            InputEvent::Key { .. } | InputEvent::FocusLost => self.input.key(&mut self.tree, ev),
+            InputEvent::PopupClosed { .. } | InputEvent::FocusEnter { .. } => Vec::new(),
+            _ => self.input.pointer(&mut self.tree, ev, now),
+        };
+        let changed = !events.is_empty() || self.tree.highlight() != before;
+        for event in events {
+            match event {
+                UiEvent::Escape => return BodyOutcome::Close,
+                UiEvent::Click(key) | UiEvent::Activate(key) => {
+                    if let Some(id) = self.workspace_of(key) {
+                        return BodyOutcome::FocusWorkspace(id);
+                    }
+                }
+                UiEvent::HoverChanged(..)
+                | UiEvent::Scroll(..)
+                | UiEvent::FieldChanged(_)
+                | UiEvent::SliderChanged(..) => {}
+            }
+        }
+        BodyOutcome::Keep { changed }
+    }
+}
+
 /// A sheet's body.
 #[derive(Debug)]
 pub enum SheetBody {
@@ -130,6 +216,8 @@ pub enum SheetBody {
     Session(Box<SessionCore>),
     /// An Island page: its content under a header with the overflow button.
     Page(Box<PageBody>),
+    /// The workspaces list: one row per workspace of the output.
+    Workspaces(Box<WorkspacesBody>),
 }
 
 /// What a body asks of its sheet after an event.
@@ -144,6 +232,8 @@ pub enum BodyOutcome {
     /// A node of a page body was clicked or activated (`keyboard`): the
     /// Island reads it as the page does.
     Activate { key: Key, keyboard: bool },
+    /// A workspace row was chosen: the sheet closes and the Island posts it.
+    FocusWorkspace(u64),
     /// The overflow button was chosen: `rect` is the button's, in body
     /// coordinates until [`super::Sheets::input`] moves it to the surface's.
     More { rect: Rect, keyboard: bool },
@@ -163,6 +253,7 @@ impl SheetBody {
             SheetBody::Level(core) => core.size(),
             SheetBody::Session(core) => core.size(),
             SheetBody::Page(body) => body.size,
+            SheetBody::Workspaces(body) => body.size,
         }
     }
 
@@ -172,7 +263,7 @@ impl SheetBody {
     pub fn takes_wheel(&self, x: f32, y: f32, now: Instant) -> bool {
         match self {
             SheetBody::Level(core) => core.slider_at(x, y, now).is_some(),
-            SheetBody::Session(_) | SheetBody::Page(_) => false,
+            SheetBody::Session(_) | SheetBody::Page(_) | SheetBody::Workspaces(_) => false,
         }
     }
 
@@ -182,7 +273,7 @@ impl SheetBody {
     pub fn held(&self) -> bool {
         match self {
             SheetBody::Level(core) => core.held(),
-            SheetBody::Session(_) | SheetBody::Page(_) => false,
+            SheetBody::Session(_) | SheetBody::Page(_) | SheetBody::Workspaces(_) => false,
         }
     }
 
@@ -193,7 +284,7 @@ impl SheetBody {
             SheetBody::Level(core) => {
                 core.flush(now, true);
             }
-            SheetBody::Session(_) | SheetBody::Page(_) => {}
+            SheetBody::Session(_) | SheetBody::Page(_) | SheetBody::Workspaces(_) => {}
         }
     }
 
@@ -209,6 +300,13 @@ impl SheetBody {
                     tracing::warn!(page = ?body.page, %fault, "page sheet: layout fault");
                 }
             }
+            SheetBody::Workspaces(body) => {
+                let size = body.size;
+                lay(&mut body.tree, size);
+                if let Some(fault) = body.tree.take_fault() {
+                    tracing::warn!(%fault, "workspaces sheet: layout fault");
+                }
+            }
         }
     }
 
@@ -218,6 +316,7 @@ impl SheetBody {
             SheetBody::Level(core) => core.paint(painter, now),
             SheetBody::Session(core) => core.paint(painter, now),
             SheetBody::Page(body) => body.tree.paint(painter, now),
+            SheetBody::Workspaces(body) => body.tree.paint(painter, now),
         }
     }
 
@@ -228,6 +327,7 @@ impl SheetBody {
             SheetBody::Level(core) => core.is_animating(now),
             SheetBody::Session(core) => core.is_animating(now),
             SheetBody::Page(body) => body.tree.is_animating(now),
+            SheetBody::Workspaces(body) => body.tree.is_animating(now),
         }
     }
 
@@ -240,7 +340,7 @@ impl SheetBody {
                 .into_iter()
                 .flatten()
                 .min(),
-            SheetBody::Session(_) | SheetBody::Page(_) => None,
+            SheetBody::Session(_) | SheetBody::Page(_) | SheetBody::Workspaces(_) => None,
         }
     }
 
@@ -252,6 +352,7 @@ impl SheetBody {
             SheetBody::Level(core) => core.node_rect(key),
             SheetBody::Session(core) => core.node_rect(key),
             SheetBody::Page(body) => body.tree.node_by_key(key).map(|id| body.tree.rect(id)),
+            SheetBody::Workspaces(body) => body.tree.node_by_key(key).map(|id| body.tree.rect(id)),
         }
     }
 
@@ -262,7 +363,7 @@ impl SheetBody {
         match self {
             SheetBody::Level(_) => false,
             SheetBody::Session(core) => core.asking(),
-            SheetBody::Page(_) => false,
+            SheetBody::Page(_) | SheetBody::Workspaces(_) => false,
         }
     }
 
@@ -271,7 +372,7 @@ impl SheetBody {
     pub fn page(&self) -> Option<PageId> {
         match self {
             SheetBody::Page(body) => Some(body.page),
-            SheetBody::Level(_) | SheetBody::Session(_) => None,
+            SheetBody::Level(_) | SheetBody::Session(_) | SheetBody::Workspaces(_) => None,
         }
     }
 
@@ -279,7 +380,15 @@ impl SheetBody {
     pub fn page_body_mut(&mut self) -> Option<&mut PageBody> {
         match self {
             SheetBody::Page(body) => Some(body),
-            SheetBody::Level(_) | SheetBody::Session(_) => None,
+            SheetBody::Level(_) | SheetBody::Session(_) | SheetBody::Workspaces(_) => None,
+        }
+    }
+
+    /// The workspaces body, when it is one.
+    pub fn workspaces_body_mut(&mut self) -> Option<&mut WorkspacesBody> {
+        match self {
+            SheetBody::Workspaces(body) => Some(body),
+            SheetBody::Level(_) | SheetBody::Session(_) | SheetBody::Page(_) => None,
         }
     }
 
@@ -317,6 +426,7 @@ impl SheetBody {
                 }
             }
             SheetBody::Page(body) => body.input(ev, now),
+            SheetBody::Workspaces(body) => body.input(ev, now),
         }
     }
 
@@ -341,6 +451,7 @@ impl SheetBody {
                 core.set_theme(theme, now, &mut fit)
             }
             SheetBody::Page(body) => body.set_theme(theme),
+            SheetBody::Workspaces(body) => body.set_theme(theme),
         }
     }
 }

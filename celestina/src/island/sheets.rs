@@ -10,14 +10,15 @@ use celestina_paint::{Painter, Rect};
 use celestina_ui::Key;
 use celestina_wayland::{InputEvent, KeyboardInteractivity, SurfaceCtl};
 
-use super::{Island, IslandAction, Measure};
+use super::{workspaces::rows_for, Island, IslandAction, Measure};
 use crate::{
     osd::popup::{Kind, LevelCore},
     pieces::{PageId, SheetKind},
     session_menu::SessionCore,
     sheet::{
         geometry::{self, Hit},
-        Anchor, BodyOutcome, Next, Request, SheetBody,
+        workspaces::workspaces_view,
+        Anchor, BodyOutcome, Next, Request, SheetBody, WorkspacesBody,
     },
 };
 
@@ -248,6 +249,10 @@ impl Island {
                 }
                 return None;
             }
+            SheetKind::Workspaces => {
+                self.open_workspaces_sheet(key, now);
+                return None;
+            }
             SheetKind::Session => {
                 let core = SessionCore::new(&self.theme, self.reduced, now);
                 self.open_sheet_at(
@@ -260,6 +265,51 @@ impl Island {
             }
         };
         Some(IslandAction::OpenLevelSheet { kind, piece: key })
+    }
+
+    /// The workspaces list and its body ids, from the model: one row per
+    /// workspace of this output. `None` while there is none.
+    fn workspaces_list(&self) -> Option<(celestina_ui::View, Vec<u64>)> {
+        let model = self.model.as_ref()?;
+        let rows = rows_for(model, &self.output);
+        if rows.is_empty() {
+            return None;
+        }
+        let view = workspaces_view(&self.theme, &rows, &model.windows);
+        Some((view, rows.iter().map(|r| r.id).collect()))
+    }
+
+    /// Opens the workspaces list as the sheet of `piece`, through the same
+    /// gates as any sheet. `false` when there is nothing to list or the bar
+    /// has no such piece.
+    fn open_workspaces_sheet(&mut self, piece: Key, now: Instant) -> bool {
+        let Some((view, ids)) = self.workspaces_list() else {
+            return false;
+        };
+        let body = WorkspacesBody::new(&self.theme, self.reduced, view, ids, now);
+        self.open_sheet_at(
+            piece,
+            SheetKind::Workspaces,
+            SheetBody::Workspaces(Box::new(body)),
+            now,
+        )
+    }
+
+    /// Builds the open workspaces list again (the model changed): the focus
+    /// and hover stay, the sheet follows a new height on its resize motion.
+    pub(super) fn apply_workspaces_sheet(&mut self, now: Instant) {
+        if self.sheets.workspaces_body_mut().is_none() {
+            return;
+        }
+        let Some((view, ids)) = self.workspaces_list() else {
+            // The output has no workspace left: nothing to list.
+            self.sheets.drop_queue();
+            self.close_sheet(now);
+            return;
+        };
+        if let Some(body) = self.sheets.workspaces_body_mut() {
+            body.apply(view, ids, now);
+        }
     }
 
     /// The frame's first part for the sheets: opens what was waiting for the
@@ -293,8 +343,9 @@ impl Island {
             tracing::debug!("island: a waiting sheet's piece is gone; not opened");
             return;
         };
-        // What the page read while the request waited was not watched.
-        if matches!(request.kind, SheetKind::Page(_)) {
+        // What the page read while the request waited was not watched, and a
+        // workspaces list built at the click may be out of date.
+        if matches!(request.kind, SheetKind::Page(_) | SheetKind::Workspaces) {
             self.stale = true;
         }
         self.sheets
@@ -482,6 +533,11 @@ impl Island {
                 self.sheets.drop_queue();
                 self.close_sheet(now);
                 vec![IslandAction::Session(action)]
+            }
+            BodyOutcome::FocusWorkspace(id) => {
+                self.sheets.drop_queue();
+                self.close_sheet(now);
+                vec![IslandAction::FocusWorkspace(id)]
             }
             BodyOutcome::Activate { key, keyboard: _ } => {
                 let Some(page) = self.sheets.page() else {
