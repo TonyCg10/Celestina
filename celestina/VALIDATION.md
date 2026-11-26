@@ -1740,3 +1740,30 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-009](docs/evidence/2026-11-26-cel-d-009-menu-windows.md)
+
+## VAL-CEL-I-011 — Tray icons resolve and tray menus open
+
+- **Status:** pending
+- **Related implementation:** CEL-I-011 (the tray's icons and menus: the
+  item's own icon directory, a fallback glyph, `ContextMenu` for an item
+  with no dbusmenu or a failed layout, `ItemIsMenu` on the left click, a menu
+  that fills late)
+- **Requires:** the deployed shell after the landing of CEL-I-011, with Steam,
+  Discord, nm-applet, blueman, solaar and shelly running, and none of them
+  listed in `bar.tray_hidden`
+- **Procedure:** (1) look at the six icons in the bar; none may be blank, and
+  an app whose icon the shell cannot find shows the grey window glyph.
+  (2) Right click each one. (3) Left click the ones that are only a menu
+  (nm-applet and blueman usually are). (4) Open the menu of one, close it
+  with Escape, open it again. (5) Install a new icon theme, restart nothing,
+  and note whether an app that changes its icon picks it up
+- **Pass condition:** (1) every item shows an icon or the grey glyph, never
+  an empty slot. (2) each right click shows a menu under the pointer: the
+  shell's own for apps with a dbusmenu, the app's for Steam and Discord. (3)
+  the left click shows the menu and does not raise a window. (4) the menu
+  opens and closes each time, with no second menu beside it. (5) a theme
+  installed after the shell started is not seen until the shell restarts: that
+  is the known limit (the `freedesktop-icons` cache), not a failure
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-I-011](docs/evidence/2026-11-26-cel-i-011-tray-fixes.md)

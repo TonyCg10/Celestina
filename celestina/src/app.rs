@@ -14,6 +14,7 @@
 use std::{
     cell::{OnceCell, RefCell},
     rc::Rc,
+    time::{Duration, Instant},
 };
 
 use celestina_core::desktop_entry::DesktopEntry;
@@ -359,6 +360,60 @@ struct PendingMenu {
     item: ItemId,
     row: Rect,
     keyboard: bool,
+    /// When an empty menu stops waiting for its late layout; set by the
+    /// first empty one.
+    until: Option<Instant>,
+}
+
+/// How long an empty menu root waits for the `LayoutUpdated` that fills it.
+const MENU_LATE_LAYOUT: Duration = Duration::from_millis(500);
+
+/// What a menu from the host means for the request waiting for it.
+#[derive(Debug)]
+enum Pending {
+    /// Nobody asked for it, or the item is not the one asked for.
+    Unasked,
+    /// The request, to open the menu now.
+    Open(PendingMenu),
+    /// The root is empty: the request stays, for this much longer.
+    Wait(Duration),
+    /// The root stayed empty past its wait: the request is dropped.
+    GiveUp(PendingMenu),
+}
+
+impl Pending {
+    /// What a menu of `item` that is `empty` or not does to `pending`,
+    /// at `now`. An empty root keeps the request for [`MENU_LATE_LAYOUT`]
+    /// from the first empty one, so one `LayoutUpdated` can fill it.
+    fn of(pending: &mut Option<PendingMenu>, item: &ItemId, empty: bool, now: Instant) -> Pending {
+        if pending.as_ref().is_none_or(|p| p.item != *item) {
+            return Pending::Unasked;
+        }
+        if !empty {
+            return pending.take().map_or(Pending::Unasked, Pending::Open);
+        }
+        let Some(request) = pending.as_mut() else {
+            return Pending::Unasked;
+        };
+        let until = *request.until.get_or_insert(now + MENU_LATE_LAYOUT);
+        match until.checked_duration_since(now).filter(|d| !d.is_zero()) {
+            Some(left) => Pending::Wait(left),
+            None => pending.take().map_or(Pending::Unasked, Pending::GiveUp),
+        }
+    }
+
+    /// Puts `request` in `pending`; the request it replaces, when that was
+    /// for another item.
+    fn replace(pending: &mut Option<PendingMenu>, request: PendingMenu) -> Option<PendingMenu> {
+        pending
+            .replace(request)
+            .filter(|old| pending.as_ref().is_some_and(|new| new.item != old.item))
+    }
+
+    /// The request that waited past its time, taken out of `pending`.
+    fn expired(pending: &mut Option<PendingMenu>, now: Instant) -> Option<PendingMenu> {
+        pending.take_if(|p| p.until.is_some_and(|until| until <= now))
+    }
 }
 
 /// The tray menu chain that is open: its Island, its item, the model its
@@ -1769,14 +1824,22 @@ impl App {
                     item,
                     row,
                     keyboard,
+                    at,
                 } => {
-                    self.pending_menu = Some(PendingMenu {
+                    let request = PendingMenu {
                         surface,
                         item: item.clone(),
                         row,
                         keyboard,
-                    });
-                    self.tray_command(TrayCommand::OpenMenu(item));
+                        until: None,
+                    };
+                    // A request for another item replaces the old one: its
+                    // item must not stay followed with an `opened` and no
+                    // `closed`.
+                    if let Some(old) = Pending::replace(&mut self.pending_menu, request) {
+                        self.give_up_menu(old);
+                    }
+                    self.tray_command(TrayCommand::OpenMenu(item, at.0, at.1));
                 }
                 IslandAction::Audio(_) | IslandAction::Brightness(_) => {
                     self.level_action(action, surface);
@@ -1984,6 +2047,9 @@ impl App {
                 }
             }
             TrayEvent::Menu(item, menu) => self.open_tray_menu(&item, menu, ctl),
+            TrayEvent::NoMenu(item) => {
+                self.pending_menu.take_if(|p| p.item == item);
+            }
         }
     }
 
@@ -2004,14 +2070,30 @@ impl App {
             }
             return;
         }
-        let Some(pending) = self.pending_menu.take_if(|p| p.item == *item) else {
-            tracing::debug!("a menu nobody asked for is dropped");
-            return;
+        let pending = match Pending::of(
+            &mut self.pending_menu,
+            item,
+            menu.entries.is_empty(),
+            Instant::now(),
+        ) {
+            Pending::Unasked => {
+                tracing::debug!("a menu nobody asked for is dropped");
+                return;
+            }
+            Pending::Wait(left) => {
+                tracing::debug!("the item's menu is empty; waiting for its layout");
+                let surface = self.pending_menu.as_ref().map(|p| p.surface);
+                if let Some(mut surface) = surface.and_then(|id| ctl.surface(id)) {
+                    surface.redraw_after(left);
+                }
+                return;
+            }
+            Pending::GiveUp(gone) => {
+                self.give_up_menu(gone);
+                return;
+            }
+            Pending::Open(pending) => pending,
         };
-        if menu.entries.is_empty() {
-            tracing::debug!("the item's menu is empty; nothing opens");
-            return;
-        }
         let (Some(shared), Some(mut surface)) =
             (self.painter.clone(), ctl.surface(pending.surface))
         else {
@@ -2058,6 +2140,21 @@ impl App {
                 cx,
             });
         }
+    }
+
+    /// An empty menu that waited for its layout past [`MENU_LATE_LAYOUT`]
+    /// is dropped, and the host stops following it.
+    fn expire_pending_menu(&mut self, now: Instant) {
+        if let Some(gone) = Pending::expired(&mut self.pending_menu, now) {
+            self.give_up_menu(gone);
+        }
+    }
+
+    /// An item's menu stayed empty past [`MENU_LATE_LAYOUT`]: nothing opens
+    /// and the item's menu is no longer followed.
+    fn give_up_menu(&mut self, gone: PendingMenu) {
+        tracing::debug!("the item's menu stayed empty; nothing opens");
+        self.tray_command(TrayCommand::CloseMenu(gone.item));
     }
 
     /// The open chain is gone (its root popup closed, or its Island's
@@ -2895,6 +2992,7 @@ impl Shell for App {
                 }
             }
         }
+        self.expire_pending_menu(cx.now);
         let (mut prompt_surface, mut settle) = (false, false);
         if let Some(polkit) = self.polkit.state_mut() {
             polkit.tick(cx.now);
@@ -3368,6 +3466,104 @@ mod tests {
             Island::new("HDMI-A-1", (2560.0, 560.0)),
         );
         islands
+    }
+
+    fn pending(item: u32) -> Option<PendingMenu> {
+        Some(PendingMenu {
+            surface: SurfaceId(10),
+            item: self::item(item),
+            row: Rect::whole((1.0, 1.0)),
+            keyboard: false,
+            until: None,
+        })
+    }
+
+    fn item(n: u32) -> ItemId {
+        ItemId {
+            bus_name: format!(":1.{n}"),
+            path: "/StatusNotifierItem".to_owned(),
+        }
+    }
+
+    #[test]
+    fn empty_root_waits_for_one_layout_update() {
+        let t0 = Instant::now();
+        let mut request = pending(1);
+        // The empty root keeps the request, with the whole wait left...
+        assert!(matches!(
+            Pending::of(&mut request, &item(1), true, t0),
+            Pending::Wait(left) if left == MENU_LATE_LAYOUT
+        ));
+        // ...a second empty one does not restart the wait...
+        let t1 = t0 + Duration::from_millis(200);
+        assert!(matches!(
+            Pending::of(&mut request, &item(1), true, t1),
+            Pending::Wait(left) if left == Duration::from_millis(300)
+        ));
+        // ...and the layout that brings entries opens it.
+        let t2 = t0 + Duration::from_millis(250);
+        assert!(matches!(
+            Pending::of(&mut request, &item(1), false, t2),
+            Pending::Open(_)
+        ));
+        assert!(request.is_none());
+    }
+
+    #[test]
+    fn empty_root_gives_up_after_500_ms() {
+        let t0 = Instant::now();
+        let mut request = pending(1);
+        assert!(
+            Pending::expired(&mut request, t0).is_none(),
+            "not waiting yet"
+        );
+        assert!(matches!(
+            Pending::of(&mut request, &item(1), true, t0),
+            Pending::Wait(_)
+        ));
+        let before = t0 + Duration::from_millis(499);
+        assert!(Pending::expired(&mut request, before).is_none());
+        // The frame at the deadline drops it...
+        let at = t0 + MENU_LATE_LAYOUT;
+        assert!(Pending::expired(&mut request, at).is_some());
+        assert!(request.is_none());
+        // ...and so does an empty root that comes in late.
+        let mut late = pending(1);
+        assert!(matches!(
+            Pending::of(&mut late, &item(1), true, t0),
+            Pending::Wait(_)
+        ));
+        assert!(matches!(
+            Pending::of(&mut late, &item(1), true, at),
+            Pending::GiveUp(_)
+        ));
+        assert!(late.is_none());
+    }
+
+    #[test]
+    fn a_request_for_another_item_gives_up_the_old_one() {
+        let mut slot = None;
+        assert!(Pending::replace(&mut slot, pending(1).expect("a request")).is_none());
+        // The same item again (two quick clicks): nothing to give up.
+        assert!(Pending::replace(&mut slot, pending(1).expect("a request")).is_none());
+        let old = Pending::replace(&mut slot, pending(2).expect("a request"));
+        assert_eq!(old.map(|o| o.item), Some(item(1)));
+        assert_eq!(slot.map(|p| p.item), Some(item(2)));
+    }
+
+    #[test]
+    fn a_menu_nobody_asked_for_is_unasked() {
+        let t0 = Instant::now();
+        let mut request = pending(1);
+        assert!(matches!(
+            Pending::of(&mut request, &item(2), false, t0),
+            Pending::Unasked
+        ));
+        assert!(request.is_some(), "another item's menu leaves it waiting");
+        assert!(matches!(
+            Pending::of(&mut None, &item(1), false, t0),
+            Pending::Unasked
+        ));
     }
 
     #[test]

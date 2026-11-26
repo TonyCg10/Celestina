@@ -2,6 +2,8 @@
 //! large: item identity, icons, menus, text, counts, scroll steps and the
 //! one-update-per-window coalescing of the item list.
 
+use std::path::PathBuf;
+
 use celestina_shell::coalesce::Coalescer;
 
 /// The most items the tray keeps; further registrations are ignored.
@@ -22,8 +24,16 @@ pub const MAX_PIXMAP_SIDE: u32 = 256;
 pub const MAX_ID_BYTES: usize = 255;
 /// Pixels of scroll that make one step.
 pub const SCROLL_PX_PER_STEP: i32 = 15;
-/// The icon an item shows when its own cannot be used.
+/// The bundled glyph (`celestina-style/icons/app-window.svg`) an item shows
+/// when none of its own icons can be used.
 pub const FALLBACK_ICON: &str = "app-window";
+/// The longest `IconThemePath` kept, in bytes.
+pub const MAX_THEME_PATH_BYTES: usize = 4096;
+/// The logical icon sizes (24 px at scale 1, 2 and 3), in device px, whose
+/// nearest pixmap is kept: the host does not know the output's scale when it
+/// reads an item, so it keeps the candidates for the scales in use and the
+/// page picks one at draw time.
+pub const PIXMAP_TARGETS: [u32; 3] = [24, 48, 72];
 /// The object path an item registered by bare name is served at.
 pub const DEFAULT_ITEM_PATH: &str = "/StatusNotifierItem";
 
@@ -112,9 +122,10 @@ pub struct Pixmap {
     pub argb: Vec<u8>,
 }
 
-/// One status notifier item the Tray page lists. It carries both ways the
-/// item describes its icon, so the page can draw the theme icon when the
-/// theme has it and fall back to the pixmap when it does not.
+/// One status notifier item the Tray page lists. It carries every way the
+/// item describes its icon, so the page can draw the item's own theme
+/// directory or the user's theme when they have it and fall back to a
+/// pixmap when they do not.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TrayItem {
     /// Who serves it.
@@ -128,10 +139,29 @@ pub struct TrayItem {
     pub status: Status,
     /// Its `IconName`, bounded; empty when it has none.
     pub icon_name: String,
-    /// The best of its `IconPixmap`s for the page's size, when it has one.
-    pub pixmap: Option<Pixmap>,
+    /// The `IconPixmap`s kept: the one nearest to each of
+    /// [`PIXMAP_TARGETS`], without repeats (at most three). The page picks
+    /// the one nearest to its scaled size with [`pick_pixmap`].
+    pub pixmaps: Vec<Pixmap>,
     /// Whether it serves a `dbusmenu`.
     pub has_menu: bool,
+    /// Its `IconThemePath`: an absolute, existing directory of at most
+    /// [`MAX_THEME_PATH_BYTES`] bytes where its private icons live.
+    pub icon_theme_path: Option<PathBuf>,
+    /// Its `ItemIsMenu`: a left click opens its menu instead of activating.
+    pub item_is_menu: bool,
+    /// Its `AttentionIconName`, bounded; read only while it needs attention.
+    pub attention_icon_name: String,
+    /// The file `icon_name` names, resolved on the host's thread when the
+    /// item was read: an absolute name under an allowed root, or a relative
+    /// one inside `icon_theme_path`. The Island only chooses between it,
+    /// the user's theme, the pixmaps and the fallback.
+    pub icon_file: Option<PathBuf>,
+    /// The same for `attention_icon_name`.
+    pub attention_icon_file: Option<PathBuf>,
+    /// Its `AttentionIconPixmap`s, kept like [`TrayItem::pixmaps`]; read
+    /// only while it needs attention.
+    pub attention_pixmaps: Vec<Pixmap>,
 }
 
 /// Who holds a bus name the shell wanted: the unique name of the connection
@@ -190,6 +220,10 @@ pub enum TrayEvent {
     Items(Vec<TrayItem>),
     /// An item's menu, after it was asked for.
     Menu(ItemId, MenuTree),
+    /// The item's dbusmenu will not open (none, or its layout failed): the
+    /// host asked the item for its own menu instead, so a request waiting
+    /// for one is dropped.
+    NoMenu(ItemId),
 }
 
 /// What the event loop asks of the tray host.
@@ -203,8 +237,13 @@ pub enum TrayCommand {
     Scroll(ItemId, i32, Orientation),
     /// A click on a menu entry.
     MenuEvent(ItemId, i32),
-    /// Fetch the item's menu.
-    OpenMenu(ItemId),
+    /// Fetch the item's menu; `(x, y)` is the pointer in output
+    /// coordinates, kept for the `ContextMenu` the host falls back to when
+    /// the item has no dbusmenu or its layout fails.
+    OpenMenu(ItemId, i32, i32),
+    /// Ask the item to show its own menu: `ContextMenu(x, y)` with the
+    /// pointer's output coordinates. The reply is not awaited.
+    ContextMenu(ItemId, i32, i32),
     /// A submenu entry of the item's menu is about to be shown; the menu
     /// is published again when the item says its layout changed.
     AboutToShow(ItemId, i32),
@@ -292,10 +331,17 @@ fn pixmap_ok(w: i32, h: i32, len: usize) -> Option<(u32, u32)> {
     (len == want).then_some((w, h))
 }
 
+/// Whether a pixmap side `side` is nearer to `want` than `best`: the smaller
+/// distance, and the larger side on a tie.
+fn nearer(side: u32, best: u32, want: u32) -> bool {
+    let (d, bd) = (side.abs_diff(want), best.abs_diff(want));
+    d < bd || (d == bd && side > best)
+}
+
 /// The best usable pixmap of `candidates` (`width`, `height`, ARGB bytes) for
-/// an icon drawn `want` pixels square: the smallest one at least that large,
-/// else the largest. Oversized and inconsistent ones are rejected, so a peer
-/// cannot make the shell hold a huge image.
+/// an icon drawn `want` device pixels square: the one whose side is nearest,
+/// the larger on a tie. Oversized and inconsistent ones are rejected, so a
+/// peer cannot make the shell hold a huge image.
 #[must_use]
 pub fn choose_pixmap(candidates: &[(i32, i32, Vec<u8>)], want: u32) -> Option<Pixmap> {
     let mut best: Option<(u32, u32, &Vec<u8>)> = None;
@@ -303,17 +349,9 @@ pub fn choose_pixmap(candidates: &[(i32, i32, Vec<u8>)], want: u32) -> Option<Pi
         let Some((w, h)) = pixmap_ok(*w, *h, bytes.len()) else {
             continue;
         };
-        let side = w.max(h);
         let better = match best {
             None => true,
-            Some((bw, bh, _)) => {
-                let best_side = bw.max(bh);
-                if best_side >= want {
-                    side >= want && side < best_side
-                } else {
-                    side > best_side
-                }
-            }
+            Some((bw, bh, _)) => nearer(w.max(h), bw.max(bh), want),
         };
         if better {
             best = Some((w, h, bytes));
@@ -324,6 +362,59 @@ pub fn choose_pixmap(candidates: &[(i32, i32, Vec<u8>)], want: u32) -> Option<Pi
         h,
         argb: bytes.clone(),
     })
+}
+
+/// The pixmaps kept of a peer's `candidates`: the nearest to each of
+/// [`PIXMAP_TARGETS`], without repeats.
+#[must_use]
+pub fn bound_pixmaps(candidates: &[(i32, i32, Vec<u8>)]) -> Vec<Pixmap> {
+    let mut kept: Vec<Pixmap> = Vec::new();
+    for want in PIXMAP_TARGETS {
+        if let Some(pixmap) = choose_pixmap(candidates, want) {
+            if !kept.iter().any(|k| (k.w, k.h) == (pixmap.w, pixmap.h)) {
+                kept.push(pixmap);
+            }
+        }
+    }
+    kept
+}
+
+/// The kept pixmap nearest to `want` device pixels, the larger on a tie.
+#[must_use]
+pub fn pick_pixmap(pixmaps: &[Pixmap], want: u32) -> Option<&Pixmap> {
+    pixmaps
+        .iter()
+        .fold(None, |best: Option<&Pixmap>, p| match best {
+            Some(b) if !nearer(p.w.max(p.h), b.w.max(b.h), want) => Some(b),
+            _ => Some(p),
+        })
+}
+
+/// An `IconThemePath` as an item sent it, kept only when it is an absolute
+/// path of at most [`MAX_THEME_PATH_BYTES`] bytes with no control characters
+/// that names an existing directory.
+#[must_use]
+pub fn theme_dir(raw: &str) -> Option<PathBuf> {
+    if raw.is_empty() || raw.len() > MAX_THEME_PATH_BYTES || raw.chars().any(char::is_control) {
+        return None;
+    }
+    let path = PathBuf::from(raw);
+    (path.is_absolute() && path.is_dir() && !celestina_paint::broad_icon_dir(&path)).then_some(path)
+}
+
+/// An icon name as an item sent it. An absolute name is a path: kept whole
+/// up to [`MAX_THEME_PATH_BYTES`] bytes and refused (empty) past that or with
+/// a control character, so a long path never loses its extension. Any other
+/// name is cut to [`MAX_TEXT_CHARS`] characters like a title.
+#[must_use]
+pub fn bound_icon_name(raw: &str) -> String {
+    if raw.starts_with('/') {
+        if raw.len() > MAX_THEME_PATH_BYTES || raw.chars().any(char::is_control) {
+            return String::new();
+        }
+        return raw.to_owned();
+    }
+    bound_text(raw, MAX_TEXT_CHARS)
 }
 
 /// `raw` with every bound applied: depth at most [`MAX_MENU_DEPTH`], at most
@@ -367,7 +458,8 @@ pub fn bound_items(items: Vec<TrayItem>) -> Vec<TrayItem> {
         .map(|item| TrayItem {
             sni_id: bound_text(&item.sni_id, MAX_TEXT_CHARS),
             title: bound_text(&item.title, MAX_TEXT_CHARS),
-            icon_name: bound_text(&item.icon_name, MAX_TEXT_CHARS),
+            icon_name: bound_icon_name(&item.icon_name),
+            attention_icon_name: bound_icon_name(&item.attention_icon_name),
             ..item
         })
         .collect()
@@ -472,13 +564,40 @@ mod tests {
     }
 
     #[test]
-    fn the_best_pixmap_is_the_smallest_that_covers_the_size_else_the_largest() {
+    fn pixmap_nearest_to_scaled_size() {
         let px = |s: i32| (s, s, vec![0u8; (s * s * 4) as usize]);
         let side = |pixmap: Option<Pixmap>| pixmap.map_or(0, |p| p.w);
         let all = [px(16), px(48), px(32), px(64)];
+        // Scale 1 (24 px): 16 and 32 are 8 away, the larger wins.
         assert_eq!(side(choose_pixmap(&all, 24)), 32);
+        // Scale 2 (48 px): the exact candidate.
+        assert_eq!(side(choose_pixmap(&all, 48)), 48);
         assert_eq!(side(choose_pixmap(&all, 100)), 64);
         assert_eq!(side(choose_pixmap(&all, 8)), 16);
+        // The kept set serves each scale with its own candidate.
+        let kept = bound_pixmaps(&all);
+        let sides: Vec<u32> = kept.iter().map(|p| p.w).collect();
+        assert_eq!(sides, vec![32, 48, 64]);
+        assert_eq!(pick_pixmap(&kept, 24).map(|p| p.w), Some(32));
+        assert_eq!(pick_pixmap(&kept, 48).map(|p| p.w), Some(48));
+        assert_eq!(pick_pixmap(&kept, 72).map(|p| p.w), Some(64));
+        assert_eq!(pick_pixmap(&[], 24), None);
+    }
+
+    #[test]
+    fn a_theme_path_must_be_an_absolute_existing_directory() {
+        let dir = std::env::temp_dir().join("celestina-theme-dir-test");
+        std::fs::create_dir_all(&dir).expect("a directory");
+        assert_eq!(theme_dir(dir.to_str().expect("utf-8")), Some(dir));
+        assert_eq!(theme_dir(""), None);
+        assert_eq!(theme_dir("relative/dir"), None);
+        assert_eq!(theme_dir("/definitely/not/here"), None);
+        assert_eq!(theme_dir("/etc/passwd"), None, "a file is not a directory");
+        assert_eq!(theme_dir("/tmp/\u{1}x"), None);
+        assert_eq!(
+            theme_dir(&format!("/{}", "a".repeat(MAX_THEME_PATH_BYTES))),
+            None
+        );
     }
 
     #[test]
@@ -498,7 +617,36 @@ mod tests {
             ..TrayItem::default()
         }]);
         assert_eq!(bounded[0].icon_name.chars().count(), MAX_TEXT_CHARS);
-        assert_eq!(bounded[0].pixmap, None);
+        assert!(bounded[0].pixmaps.is_empty());
+    }
+
+    #[test]
+    fn a_long_absolute_icon_name_keeps_its_extension_or_is_refused_whole() {
+        let path = format!("/usr/share/icons/{}/app.png", "d".repeat(200));
+        assert_eq!(bound_icon_name(&path), path);
+        let too_long = format!("/{}/app.png", "d".repeat(MAX_THEME_PATH_BYTES));
+        assert_eq!(bound_icon_name(&too_long), "");
+        assert_eq!(bound_icon_name("/tmp/\u{1}x.png"), "");
+        assert_eq!(
+            bound_icon_name(&"y".repeat(500)).chars().count(),
+            MAX_TEXT_CHARS
+        );
+    }
+
+    #[test]
+    fn a_broad_theme_dir_is_refused() {
+        assert_eq!(theme_dir("/"), None);
+        assert_eq!(theme_dir("/tmp"), None, "one component");
+        assert_eq!(theme_dir("/home"), None);
+        if let Some(home) = std::env::var_os("HOME").and_then(|h| h.into_string().ok()) {
+            assert_eq!(theme_dir(&home), None, "$HOME");
+        }
+        if std::path::Path::new("/usr/share/icons").is_dir() {
+            assert!(
+                theme_dir("/usr/share").is_none(),
+                "an ancestor of an icon root"
+            );
+        }
     }
 
     #[test]

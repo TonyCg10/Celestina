@@ -1,0 +1,53 @@
+# CEL-I-011 exact change inventory
+
+Base revision	7df47858d29896693a42990a7fd03e936ba6f7c2
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-paint/src/icon.rs
+Pathspec	celestina/crates/celestina-paint/src/lib.rs
+Pathspec	celestina/docs/evidence/2026-11-26-cel-i-011-tray-fixes.md
+Pathspec	celestina/docs/evidence/2026-11-26-cel-i-011-tray-fixes/context-menu-calls.log
+Pathspec	celestina/docs/evidence/2026-11-26-cel-i-011-tray-fixes/tray-after-clicks.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-i-011-tray-fixes/tray-icons.png
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-011.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/pages/mod.rs
+Pathspec	celestina/src/island/pages/tray.rs
+Pathspec	celestina/src/pieces/mod.rs
+Pathspec	celestina/src/pieces/tray.rs
+Pathspec	celestina/src/providers/tray.rs
+Pathspec	celestina/src/tray/dbusmenu.rs
+Pathspec	celestina/src/tray/item.rs
+Pathspec	celestina/src/tray/mod.rs
+Pathspec	celestina/src/tray/model.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	88ee25ae25cb60edf9b83e0580a76beee23b76f0d3fd145e98979c29dfe41737	celestina/Cargo.lock
+1	1	77fe8283d7bfffc52ee191f45bb95a32c5f8bd900e9bb1d16b9f621b39c161d4	celestina/Cargo.toml
+27	0	69f1e39c9435045b0ac0f7ace89aa055f5f84a3922e91df6692d9f76544f7245	celestina/VALIDATION.md
+298	0	d20612e95c93c380307a1e3d1f2f5d631bec5cb430897febc07936acf9b650a4	celestina/crates/celestina-paint/src/icon.rs
+1	1	79170f7255ec5d249e86338b9a90fa5465ac80a0d6d261d2469b47b3a5cf0640	celestina/crates/celestina-paint/src/lib.rs
+81	0	7951b34533b91a79bd87b6e52c795f764b82a528f3d8386eb50a1ef66e3c46a8	celestina/docs/evidence/2026-11-26-cel-i-011-tray-fixes.md
+6	0	c6613087e50d1580b568edd68d3be082495890612000f7133fd52f057a6df9f9	celestina/docs/evidence/2026-11-26-cel-i-011-tray-fixes/context-menu-calls.log
+-	-	47faa64c97aa4b8e44faf5b07f62edb5c8272a7e074ad1a7baaa82c26d49a024	celestina/docs/evidence/2026-11-26-cel-i-011-tray-fixes/tray-after-clicks.png
+-	-	1de833fa2b281b637e07e7aa3f74f744c89520554eccd181a7369c76dd21187c	celestina/docs/evidence/2026-11-26-cel-i-011-tray-fixes/tray-icons.png
+53	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-011.numstat.tsv
+1	0	d406bd584073287b1e66a82f4d20eaf14c22b779ed41a3e7e859103efc8a01c0	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+206	10	60293906da49c8da37e8d577c4f0fc722cc2d4feedb662ca9d887624e5332c7e	celestina/src/app.rs
+144	19	c402c2a552d4f87ae4f339ebcb657362f20e07ff69c3db476a5cecf42104920b	celestina/src/island/mod.rs
+1	0	eae33c95cd21aee1e5692fe348e561b5f0152feeadd513bc540b1dd3222f61fe	celestina/src/island/pages/mod.rs
+389	43	1721695f163a995cfe32ca1e3eb4ebb8653e3957ba020d27f126911402072080	celestina/src/island/pages/tray.rs
+3	0	ce368bd1c4e29b9d1d2a7fc10deef03ac0db2602239a5f5cd4d12d4191b5f9e8	celestina/src/pieces/mod.rs
+72	22	9ec75fe2563875935dcf5711647700d47ec6a53ed0c366680b58389071fdf321	celestina/src/pieces/tray.rs
+142	12	2cb8c78dc499f4232ddc1fcf3c53c865d9ef7f80d18c8f55e29d87da398a0ae3	celestina/src/providers/tray.rs
+139	14	3889716ab1a20d723620bf990d14709023859b91803429fed1a95477f0d6a900	celestina/src/tray/dbusmenu.rs
+159	29	d900683a9b5721e6ac4b93b90f6a44ddae669b7872951e3f35c83e7c1ea7367c	celestina/src/tray/item.rs
+3	3	d92d6c195862e9df293f7866fe73a71f46a8d1a49909019b3c8ccecec31508d5	celestina/src/tray/mod.rs
+171	23	6dd60f5bc5fefb33d5cac91c134a0a3743cd3ccbf2696543d1a215343c62216b	celestina/src/tray/model.rs
+1	0	0b7e8d4aebd3bde46d6dbac12ccaac87776e8da4ef6b8a0a94da1f68788369f4	docs/version-history.tsv

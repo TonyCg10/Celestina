@@ -458,6 +458,7 @@ mod tests {
             status: Status::Active,
             icon: status,
             has_menu,
+            item_is_menu: false,
             sni_id: String::new(),
         }
     }

@@ -200,8 +200,13 @@ fn fetch(connection: &Connection, item: &ItemAddress) -> Option<MenuTree> {
     }
 }
 
-/// Sends `Event(id, "clicked", 0, 0)` without waiting for a reply.
-fn send_click(connection: &Connection, item: &ItemAddress, entry: i32) -> zbus::Result<()> {
+/// Sends `Event(id, name, 0, 0)` without waiting for a reply.
+fn send_event(
+    connection: &Connection,
+    item: &ItemAddress,
+    entry: i32,
+    name: &str,
+) -> zbus::Result<()> {
     let Some(path) = item.menu.as_deref() else {
         return Ok(());
     };
@@ -209,7 +214,7 @@ fn send_click(connection: &Connection, item: &ItemAddress, entry: i32) -> zbus::
         .destination(item.owner.as_str())?
         .interface(MENU_INTERFACE)?
         .with_flags(Flags::NoReplyExpected)?
-        .build(&(entry, "clicked", Value::from(0i32), 0u32))?;
+        .build(&(entry, name, Value::from(0i32), 0u32))?;
     connection.send(&message)
 }
 
@@ -246,17 +251,33 @@ impl MenuClient for DbusMenu {
         connection: &Connection,
         item: &ItemAddress,
         publish: &mut dyn FnMut(TrayEvent) -> bool,
-    ) {
+    ) -> bool {
         if item.menu.is_none() {
-            return;
+            return false;
         }
         about_to_show(connection, item, 0);
+        // A layout that fails is not followed: the host asks the item for
+        // its own menu instead, and a late update must not open a second.
+        let Some(tree) = fetch(connection, item) else {
+            return false;
+        };
+        // A second request while the menu is open (two quick right clicks)
+        // is not a second `opened`: the menu hears one, and one `closed`.
+        let already_open = self.followed.contains(item);
         self.follow(item);
-        Self::publish_menu(connection, item, publish);
+        // The root may be empty: the app fills it on `opened`, and the page
+        // waits for the `LayoutUpdated` that brings the entries.
+        if !already_open {
+            if let Err(err) = send_event(connection, item, 0, "opened") {
+                tracing::debug!(%err, item = %item.id.bus_name, "tray: opened was not sent");
+            }
+        }
+        publish(TrayEvent::Menu(item.id.clone(), tree));
+        true
     }
 
     fn menu_event(&mut self, connection: &Connection, item: &ItemAddress, entry: i32) {
-        if let Err(err) = send_click(connection, item, entry) {
+        if let Err(err) = send_event(connection, item, entry, "clicked") {
             tracing::warn!(%err, item = %item.id.bus_name, "tray: a menu click was not sent");
         }
     }
@@ -291,8 +312,14 @@ impl MenuClient for DbusMenu {
         }
     }
 
-    fn close_menu(&mut self, item: &ItemAddress) {
+    fn close_menu(&mut self, connection: &Connection, item: &ItemAddress) {
+        let was_open = self.followed.contains(item);
         self.followed.retain(|a| a != item);
+        if was_open {
+            if let Err(err) = send_event(connection, item, 0, "closed") {
+                tracing::debug!(%err, item = %item.id.bus_name, "tray: closed was not sent");
+            }
+        }
     }
 }
 
@@ -594,21 +621,119 @@ mod tests {
         assert_eq!(tree.entries[0].label, "Open");
         assert!(tree.entries[1].separator);
         assert!(!tree.entries[2].enabled);
+        events_until(&served, 3);
         assert_eq!(
             lock(&served.events).as_slice(),
-            ["AboutToShow(0)", "GetLayout(0,4,7)"]
+            ["AboutToShow(0)", "GetLayout(0,4,7)", "Event(0,opened,0)"]
         );
 
         menu.menu_event(&client, &item, 3);
         let deadline = Instant::now() + WAIT;
-        while !lock(&served.events).iter().any(|e| e.starts_with("Event")) {
+        while !lock(&served.events)
+            .iter()
+            .any(|e| e == "Event(3,clicked,0)")
+        {
             assert!(Instant::now() < deadline, "the click never arrived");
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    /// Waits until the fake menu has logged `count` events.
+    fn events_until(served: &Served, count: usize) {
+        let deadline = Instant::now() + WAIT;
+        while lock(&served.events).len() < count {
+            assert!(Instant::now() < deadline, "the events never arrived");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn opened_and_closed_events_are_sent() {
+        let Some(bus) = PrivateBus::start("menu-events") else {
+            return;
+        };
+        let served = serve_menu(&bus, simple_layout(), false);
+        let client = client_connection(&bus);
+        let item = address(&served);
+        let mut menu = DbusMenu::default();
+        assert!(menu.open_menu(&client, &item, &mut |_| true));
+        events_until(&served, 3);
+        menu.close_menu(&client, &item);
+        events_until(&served, 4);
         assert_eq!(
-            lock(&served.events).last().map(String::as_str),
-            Some("Event(3,clicked,0)")
+            lock(&served.events).as_slice(),
+            [
+                "AboutToShow(0)",
+                "GetLayout(0,4,7)",
+                "Event(0,opened,0)",
+                "Event(0,closed,0)"
+            ]
         );
+        // A second open request while it is open is not a second `opened`.
+        assert!(menu.open_menu(&client, &item, &mut |_| true));
+        assert!(menu.open_menu(&client, &item, &mut |_| true));
+        events_until(&served, 8);
+        std::thread::sleep(Duration::from_millis(100));
+        let opened = lock(&served.events)
+            .iter()
+            .filter(|e| e.starts_with("Event(0,opened"))
+            .count();
+        assert_eq!(opened, 2, "one `opened` for each time it was closed");
+        menu.close_menu(&client, &item);
+        std::thread::sleep(Duration::from_millis(100));
+        let before = lock(&served.events).len();
+        // A menu that is not open hears no `closed`.
+        menu.close_menu(&client, &item);
+        std::thread::sleep(Duration::from_millis(100));
+        assert_eq!(lock(&served.events).len(), before);
+    }
+
+    #[test]
+    fn an_empty_root_is_followed_for_its_late_layout() {
+        let Some(bus) = PrivateBus::start("menu-empty") else {
+            return;
+        };
+        let served = serve_menu(&bus, root(Vec::new()), false);
+        let client = client_connection(&bus);
+        let item = address(&served);
+        let mut menu = DbusMenu::default();
+        let mut published = Vec::new();
+        assert!(menu.open_menu(&client, &item, &mut |event| {
+            published.push(event);
+            true
+        }));
+        let [TrayEvent::Menu(_, tree)] = published.as_slice() else {
+            panic!("expected the empty menu, got {published:?}");
+        };
+        assert!(tree.entries.is_empty());
+        // The item fills its menu on `opened` and signals: the entries
+        // reach the page.
+        *lock(&served.layout) = simple_layout();
+        published.clear();
+        menu.menu_changed(&client, &item.owner, "/Menu", &mut |event| {
+            published.push(event);
+            true
+        });
+        let [TrayEvent::Menu(_, tree)] = published.as_slice() else {
+            panic!("expected the filled menu, got {published:?}");
+        };
+        assert_eq!(tree.entries.len(), 3);
+    }
+
+    #[test]
+    fn a_failed_layout_is_not_followed_nor_opened() {
+        let Some(bus) = PrivateBus::start("menu-fails") else {
+            return;
+        };
+        let served = serve_menu(&bus, simple_layout(), false);
+        let client = client_connection(&bus);
+        let mut item = address(&served);
+        item.menu = Some("/Elsewhere".to_owned());
+        let mut menu = DbusMenu::default();
+        assert!(!menu.open_menu(&client, &item, &mut |_| panic!("published")));
+        item.menu = None;
+        assert!(!menu.open_menu(&client, &item, &mut |_| panic!("published")));
+        assert!(menu.followed.is_empty());
     }
 
     #[test]
@@ -659,7 +784,7 @@ mod tests {
         });
         assert_eq!(published, 2);
         // ...closed, it is not.
-        menu.close_menu(&item);
+        menu.close_menu(&client, &item);
         menu.menu_changed(&client, &item.owner, "/Menu", &mut |_| {
             published += 1;
             true
@@ -825,7 +950,7 @@ mod tests {
             }
         };
         provider
-            .command(TrayCommand::OpenMenu(item_id.clone()))
+            .command(TrayCommand::OpenMenu(item_id.clone(), 0, 0))
             .expect("queued");
         let first = menu_until(&rx, |_| true);
         assert_eq!(first.entries.len(), 3);

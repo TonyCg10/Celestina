@@ -9,6 +9,7 @@
 use std::{
     collections::{hash_map::DefaultHasher, HashMap, HashSet},
     hash::{Hash, Hasher},
+    path::{Path, PathBuf},
 };
 
 use celestina_paint::{IconKey, PixmapId, Role, Weight};
@@ -21,7 +22,7 @@ use crate::{
         state::PAGE_SIZE,
         view::{centred, chrome_height, text_style},
     },
-    tray::{model::FALLBACK_ICON, ItemId, Pixmap, Status, TrayItem},
+    tray::{model::FALLBACK_ICON, pick_pixmap, ItemId, Pixmap, Status, TrayItem},
 };
 
 /// An item's icon, logical px.
@@ -35,14 +36,55 @@ pub const MAX_ROWS: usize = 24;
 pub enum RowIcon {
     /// A name in the icon theme.
     Theme(String),
+    /// A file [`celestina_paint::peer_icon_file`] or
+    /// [`celestina_paint::icon_in_dir`] accepted: canonical, a PNG or SVG,
+    /// under the item's own theme directory or an XDG icon root.
+    File(PathBuf),
     /// A pixmap uploaded to the painter.
     Pixmap(PixmapId),
+    /// One of the bundled glyphs of `celestina-style/icons`, drawn in the
+    /// muted text colour.
+    Bundled(&'static str),
 }
 
 impl Default for RowIcon {
     fn default() -> Self {
-        RowIcon::Theme(FALLBACK_ICON.to_owned())
+        RowIcon::Bundled(FALLBACK_ICON)
     }
+}
+
+/// The view that draws `icon` in a box of [`ICON_SIZE`], the one the page's
+/// rows and the bar's icons share.
+#[must_use]
+pub fn icon_view(key: Key, icon: &RowIcon) -> View {
+    match icon {
+        RowIcon::Theme(name) => View::new(
+            key,
+            ViewKind::Icon {
+                key: IconKey::Theme(name.clone()),
+                tint: None,
+                size: ICON_SIZE,
+            },
+        ),
+        RowIcon::File(path) => View::new(
+            key,
+            ViewKind::Icon {
+                key: IconKey::File(path.clone()),
+                tint: None,
+                size: ICON_SIZE,
+            },
+        ),
+        RowIcon::Bundled(name) => View::new(
+            key,
+            ViewKind::Icon {
+                key: IconKey::Semantic(name),
+                tint: Some(Role::TextLo),
+                size: ICON_SIZE,
+            },
+        ),
+        RowIcon::Pixmap(id) => view::image(key, *id, 1.0),
+    }
+    .size(ICON_SIZE, ICON_SIZE)
 }
 
 /// One item as the page shows it.
@@ -61,6 +103,8 @@ pub struct TrayRow {
     pub icon: RowIcon,
     /// Whether it serves a menu.
     pub has_menu: bool,
+    /// Its `ItemIsMenu`: a left click opens the menu.
+    pub item_is_menu: bool,
 }
 
 /// The item list the app keeps and the generation that tells an Island it
@@ -118,29 +162,115 @@ pub trait Pixmaps {
     fn has_theme_icon(&self, name: &str, size: u32) -> bool;
 }
 
-/// Whether the theme has the item's icon name. The lookup happens here,
-/// when the list changes, so a frame never looks an icon up to draw
-/// nothing; an item publishing a private name (as libappindicator does)
-/// draws its pixmap or the fallback instead.
-fn themed(item: &TrayItem, pixmaps: &impl Pixmaps) -> bool {
-    !item.icon_name.is_empty() && pixmaps.has_theme_icon(&item.icon_name, ICON_SIZE as u32)
+/// What the icon of an item is, before any pixmap is uploaded.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IconSource<'a> {
+    /// Drawn as it is.
+    Icon(RowIcon),
+    /// One of the item's pixmaps, to upload.
+    Pixmap(&'a Pixmap),
+}
+
+/// The icon size, in device px, at output scale `scale`.
+fn device_px(scale: f32) -> u32 {
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
+    ((ICON_SIZE * scale).round() as u32).max(1)
+}
+
+/// One icon description (`name`, its resolved `file` and `pixmaps`), tried
+/// in order:
+/// 1. the `file` the tray host resolved off this thread (an absolute name
+///    under an allowed root, or a relative one in the item's own theme
+///    directory); this thread never touches the disk for it;
+/// 2. a relative `name` in the user's theme (looked up here, when the list
+///    changes, so a frame never looks an icon up to draw nothing);
+/// 3. the pixmap nearest to the scaled size.
+fn describe<'a>(
+    name: &str,
+    file: Option<&Path>,
+    pixmaps: &'a [Pixmap],
+    px: u32,
+    has_theme: &dyn Fn(&str, u32) -> bool,
+) -> Option<IconSource<'a>> {
+    if let Some(file) = file {
+        return Some(IconSource::Icon(RowIcon::File(file.to_owned())));
+    }
+    if !name.is_empty()
+        && !Path::new(name).is_absolute()
+        && !name.contains(['/', '\\', '\0'])
+        && has_theme(name, px)
+    {
+        return Some(IconSource::Icon(RowIcon::Theme(name.to_owned())));
+    }
+    pick_pixmap(pixmaps, px).map(IconSource::Pixmap)
+}
+
+/// What `item` draws at output scale `scale`, the one place the bar's piece
+/// and the Tray page get their icons from (through the rows built by
+/// [`IconCache::rows`]). While the item needs attention its attention icon
+/// replaces the normal one when it has a usable one; the normal order is the
+/// item's theme directory, the user's theme (`has_theme(name, device_px)`),
+/// the pixmap nearest to `24 * scale`, then the bundled fallback.
+#[must_use]
+pub fn resolve_tray_icon<'a>(
+    item: &'a TrayItem,
+    scale: f32,
+    has_theme: &dyn Fn(&str, u32) -> bool,
+) -> IconSource<'a> {
+    let px = device_px(scale);
+    let attention = (item.status == Status::NeedsAttention)
+        .then(|| {
+            describe(
+                &item.attention_icon_name,
+                item.attention_icon_file.as_deref(),
+                &item.attention_pixmaps,
+                px,
+                has_theme,
+            )
+        })
+        .flatten();
+    attention
+        .or_else(|| {
+            describe(
+                &item.icon_name,
+                item.icon_file.as_deref(),
+                &item.pixmaps,
+                px,
+                has_theme,
+            )
+        })
+        .unwrap_or_else(|| IconSource::Icon(RowIcon::default()))
 }
 
 impl IconCache {
-    /// The rows for `items`: a theme icon when the theme has the item's
-    /// name, else its pixmap, else the fallback. Pixmaps are uploaded to
-    /// `pixmaps` only when new or changed, and the ones no item uses any
-    /// more are released.
-    pub fn rows(&mut self, items: &[TrayItem], pixmaps: &mut impl Pixmaps) -> Vec<TrayRow> {
+    /// The rows for `items` at output scale `scale`, each icon as
+    /// [`resolve_tray_icon`] says. Pixmaps are uploaded to `pixmaps` only
+    /// when new or changed, and the ones no item uses any more are released.
+    pub fn rows(
+        &mut self,
+        items: &[TrayItem],
+        scale: f32,
+        pixmaps: &mut impl Pixmaps,
+    ) -> Vec<TrayRow> {
         let mut seen = HashSet::new();
         let mut rows = Vec::with_capacity(items.len());
         let mut drawn: Vec<(ItemId, bool)> = Vec::with_capacity(items.len());
         for item in items {
-            let themed = themed(item, pixmaps);
-            let uses_pixmap = !themed && item.pixmap.is_some();
+            let source = {
+                let pixmaps: &dyn Pixmaps = &*pixmaps;
+                resolve_tray_icon(item, scale, &|name, size| {
+                    pixmaps.has_theme_icon(name, size)
+                })
+            };
+            let uses_pixmap = matches!(source, IconSource::Pixmap(_));
             drawn.push((item.id.clone(), uses_pixmap));
-            let icon = match (&item.pixmap, uses_pixmap) {
-                (Some(Pixmap { w, h, argb }), true) => {
+            let icon = match source {
+                IconSource::Icon(icon) => icon,
+                IconSource::Pixmap(Pixmap { w, h, argb }) => {
                     let print = fingerprint(*w, *h, argb);
                     let kept = self.uploaded.get(&item.id).copied();
                     let shared = !seen.insert(item.id.clone());
@@ -160,8 +290,6 @@ impl IconCache {
                         }
                     }
                 }
-                _ if themed => RowIcon::Theme(item.icon_name.clone()),
-                _ => RowIcon::default(),
             };
             rows.push(TrayRow {
                 id: item.id.clone(),
@@ -170,6 +298,7 @@ impl IconCache {
                 status: item.status,
                 icon,
                 has_menu: item.has_menu,
+                item_is_menu: item.item_is_menu,
             });
         }
         let gone: Vec<ItemId> = self
@@ -286,18 +415,7 @@ fn item_row(cx: &PageCx<'_>, index: usize, row: &TrayRow) -> View {
         Status::NeedsAttention => (Role::TextHi, Weight::Semibold),
     };
     let icon_key = Key::indexed("tray-icon", index as u64);
-    let icon = match &row.icon {
-        RowIcon::Theme(name) => View::new(
-            icon_key,
-            ViewKind::Icon {
-                key: IconKey::Theme(name.clone()),
-                tint: None,
-                size: ICON_SIZE,
-            },
-        ),
-        RowIcon::Pixmap(id) => view::image(icon_key, *id, 1.0),
-    }
-    .size(ICON_SIZE, ICON_SIZE);
+    let icon = icon_view(icon_key, &row.icon);
     let title = if row.title.is_empty() {
         copy::TRAY_ITEM_UNTITLED
     } else {
@@ -388,6 +506,7 @@ mod tests {
             status,
             icon,
             has_menu: false,
+            item_is_menu: false,
             sni_id: String::new(),
         }
     }
@@ -553,13 +672,240 @@ mod tests {
                 path: "/StatusNotifierItem".to_owned(),
             },
             title: name.to_owned(),
-            pixmap: Some(Pixmap {
+            pixmaps: vec![Pixmap {
                 w: 1,
                 h: 1,
                 argb: vec![fill; 4],
-            }),
+            }],
             ..TrayItem::default()
         }
+    }
+
+    /// A square pixmap of side `side`.
+    fn square(side: u32) -> Pixmap {
+        Pixmap {
+            w: side,
+            h: side,
+            argb: vec![0; (side * side * 4) as usize],
+        }
+    }
+
+    /// A scratch directory under the temp dir, removed on drop.
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(tag: &str) -> Scratch {
+            let dir = std::env::temp_dir().join(format!(
+                "celestina-tray-{tag}-{}-{:?}",
+                std::process::id(),
+                std::thread::current().id()
+            ));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("scratch dir");
+            Scratch(dir)
+        }
+
+        fn file(&self, rel: &str) -> PathBuf {
+            let path = self.0.join(rel);
+            std::fs::create_dir_all(path.parent().expect("a parent")).expect("dirs");
+            std::fs::write(&path, b"x").expect("file");
+            path
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn icon_of(item: &TrayItem, scale: f32, theme: &[&str]) -> IconSource<'static> {
+        let theme: Vec<String> = theme.iter().map(|s| (*s).to_owned()).collect();
+        // The host resolves the files when it reads the item; so do the tests.
+        let mut item = item.clone();
+        let dir = item.icon_theme_path.clone();
+        item.icon_file = crate::tray::item::icon_file_of(&item.icon_name, dir.as_deref());
+        item.attention_icon_file =
+            crate::tray::item::icon_file_of(&item.attention_icon_name, dir.as_deref());
+        match resolve_tray_icon(&item, scale, &|name, _| theme.iter().any(|t| t == name)) {
+            IconSource::Icon(icon) => IconSource::Icon(icon),
+            IconSource::Pixmap(p) => IconSource::Icon(RowIcon::Pixmap(PixmapId(p.w))),
+        }
+    }
+
+    #[test]
+    fn icon_from_item_theme_path_wins() {
+        let dir = Scratch::new("theme-path");
+        let file = dir.file("app/mail.png");
+        let item = TrayItem {
+            icon_name: "mail".to_owned(),
+            icon_theme_path: Some(dir.0.join("app")),
+            pixmaps: vec![square(24)],
+            ..TrayItem::default()
+        };
+        // The user's theme has `mail` too; the item's own directory wins.
+        let real = file.canonicalize().expect("canonical");
+        assert_eq!(
+            icon_of(&item, 1.0, &["mail"]),
+            IconSource::Icon(RowIcon::File(real))
+        );
+        // Without the file there, the user's theme is next, then the pixmap.
+        let elsewhere = TrayItem {
+            icon_theme_path: Some(dir.0.join("empty")),
+            ..item.clone()
+        };
+        assert_eq!(
+            icon_of(&elsewhere, 1.0, &["mail"]),
+            IconSource::Icon(RowIcon::Theme("mail".to_owned()))
+        );
+        assert_eq!(
+            icon_of(&elsewhere, 1.0, &[]),
+            IconSource::Icon(RowIcon::Pixmap(PixmapId(24)))
+        );
+    }
+
+    #[test]
+    fn absolute_icon_name_under_a_root_is_used() {
+        let dir = Scratch::new("abs-in");
+        let file = dir.file("app/icons/tray.svg");
+        let item = TrayItem {
+            icon_name: file.to_string_lossy().into_owned(),
+            icon_theme_path: Some(dir.0.join("app")),
+            ..TrayItem::default()
+        };
+        assert_eq!(
+            icon_of(&item, 1.0, &[]),
+            IconSource::Icon(RowIcon::File(file.canonicalize().expect("canonical")))
+        );
+    }
+
+    #[test]
+    fn absolute_icon_name_outside_the_roots_is_refused() {
+        let dir = Scratch::new("abs-out");
+        let secret = dir.file("elsewhere/secret.png");
+        dir.file("app/inside.png");
+        let link = dir.0.join("app/link.png");
+        std::os::unix::fs::symlink(&secret, &link).expect("symlink");
+        let hostile = |name: String| TrayItem {
+            icon_name: name,
+            icon_theme_path: Some(dir.0.join("app")),
+            ..TrayItem::default()
+        };
+        for name in [
+            "/etc/shadow".to_owned(),
+            "../../x.png".to_owned(),
+            secret.to_string_lossy().into_owned(),
+            link.to_string_lossy().into_owned(),
+            format!("{}/app/../elsewhere/secret.png", dir.0.display()),
+        ] {
+            // Refused: the fallback, even when the theme claims every name.
+            assert_eq!(
+                icon_of(&hostile(name.clone()), 1.0, &[&name]),
+                IconSource::Icon(RowIcon::default()),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_broad_theme_dir_makes_no_root() {
+        // `IconThemePath` "/" must not turn every absolute name into an
+        // allowed one: the host resolves nothing under it.
+        let dir = Scratch::new("broad");
+        let file = dir.file("anywhere/secret.png");
+        let item = TrayItem {
+            icon_name: file.to_string_lossy().into_owned(),
+            icon_theme_path: Some(PathBuf::from("/")),
+            ..TrayItem::default()
+        };
+        assert_eq!(
+            icon_of(&item, 1.0, &[]),
+            IconSource::Icon(RowIcon::default())
+        );
+    }
+
+    #[test]
+    fn pixmap_nearest_to_scaled_size() {
+        let item = TrayItem {
+            pixmaps: vec![square(32), square(48), square(64)],
+            ..TrayItem::default()
+        };
+        assert_eq!(
+            icon_of(&item, 1.0, &[]),
+            IconSource::Icon(RowIcon::Pixmap(PixmapId(32))),
+            "24 px: 32 is nearest"
+        );
+        assert_eq!(
+            icon_of(&item, 2.0, &[]),
+            IconSource::Icon(RowIcon::Pixmap(PixmapId(48))),
+            "scale 2 is the 48 px candidate"
+        );
+        assert_eq!(
+            icon_of(&item, 3.0, &[]),
+            IconSource::Icon(RowIcon::Pixmap(PixmapId(64)))
+        );
+        // A non-finite scale counts as 1.
+        assert_eq!(icon_of(&item, f32::NAN, &[]), icon_of(&item, 1.0, &[]));
+    }
+
+    #[test]
+    fn attention_icon_replaces_the_icon_when_needs_attention() {
+        let mut item = TrayItem {
+            icon_name: "mail".to_owned(),
+            attention_icon_name: "mail-unread".to_owned(),
+            ..TrayItem::default()
+        };
+        let theme = ["mail", "mail-unread"];
+        assert_eq!(
+            icon_of(&item, 1.0, &theme),
+            IconSource::Icon(RowIcon::Theme("mail".to_owned())),
+            "active: the normal icon"
+        );
+        item.status = Status::NeedsAttention;
+        assert_eq!(
+            icon_of(&item, 1.0, &theme),
+            IconSource::Icon(RowIcon::Theme("mail-unread".to_owned()))
+        );
+        // The attention pixmap stands in when the name is not usable.
+        item.attention_icon_name.clear();
+        item.attention_pixmaps = vec![square(24)];
+        assert_eq!(
+            icon_of(&item, 1.0, &theme),
+            IconSource::Icon(RowIcon::Pixmap(PixmapId(24)))
+        );
+        // Nothing usable of its own: the normal icon.
+        item.attention_pixmaps.clear();
+        assert_eq!(
+            icon_of(&item, 1.0, &theme),
+            IconSource::Icon(RowIcon::Theme("mail".to_owned()))
+        );
+    }
+
+    #[test]
+    fn missing_icon_draws_the_bundled_fallback() {
+        let item = TrayItem {
+            icon_name: "no-such-icon".to_owned(),
+            ..TrayItem::default()
+        };
+        let icon = RowIcon::Bundled("app-window");
+        assert_eq!(icon_of(&item, 1.0, &[]), IconSource::Icon(icon.clone()));
+        assert_eq!(RowIcon::default(), icon);
+        let drawn = icon_view(Key::named("i"), &icon);
+        assert!(matches!(
+            &drawn.kind,
+            ViewKind::Icon {
+                key: IconKey::Semantic("app-window"),
+                tint: Some(Role::TextLo),
+                ..
+            }
+        ));
+        // The glyph is bundled with the style assets.
+        assert!(
+            celestina_paint::default_icon_dirs()
+                .iter()
+                .any(|d| d.join("app-window.svg").is_file()),
+            "celestina-style/icons/app-window.svg"
+        );
     }
 
     /// Hands out ids from 1 and remembers what happened; the theme has the
@@ -598,7 +944,7 @@ mod tests {
     fn rows_carry_the_items_own_id() {
         let mut item = pixmap_item("a", 1);
         item.sni_id = "nm-applet".to_owned();
-        let rows = IconCache::default().rows(&[item], &mut Fake::default());
+        let rows = IconCache::default().rows(&[item], 1.0, &mut Fake::default());
         assert_eq!(rows[0].sni_id, "nm-applet");
     }
 
@@ -617,7 +963,7 @@ mod tests {
             icon_name: "no-such-icon".to_owned(),
             ..TrayItem::default()
         };
-        let rows = cache.rows(&[themed, private, nothing], &mut fake);
+        let rows = cache.rows(&[themed, private, nothing], 1.0, &mut fake);
         assert_eq!(rows[0].icon, RowIcon::Theme("mail".to_owned()));
         assert_eq!(rows[1].icon, RowIcon::Pixmap(PixmapId(1)));
         assert_eq!(
@@ -635,13 +981,13 @@ mod tests {
         let mut cache = IconCache::default();
         let mut fake = Fake::default();
         let items = [pixmap_item("a", 1), pixmap_item("b", 2)];
-        let first = cache.rows(&items, &mut fake);
+        let first = cache.rows(&items, 1.0, &mut fake);
         assert_eq!(cache.len(), 2);
-        let again = cache.rows(&items, &mut fake);
+        let again = cache.rows(&items, 1.0, &mut fake);
         assert_eq!(first, again, "re-sent items upload nothing");
         assert_eq!(fake.uploads, 2);
         let changed = [pixmap_item("a", 9), pixmap_item("b", 2)];
-        let after = cache.rows(&changed, &mut fake);
+        let after = cache.rows(&changed, 1.0, &mut fake);
         assert_ne!(first[0].icon, after[0].icon);
         assert_eq!(first[1].icon, after[1].icon);
         assert_eq!(
@@ -649,7 +995,7 @@ mod tests {
             vec![PixmapId(1)],
             "the changed image's old texture"
         );
-        let gone = cache.rows(&changed[1..], &mut fake);
+        let gone = cache.rows(&changed[1..], 1.0, &mut fake);
         assert_eq!(gone.len(), 1);
         assert_eq!(cache.len(), 1);
         assert_eq!(fake.released.len(), 2, "and the gone item's");
@@ -666,7 +1012,7 @@ mod tests {
             refuse: true,
             ..Fake::default()
         };
-        let rows = cache.rows(&[pixmap_item("a", 1)], &mut fake);
+        let rows = cache.rows(&[pixmap_item("a", 1)], 1.0, &mut fake);
         assert_eq!(rows[0].icon, RowIcon::default());
         assert!(cache.is_empty());
     }
@@ -679,10 +1025,10 @@ mod tests {
             ..Fake::default()
         };
         let mut a = pixmap_item("a", 1);
-        cache.rows(&[a.clone()], &mut fake);
-        a.pixmap = None;
+        cache.rows(&[a.clone()], 1.0, &mut fake);
+        a.pixmaps.clear();
         a.icon_name = "mail".to_owned();
-        let rows = cache.rows(&[a], &mut fake);
+        let rows = cache.rows(&[a], 1.0, &mut fake);
         assert_eq!(rows[0].icon, RowIcon::Theme("mail".to_owned()));
         assert_eq!(fake.released, vec![PixmapId(1)]);
     }

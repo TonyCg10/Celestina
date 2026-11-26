@@ -18,7 +18,7 @@ pub use celestina_wayland::Rect;
 pub use color::{Color, ColorError};
 pub use haze::GrainError;
 pub use haze::{silhouette_slices, HazePlan};
-pub use icon::{default_icon_dirs, IconKey, PixmapId};
+pub use icon::{broad_icon_dir, default_icon_dirs, icon_in_dir, peer_icon_file, IconKey, PixmapId};
 pub use painter::{AtlasUsage, CutRow, PaintError, Painter};
 pub use soft_edge::Cuts;
 pub use text::{default_font_dirs, TextError, TextRun, TextStyle, TextSystem, Weight, LINE_HEIGHT};

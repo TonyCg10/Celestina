@@ -87,6 +87,9 @@ pub enum IslandAction {
         item: ItemId,
         row: Rect,
         keyboard: bool,
+        /// Where the pointer was, in output coordinates: what the item
+        /// hears in `ContextMenu` when its dbusmenu cannot be had.
+        at: (i32, i32),
     },
     /// The overflow button at `more` (a rect of the surface) was chosen,
     /// from the `keyboard` or the pointer: the app builds the menu and
@@ -321,6 +324,8 @@ pub struct Island {
     tray_rows: Vec<TrayRow>,
     /// The generation of the tray list `tray_rows` was made from.
     tray_generation: u64,
+    /// The output scale the tray rows' icons were resolved at.
+    tray_dpr: f32,
     /// The clipboard rows the panel was made from, and whether the duty was
     /// on.
     clipboard: ClipboardState,
@@ -365,6 +370,10 @@ pub struct Island {
     tray_menu_on_bar: bool,
     /// The last tray menu asked for was a bar icon's.
     bar_menu_asked: bool,
+    /// The last pointer position seen, in the surface's logical coordinates.
+    /// The surface is anchored to the output's whole top edge, so these are
+    /// the output's coordinates too.
+    pointer: (f32, f32),
     /// The button pressed on the open sheet's subtitle, until its release:
     /// only a press that began there makes a click there.
     subtitle_press: Option<u32>,
@@ -384,6 +393,14 @@ pub struct Island {
     /// The month the Clock page shows, in months from the current one;
     /// bounded by [`clock_page::MAX_OFFSET`] and reset when the page closes.
     month_offset: i32,
+}
+
+/// A point of the surface as the integer output coordinates an item hears
+/// in `ContextMenu`. The surface is anchored to the output's whole top
+/// edge, so its coordinates are the output's; a non-finite value is 0.
+fn output_point((x, y): (f32, f32)) -> (i32, i32) {
+    let whole = |v: f32| if v.is_finite() { v.round() as i32 } else { 0 };
+    (whole(x), whole(y))
 }
 
 /// The room the page is laid out in on a surface of `size`: never wider
@@ -432,6 +449,7 @@ impl Island {
             tray_menu: None,
             tray_rows: Vec::new(),
             tray_generation: 0,
+            tray_dpr: 1.0,
             clipboard: ClipboardState::default(),
             clipboard_on: false,
             clip_panel: clipboard_page::ClipboardPanel::default(),
@@ -453,6 +471,7 @@ impl Island {
             levels: Levels::default(),
             tray_menu_on_bar: false,
             bar_menu_asked: false,
+            pointer: (0.0, 0.0),
             subtitle_press: None,
             bar_sysmon: Cadence::new(SYSMON_BAR_PERIOD),
             page_sysmon: None,
@@ -829,9 +848,10 @@ impl Island {
             self.bubbles = bubbles.clone();
             seen = true;
         }
-        if tray.generation != self.tray_generation {
+        if tray.generation != self.tray_generation || self.dpr != self.tray_dpr {
             self.tray_generation = tray.generation;
-            self.tray_rows = self.icons.rows(&tray.items, painter);
+            self.tray_dpr = self.dpr;
+            self.tray_rows = self.icons.rows(&tray.items, self.dpr, painter);
             seen = true;
         }
         if self.mirror_weather(weather) {
@@ -1369,6 +1389,12 @@ impl Island {
         measure: &mut Measure<'_>,
     ) -> Vec<IslandAction> {
         self.sheet_queue_input(&ev, now);
+        if let InputEvent::PointerMotion { x, y }
+        | InputEvent::PointerPress { x, y, .. }
+        | InputEvent::PointerRelease { x, y, .. } = ev
+        {
+            self.pointer = (x, y);
+        }
         if self.sheets.is_open() {
             if let Some(actions) = self.sheet_input(&ev, now, measure) {
                 return actions;
@@ -1549,8 +1575,13 @@ impl Island {
                             item,
                             row,
                             keyboard: false,
+                            at: output_point(self.pointer),
                         });
                     }
+                }
+                PieceAction::TrayContext(item) => {
+                    let (x, y) = output_point(self.pointer);
+                    out.push(IslandAction::Tray(TrayCommand::ContextMenu(item, x, y)));
                 }
                 PieceAction::Audio(action) => out.push(IslandAction::Audio(action)),
                 PieceAction::Brightness(action) => out.push(IslandAction::Brightness(action)),
@@ -1672,11 +1703,21 @@ impl Island {
     /// ([`Island::menu_key`]), as the pointer's is the right button.
     fn tray_actions(&mut self, event: &UiEvent) -> Vec<IslandAction> {
         match event {
-            UiEvent::Click(key) | UiEvent::Activate(key) => self
-                .tray_row(*key)
-                .map(|(_, row)| IslandAction::Tray(TrayCommand::Activate(row.id.clone())))
-                .into_iter()
-                .collect(),
+            UiEvent::Click(key) | UiEvent::Activate(key) => {
+                let keyboard = matches!(event, UiEvent::Activate(_));
+                self.tray_row(*key)
+                    .map(|(index, row)| {
+                        // An item that is only a menu opens it on the click.
+                        if row.item_is_menu {
+                            self.menu_for(index, row, keyboard, self.pointer)
+                        } else {
+                            Some(IslandAction::Tray(TrayCommand::Activate(row.id.clone())))
+                        }
+                    })
+                    .into_iter()
+                    .flatten()
+                    .collect()
+            }
             UiEvent::Scroll(key, horizontal, vertical) => {
                 self.scroll_actions(*key, *horizontal, *vertical)
             }
@@ -1687,12 +1728,46 @@ impl Island {
         }
     }
 
-    fn open_menu_action(&self, item: ItemId, index: usize, keyboard: bool) -> Option<IslandAction> {
+    fn open_menu_action(
+        &self,
+        item: ItemId,
+        index: usize,
+        keyboard: bool,
+        at: (i32, i32),
+    ) -> Option<IslandAction> {
         Some(IslandAction::OpenTrayMenu {
             item,
             row: self.tray_row_rect(index)?,
             keyboard,
+            at,
         })
+    }
+
+    /// What the menu of the tray row at `index` asks for: its dbusmenu when
+    /// it serves one, else the item's own through `ContextMenu`. `pointer`
+    /// is where the pointer was; the keyboard's menu is placed at the row's
+    /// centre instead.
+    fn menu_for(
+        &self,
+        index: usize,
+        row: &TrayRow,
+        keyboard: bool,
+        pointer: (f32, f32),
+    ) -> Option<IslandAction> {
+        let rect = self.tray_row_rect(index)?;
+        let at = output_point(if keyboard {
+            (rect.x + rect.w / 2.0, rect.y + rect.h / 2.0)
+        } else {
+            pointer
+        });
+        if row.has_menu {
+            return self.open_menu_action(row.id.clone(), index, keyboard, at);
+        }
+        Some(IslandAction::Tray(TrayCommand::ContextMenu(
+            row.id.clone(),
+            at.0,
+            at.1,
+        )))
     }
 
     /// A wheel turn of (`horizontal`, `vertical`) logical px over the row
@@ -1750,8 +1825,8 @@ impl Island {
             BTN_MIDDLE => vec![IslandAction::Tray(TrayCommand::SecondaryActivate(
                 row.id.clone(),
             ))],
-            BTN_RIGHT if row.has_menu => self
-                .open_menu_action(row.id.clone(), index, false)
+            BTN_RIGHT => self
+                .menu_for(index, row, false, (x, y))
                 .into_iter()
                 .collect(),
             _ => Vec::new(),
@@ -1764,8 +1839,8 @@ impl Island {
             return Vec::new();
         };
         match self.tray_row(self.page.key_of(id)) {
-            Some((index, row)) if row.has_menu => self
-                .open_menu_action(row.id.clone(), index, true)
+            Some((index, row)) => self
+                .menu_for(index, row, true, self.pointer)
                 .into_iter()
                 .collect(),
             _ => Vec::new(),
@@ -2634,7 +2709,8 @@ mod tests {
             [IslandAction::OpenTrayMenu {
                 item: id.clone(),
                 row: rect,
-                keyboard: false
+                keyboard: false,
+                at: (icon.0.round() as i32, icon.1.round() as i32),
             }]
         );
         assert!(island.bar_menu_asked);
@@ -3655,19 +3731,27 @@ mod tests {
         assert_eq!(
             island.other_button(x0, y0, BTN_RIGHT),
             island
-                .open_menu_action(a, 0, false)
+                .open_menu_action(a, 0, false, (x0.round() as i32, y0.round() as i32))
                 .into_iter()
                 .collect::<Vec<_>>()
         );
-        // A right click on an item without a menu, a click between rows
-        // and any other button do nothing.
-        assert!(island.other_button(x1, y1, BTN_RIGHT).is_empty());
+        // A right click on an item without a menu asks the item for its
+        // own, at the pointer; a click between rows and any other button do
+        // nothing.
+        assert_eq!(
+            island.other_button(x1 + 0.4, y1, BTN_RIGHT),
+            vec![IslandAction::Tray(TrayCommand::ContextMenu(
+                id_of(&island, 1),
+                x1.round() as i32,
+                y1.round() as i32
+            ))]
+        );
         assert!(island.other_button(1.0, 1.0, BTN_MIDDLE).is_empty());
         assert!(island.other_button(x0, y0, 0x113).is_empty());
     }
 
     #[test]
-    fn the_menu_key_opens_the_menu_of_the_focused_row_only() {
+    fn the_menu_key_opens_the_menu_of_the_focused_row() {
         let (mut island, _) = tray_island(2);
         assert!(island.menu_key().is_empty(), "nothing focused");
         // Tab focuses the first row (it has a menu), Tab again the second.
@@ -3695,7 +3779,48 @@ mod tests {
             Some(IslandAction::OpenTrayMenu { keyboard: true, .. })
         ));
         tab_to(&mut island, tray_page::row_key(1));
-        assert!(island.menu_key().is_empty(), "the second row has no menu");
+        assert!(
+            matches!(
+                island.menu_key().as_slice(),
+                [IslandAction::Tray(TrayCommand::ContextMenu(..))]
+            ),
+            "the second row has no dbusmenu: the item's own menu"
+        );
+    }
+
+    #[test]
+    fn item_is_menu_opens_the_menu_on_left_click() {
+        let (mut island, _) = tray_island(3);
+        island.tray_rows[0].item_is_menu = true;
+        island.tray_rows[1].item_is_menu = true;
+        island.pointer = (30.4, 40.6);
+        // With a dbusmenu: its menu opens, not an activation.
+        let first = island.tray_actions(&UiEvent::Click(tray_page::row_key(0)));
+        assert!(
+            matches!(
+                first.as_slice(),
+                [IslandAction::OpenTrayMenu {
+                    keyboard: false,
+                    at: (30, 41),
+                    ..
+                }]
+            ),
+            "{first:?}"
+        );
+        // Without one: the item's own menu, at the pointer.
+        assert_eq!(
+            island.tray_actions(&UiEvent::Click(tray_page::row_key(1))),
+            vec![IslandAction::Tray(TrayCommand::ContextMenu(
+                id_of(&island, 1),
+                30,
+                41
+            ))]
+        );
+        // An item that is not only a menu still activates.
+        assert_eq!(
+            island.tray_actions(&UiEvent::Click(tray_page::row_key(2))),
+            vec![IslandAction::Tray(TrayCommand::Activate(id_of(&island, 2)))]
+        );
     }
 
     #[test]

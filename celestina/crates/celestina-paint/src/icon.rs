@@ -275,6 +275,183 @@ pub(crate) fn theme_path(theme: Option<&str>, name: &str, size: u32) -> Option<P
     }
 }
 
+/// The largest icon file a peer may name by path, in bytes.
+const MAX_PEER_ICON_FILE: u64 = 1 << 20;
+
+/// The directories an icon a peer named by absolute path may live in:
+/// `$XDG_DATA_DIRS` (default `/usr/local/share:/usr/share`) with `icons`
+/// and `pixmaps`, and `$XDG_DATA_HOME` (default `~/.local/share`) with
+/// `icons`.
+pub(crate) fn xdg_icon_roots_from(
+    data_dirs: Option<OsString>,
+    data_home: Option<OsString>,
+    home: Option<OsString>,
+) -> Vec<PathBuf> {
+    let dirs = data_dirs
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| OsString::from("/usr/local/share:/usr/share"));
+    let mut roots = Vec::new();
+    for dir in std::env::split_paths(&dirs).filter(|d| d.is_absolute()) {
+        roots.push(dir.join("icons"));
+        roots.push(dir.join("pixmaps"));
+    }
+    let data_home = data_home
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| {
+            home.map(PathBuf::from)
+                .filter(|p| p.is_absolute())
+                .map(|h| h.join(".local/share"))
+        });
+    if let Some(dir) = data_home {
+        roots.push(dir.join("icons"));
+    }
+    roots
+}
+
+/// [`xdg_icon_roots_from`] with the process environment.
+pub(crate) fn xdg_icon_roots() -> Vec<PathBuf> {
+    xdg_icon_roots_from(
+        std::env::var_os("XDG_DATA_DIRS"),
+        std::env::var_os("XDG_DATA_HOME"),
+        std::env::var_os("HOME"),
+    )
+}
+
+/// The canonical path of `path` when it is absolute, a `.png` or `.svg`
+/// (any case), canonicalizes to a regular file of at most 1 MiB, and that
+/// file lies under one of `roots` (canonicalized the same way). `..`
+/// segments and symlinks are resolved first, so neither leads out of a root.
+/// Only the metadata is read: nothing is opened, so a FIFO or a device
+/// refused here never blocks. The one way a path a remote peer sent becomes
+/// something that may be drawn.
+#[cfg(test)]
+pub(crate) fn bounded_icon_file(path: &Path, roots: &[PathBuf]) -> Option<PathBuf> {
+    let roots: Vec<PathBuf> = roots.iter().filter_map(|r| r.canonicalize().ok()).collect();
+    bounded_under(path, &roots)
+}
+
+/// [`bounded_icon_file`] with `roots` already canonical.
+fn bounded_under(path: &Path, roots: &[PathBuf]) -> Option<PathBuf> {
+    let icon_file = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("png") || e.eq_ignore_ascii_case("svg"));
+    if !path.is_absolute() || !icon_file {
+        return None;
+    }
+    let real = path.canonicalize().ok()?;
+    let meta = std::fs::metadata(&real).ok()?;
+    if !meta.is_file() || meta.len() > MAX_PEER_ICON_FILE {
+        return None;
+    }
+    roots
+        .iter()
+        .any(|root| real.starts_with(root))
+        .then_some(real)
+}
+
+/// The XDG icon roots, canonical, computed once per process.
+fn cached_roots() -> &'static [PathBuf] {
+    static ROOTS: std::sync::OnceLock<Vec<PathBuf>> = std::sync::OnceLock::new();
+    ROOTS.get_or_init(|| {
+        xdg_icon_roots()
+            .iter()
+            .filter_map(|r| r.canonicalize().ok())
+            .collect()
+    })
+}
+
+/// Whether `dir` is too broad to serve as a peer's icon root: fewer than two
+/// components (`/`, `/home`), the home directory or an ancestor of it, or an
+/// ancestor of an XDG icon root. A peer that named one would make every file
+/// below it an icon it may draw.
+#[must_use]
+pub fn broad_icon_dir(dir: &Path) -> bool {
+    broad_with(
+        dir,
+        std::env::var_os("HOME").map(PathBuf::from),
+        cached_roots(),
+    )
+}
+
+fn broad_with(dir: &Path, home: Option<PathBuf>, roots: &[PathBuf]) -> bool {
+    let real = dir.canonicalize().unwrap_or_else(|_| dir.to_owned());
+    broad_real(&real, home, roots)
+}
+
+/// [`broad_with`] for a path already canonical.
+fn broad_real(real: &Path, home: Option<PathBuf>, roots: &[PathBuf]) -> bool {
+    let parts = real
+        .components()
+        .filter(|c| matches!(c, std::path::Component::Normal(_)))
+        .count();
+    if parts < 2 {
+        return true;
+    }
+    let home = home.map(|h| h.canonicalize().unwrap_or(h));
+    home.is_some_and(|h| h.starts_with(real))
+        || roots.iter().any(|r| r != real && r.starts_with(real))
+}
+
+/// A peer's icon directory as the root it may serve icons from: canonical,
+/// and checked as that same canonical value, so a symlink the peer swaps
+/// after the check cannot widen the root (files are matched by prefix
+/// against this path once they are canonical themselves). `None` when the
+/// directory cannot be resolved or is too broad ([`broad_icon_dir`]).
+fn peer_root(dir: &Path) -> Option<PathBuf> {
+    let real = dir.canonicalize().ok()?;
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    (!broad_real(
+        &real,
+        home.map(|h| h.canonicalize().unwrap_or(h)),
+        cached_roots(),
+    ))
+    .then_some(real)
+}
+
+/// A file a peer's `IconName` that is an absolute path points at, when
+/// [`bounded_icon_file`] accepts it under the item's `theme_dir` or the XDG
+/// icon roots.
+#[must_use]
+pub fn peer_icon_file(path: &Path, theme_dir: Option<&Path>) -> Option<PathBuf> {
+    let mut roots = cached_roots().to_vec();
+    roots.extend(theme_dir.and_then(peer_root));
+    bounded_under(path, &roots)
+}
+
+/// The file for the relative icon `name` inside an item's own `dir`
+/// (`IconThemePath`): `<dir>/<name>.svg|png`, then the freedesktop layout
+/// (`<dir>/hicolor/<size>/apps/`, scalable first). The result is checked
+/// like a peer's absolute path with `dir` as its only root, so a symlink in
+/// the directory cannot point out of it.
+#[must_use]
+pub fn icon_in_dir(dir: &Path, name: &str, size: u32) -> Option<PathBuf> {
+    if !valid_name(name) {
+        return None;
+    }
+    let dir = peer_root(dir)?;
+    let dir = dir.as_path();
+    let mut folders = vec![
+        dir.to_owned(),
+        dir.join("hicolor/scalable/apps"),
+        dir.join("icons/hicolor/scalable/apps"),
+    ];
+    for side in [size, 48, 32, 24, 22, 64, 128, 256] {
+        for kind in ["apps", "status"] {
+            folders.push(dir.join(format!("hicolor/{side}x{side}/{kind}")));
+            folders.push(dir.join(format!("icons/hicolor/{side}x{side}/{kind}")));
+        }
+    }
+    let roots = [dir.to_owned()];
+    folders.iter().find_map(|folder| {
+        ["svg", "png"]
+            .iter()
+            .find_map(|ext| bounded_under(&folder.join(format!("{name}.{ext}")), &roots))
+    })
+}
+
 /// The square device size an icon is rasterised at for `rect`: its longer
 /// side, clamped to `1..=MAX_ICON_PX`.
 pub(crate) fn device_size(rect: Rect, dpr: f32) -> u32 {
@@ -571,6 +748,127 @@ mod tests {
             IconKey::desktop_icon("/opt/a.png"),
             Some(IconKey::File(PathBuf::from("/opt/a.png")))
         );
+    }
+
+    #[test]
+    fn absolute_icon_name_under_a_root_is_used() {
+        let dir = Scratch::new("bounded-in");
+        let png = dir.file("root/app.png");
+        let svg = dir.file("root/sub/APP.SVG");
+        let roots = [dir.0.join("root")];
+        let real_root = dir.0.join("root").canonicalize().unwrap();
+        assert_eq!(
+            bounded_icon_file(&png, &roots),
+            Some(real_root.join("app.png"))
+        );
+        assert_eq!(
+            bounded_icon_file(&svg, &roots),
+            Some(real_root.join("sub/APP.SVG"))
+        );
+        // The peer-facing entry point accepts the item's own directory.
+        assert_eq!(
+            peer_icon_file(&png, Some(&dir.0.join("root"))),
+            Some(real_root.join("app.png"))
+        );
+    }
+
+    #[test]
+    fn absolute_icon_name_outside_the_roots_is_refused() {
+        let dir = Scratch::new("bounded-out");
+        let inside = dir.file("root/app.png");
+        let outside = dir.file("elsewhere/secret.png");
+        let roots = [dir.0.join("root")];
+        assert!(bounded_icon_file(&outside, &roots).is_none());
+        // `..` that leaves the root.
+        let dotdot = inside.parent().unwrap().join("../elsewhere/secret.png");
+        assert!(bounded_icon_file(&dotdot, &roots).is_none());
+        // A symlink in the root that points out of it.
+        let link = dir.0.join("root/link.png");
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        assert!(bounded_icon_file(&link, &roots).is_none());
+        // A directory symlink out of the root.
+        let dir_link = dir.0.join("root/dir");
+        std::os::unix::fs::symlink(dir.0.join("elsewhere"), &dir_link).unwrap();
+        assert!(bounded_icon_file(&dir_link.join("secret.png"), &roots).is_none());
+        // Files that are not icons, relative names, missing files.
+        assert!(bounded_icon_file(Path::new("/etc/shadow"), &roots).is_none());
+        assert!(bounded_icon_file(Path::new("../../x.png"), &roots).is_none());
+        assert!(bounded_icon_file(&dir.0.join("root/none.png"), &roots).is_none());
+        let text = dir.file("root/notes.txt");
+        assert!(bounded_icon_file(&text, &roots).is_none());
+        // A directory named like an icon, and an oversized file.
+        let folder = dir.0.join("root/d.png");
+        std::fs::create_dir_all(&folder).unwrap();
+        assert!(bounded_icon_file(&folder, &roots).is_none());
+        let big = dir.0.join("root/big.png");
+        std::fs::write(&big, vec![0u8; (MAX_PEER_ICON_FILE + 1) as usize]).unwrap();
+        assert!(bounded_icon_file(&big, &roots).is_none());
+        // No roots, nothing is allowed.
+        assert!(bounded_icon_file(&inside, &[]).is_none());
+    }
+
+    #[test]
+    fn broad_dirs_are_refused_as_peer_roots() {
+        let roots = [PathBuf::from("/usr/share/icons")];
+        let home = Some(PathBuf::from("/home/u"));
+        for broad in ["/", "/home", "/home/u", "/usr/share", "/usr"] {
+            assert!(
+                broad_with(Path::new(broad), home.clone(), &roots),
+                "{broad}"
+            );
+        }
+        for fine in [
+            "/opt/app/icons",
+            "/home/u/.local/share/app",
+            "/usr/share/icons",
+        ] {
+            assert!(!broad_with(Path::new(fine), home.clone(), &roots), "{fine}");
+        }
+    }
+
+    #[test]
+    fn xdg_roots_follow_the_environment_with_the_spec_defaults() {
+        let os = |s: &str| Some(OsString::from(s));
+        assert_eq!(
+            xdg_icon_roots_from(None, None, os("/home/u")),
+            [
+                "/usr/local/share/icons",
+                "/usr/local/share/pixmaps",
+                "/usr/share/icons",
+                "/usr/share/pixmaps",
+                "/home/u/.local/share/icons",
+            ]
+            .map(PathBuf::from)
+        );
+        assert_eq!(
+            xdg_icon_roots_from(os("/a:rel:/b"), os("/data"), os("/home/u")),
+            [
+                "/a/icons",
+                "/a/pixmaps",
+                "/b/icons",
+                "/b/pixmaps",
+                "/data/icons"
+            ]
+            .map(PathBuf::from)
+        );
+    }
+
+    #[test]
+    fn icon_from_an_item_dir_is_found_flat_or_in_the_theme_layout() {
+        let dir = Scratch::new("item-dir");
+        let flat = dir.file("app/flat.png");
+        let themed = dir.file("app/hicolor/48x48/apps/nested.png");
+        let svg = dir.file("app/hicolor/scalable/apps/vec.svg");
+        let root = dir.0.join("app");
+        assert_eq!(icon_in_dir(&root, "flat", 24), flat.canonicalize().ok());
+        assert_eq!(icon_in_dir(&root, "nested", 24), themed.canonicalize().ok());
+        assert_eq!(icon_in_dir(&root, "vec", 24), svg.canonicalize().ok());
+        assert_eq!(icon_in_dir(&root, "absent", 24), None);
+        assert_eq!(icon_in_dir(&root, "../flat", 24), None);
+        // A symlink inside the directory that leaves it is not followed.
+        let outside = dir.file("out/leak.png");
+        std::os::unix::fs::symlink(&outside, root.join("leak.png")).unwrap();
+        assert_eq!(icon_in_dir(&root, "leak", 24), None);
     }
 
     #[test]

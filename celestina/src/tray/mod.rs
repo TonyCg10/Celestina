@@ -13,7 +13,7 @@ pub(crate) mod test_bus;
 pub mod watcher;
 
 pub use model::{
-    bound_items, bound_menu, bound_text, choose_pixmap, scroll_steps, ItemId, ItemIdError,
-    ItemsCoalescer, MenuEntry, MenuTree, NameHolder, Orientation, Pixmap, Status, TrayCommand,
-    TrayEvent, TrayItem,
+    bound_items, bound_menu, bound_pixmaps, bound_text, choose_pixmap, pick_pixmap, scroll_steps,
+    theme_dir, ItemId, ItemIdError, ItemsCoalescer, MenuEntry, MenuTree, NameHolder, Orientation,
+    Pixmap, Status, TrayCommand, TrayEvent, TrayItem,
 };

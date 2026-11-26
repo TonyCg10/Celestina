@@ -12,7 +12,10 @@
 //! without expecting a reply, so an item that never answers cannot hold the
 //! worker.
 
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+
+use celestina_paint::{icon_in_dir, peer_icon_file};
 
 use zbus::{
     blocking::Connection,
@@ -21,7 +24,7 @@ use zbus::{
 };
 
 use crate::bus_signal::{name_owner_change, NameOwnerChange, BUS_DRIVER};
-use crate::tray::model::{choose_pixmap, Orientation, Status, TrayEvent, TrayItem};
+use crate::tray::model::{bound_pixmaps, theme_dir, Orientation, Status, TrayEvent, TrayItem};
 use crate::tray::ItemId;
 
 /// The interfaces an item may serve, tried in this order.
@@ -32,9 +35,6 @@ pub const ITEM_INTERFACES: [&str; 2] = [
 /// The most bytes an `IconPixmap` reply may carry before it is refused
 /// unread: sixteen pixmaps of the largest kept size.
 pub const MAX_PIXMAP_BODY_BYTES: usize = 16 * 256 * 256 * 4;
-/// The size, in pixels, the Tray page draws an icon at; the pixmap chosen is
-/// the smallest at least this large.
-pub const ICON_SIZE: u32 = 22;
 /// The most bytes a text property's reply may carry before it is refused
 /// unread: the model keeps 128 characters of a title or icon name, and a
 /// bus name or object path is at most 255 bytes.
@@ -44,7 +44,10 @@ pub const MAX_TEXT_BODY_BYTES: usize = 4096;
 /// call timeout must not hold the host for the whole sequence. The budget
 /// is looked at between calls, so a read takes at most this plus one call's
 /// timeout (1 s): under the two seconds the shell's exit waits for the
-/// host. An honest item has six calls to answer within it.
+/// host. An honest item has eight calls to answer within it (ten while it
+/// needs attention). Each property stays its own typed `Get`: a `GetAll`
+/// would decode a peer's dictionary as generic values, which the bounds
+/// above exist to avoid.
 pub const ITEM_READ_BUDGET: Duration = Duration::from_millis(900);
 /// The wire signature of `IconPixmap`.
 const PIXMAPS_SIGNATURE: &[u8] = b"a(iiay)";
@@ -179,6 +182,40 @@ pub fn text_of(reply: &Message) -> Option<String> {
     None
 }
 
+/// The value of a `Get` reply holding a boolean, `None` for any other type.
+#[must_use]
+pub fn bool_of(reply: &Message) -> Option<bool> {
+    let body = reply.body();
+    if body.len() > MAX_TEXT_BODY_BYTES {
+        return None;
+    }
+    let data = body.data();
+    let at = variant_value_at(data.bytes(), b"b")?;
+    data.slice(at..)
+        .deserialize_for_signature::<_, bool>("b")
+        .ok()
+        .map(|(value, _)| value)
+}
+
+/// A boolean property, `false` when it is missing or not a boolean; `Err`
+/// when the owner is gone or silent.
+fn get_bool(
+    connection: &Connection,
+    owner: &str,
+    path: &str,
+    interface: &str,
+    property: &str,
+) -> Result<bool, Failure> {
+    match get(connection, owner, path, interface, property) {
+        Ok(reply) => Ok(bool_of(&reply).unwrap_or(false)),
+        Err(err) => match classify(&err) {
+            Failure::Gone => Err(Failure::Gone),
+            Failure::Unresponsive => Err(Failure::Unresponsive),
+            Failure::Missing | Failure::Other => Ok(false),
+        },
+    }
+}
+
 /// A string property, `None` when it is missing or not a string; `Err` when
 /// the owner is gone or silent.
 fn get_text(
@@ -231,8 +268,9 @@ fn get_pixmaps(
     owner: &str,
     path: &str,
     interface: &str,
+    property: &str,
 ) -> Result<Vec<(i32, i32, Vec<u8>)>, Failure> {
-    match get(connection, owner, path, interface, "IconPixmap") {
+    match get(connection, owner, path, interface, property) {
         Ok(reply) => Ok(pixmaps_of(&reply)),
         Err(err) => match classify(&err) {
             Failure::Gone => Err(Failure::Gone),
@@ -252,19 +290,51 @@ pub fn status_of(text: &str) -> Status {
     }
 }
 
-/// A `Menu` property that names a menu: a path other than `/`.
+/// The `Menu` value an item sends when it has no dbusmenu (Qt's and
+/// libappindicator's convention).
+const NO_DBUSMENU: &str = "/NO_DBUSMENU";
+
+/// A `Menu` property that names a menu: a path other than `/` and
+/// `/NO_DBUSMENU`.
 #[must_use]
 pub fn menu_path(text: Option<&str>) -> Option<String> {
     match text {
-        Some(path) if path.starts_with('/') && path != "/" => Some(path.to_owned()),
+        Some(path) if path.starts_with('/') && path != "/" && path != NO_DBUSMENU => {
+            Some(path.to_owned())
+        }
         _ => None,
     }
 }
 
-/// Reads the item `id`, served by `owner`, into a [`TrayItem`] drawn at
-/// [`ICON_SIZE`]: `Id` decides the interface, then `Title`, `Status`,
-/// `IconName`, `Menu` and `IconPixmap`. The whole read has
-/// [`ITEM_READ_BUDGET`]; past it the item is unresponsive.
+/// The device size the icon files are looked up for: the sizes of the
+/// freedesktop layout are tried around it. The output's scale is not known
+/// here, so this is the bar's 24 px at scale 2: a larger file scales down
+/// cleanly on a scale 1 or 1.5 output, a 24 px one blurs on a HiDPI one.
+const ICON_FILE_SIZE: u32 = 48;
+
+/// The file an item's icon `name` names, checked on the host's thread (the
+/// Island never touches the disk): an absolute name under an allowed root, or
+/// a relative one inside the item's own `dir`.
+#[must_use]
+pub fn icon_file_of(name: &str, dir: Option<&Path>) -> Option<PathBuf> {
+    let name = crate::tray::model::bound_icon_name(name);
+    if name.is_empty() {
+        return None;
+    }
+    if Path::new(&name).is_absolute() {
+        return peer_icon_file(Path::new(&name), dir);
+    }
+    if name.contains(['/', '\\', '\0']) {
+        return None;
+    }
+    dir.and_then(|dir| icon_in_dir(dir, &name, ICON_FILE_SIZE))
+}
+
+/// Reads the item `id`, served by `owner`, into a [`TrayItem`]: `Id` decides
+/// the interface, then `Title`, `Status`, `IconName`, `IconThemePath`,
+/// `ItemIsMenu`, `Menu` and `IconPixmap`, and, only while the status is
+/// `NeedsAttention`, `AttentionIconName` and `AttentionIconPixmap`. The
+/// whole read has [`ITEM_READ_BUDGET`]; past it the item is unresponsive.
 #[must_use]
 pub fn read_item(connection: &Connection, id: &ItemId, owner: &str) -> Read {
     let started = Instant::now();
@@ -311,6 +381,19 @@ pub fn read_item(connection: &Connection, id: &ItemId, owner: &str) -> Read {
         Ok(name) => name.unwrap_or_default(),
         Err(failure) => return failed(failure),
     };
+    let icon_theme_path = match text("IconThemePath") {
+        Ok(path) => path.as_deref().and_then(theme_dir),
+        Err(failure) => return failed(failure),
+    };
+    let item_is_menu = {
+        if started.elapsed() > ITEM_READ_BUDGET {
+            return Read::Unresponsive;
+        }
+        match get_bool(connection, owner, path, interface, "ItemIsMenu") {
+            Ok(value) => value,
+            Err(failure) => return failed(failure),
+        }
+    };
     let menu = match text("Menu") {
         Ok(menu) => menu_path(menu.as_deref()),
         Err(failure) => return failed(failure),
@@ -318,18 +401,41 @@ pub fn read_item(connection: &Connection, id: &ItemId, owner: &str) -> Read {
     if started.elapsed() > ITEM_READ_BUDGET {
         return Read::Unresponsive;
     }
-    let pixmap = match get_pixmaps(connection, owner, path, interface) {
-        Ok(pixmaps) => choose_pixmap(&pixmaps, ICON_SIZE),
+    let pixmaps = match get_pixmaps(connection, owner, path, interface, "IconPixmap") {
+        Ok(pixmaps) => bound_pixmaps(&pixmaps),
         Err(failure) => return failed(failure),
     };
+    let (mut attention_icon_name, mut attention_pixmaps) = (String::new(), Vec::new());
+    if status == Status::NeedsAttention {
+        attention_icon_name = match text("AttentionIconName") {
+            Ok(name) => name.unwrap_or_default(),
+            Err(failure) => return failed(failure),
+        };
+        if started.elapsed() > ITEM_READ_BUDGET {
+            return Read::Unresponsive;
+        }
+        attention_pixmaps =
+            match get_pixmaps(connection, owner, path, interface, "AttentionIconPixmap") {
+                Ok(found) => bound_pixmaps(&found),
+                Err(failure) => return failed(failure),
+            };
+    }
+    let icon_file = icon_file_of(&icon_name, icon_theme_path.as_deref());
+    let attention_icon_file = icon_file_of(&attention_icon_name, icon_theme_path.as_deref());
     let item = TrayItem {
         id: id.clone(),
         sni_id,
         title,
         status,
-        icon_name,
-        pixmap,
+        pixmaps,
         has_menu: menu.is_some(),
+        icon_theme_path,
+        item_is_menu,
+        icon_name,
+        attention_icon_name,
+        attention_pixmaps,
+        icon_file,
+        attention_icon_file,
     };
     Read::Item(Box::new(Served {
         address: ItemAddress {
@@ -351,6 +457,8 @@ pub enum ItemCall {
     SecondaryActivate,
     /// `Scroll(delta, orientation)`.
     Scroll(i32, Orientation),
+    /// `ContextMenu(x, y)`: the pointer's output coordinates.
+    ContextMenu(i32, i32),
 }
 
 impl ItemCall {
@@ -359,6 +467,7 @@ impl ItemCall {
             Self::Activate => "Activate",
             Self::SecondaryActivate => "SecondaryActivate",
             Self::Scroll(..) => "Scroll",
+            Self::ContextMenu(..) => "ContextMenu",
         }
     }
 }
@@ -372,8 +481,8 @@ pub fn orientation_name(orientation: Orientation) -> &'static str {
     }
 }
 
-/// Sends `call` to the item without expecting a reply. The pointer position
-/// is not known to the page, so activations carry `(0, 0)`.
+/// Sends `call` to the item without expecting a reply. Activations carry
+/// `(0, 0)`; `ContextMenu` carries the pointer's output coordinates.
 ///
 /// # Errors
 ///
@@ -388,6 +497,7 @@ pub fn send(connection: &Connection, item: &ItemAddress, call: &ItemCall) -> zbu
         ItemCall::Scroll(delta, orientation) => {
             builder.build(&(*delta, orientation_name(*orientation)))?
         }
+        ItemCall::ContextMenu(x, y) => builder.build(&(*x, *y))?,
     };
     connection.send(&message)
 }
@@ -469,12 +579,15 @@ pub fn recognise(message: &Message) -> Option<BusSignal> {
 /// client, and by `DbusMenu` in the shell.
 pub trait MenuClient: Send {
     /// Fetches the menu of `item` and publishes it as [`TrayEvent::Menu`].
+    /// Returns whether the item's dbusmenu answered; when it did not (no
+    /// dbusmenu, or a layout that failed), the host asks the item for its
+    /// own menu with `ContextMenu`.
     fn open_menu(
         &mut self,
         connection: &Connection,
         item: &ItemAddress,
         publish: &mut dyn FnMut(TrayEvent) -> bool,
-    );
+    ) -> bool;
 
     /// Sends a click on the entry `entry` of `item`'s menu.
     fn menu_event(&mut self, connection: &Connection, item: &ItemAddress, entry: i32);
@@ -502,8 +615,8 @@ pub trait MenuClient: Send {
     }
 
     /// The menu of `item` closed on the page: its changes are not followed
-    /// any more. Nothing by default.
-    fn close_menu(&mut self, _item: &ItemAddress) {}
+    /// any more, and the menu hears `closed`. Nothing by default.
+    fn close_menu(&mut self, _connection: &Connection, _item: &ItemAddress) {}
 }
 
 /// The menu client while there is none: a menu request is logged and
@@ -517,8 +630,9 @@ impl MenuClient for NoMenu {
         _: &Connection,
         item: &ItemAddress,
         _: &mut dyn FnMut(TrayEvent) -> bool,
-    ) {
+    ) -> bool {
         tracing::debug!(item = %item.id.bus_name, "tray: menus are not served yet");
+        false
     }
 
     fn menu_event(&mut self, _: &Connection, item: &ItemAddress, entry: i32) {
@@ -553,17 +667,14 @@ mod tests {
         let pixmaps = pixmaps_of(&reply);
         assert_eq!(pixmaps, vec![huge, small.clone()]);
         assert_eq!(
-            choose_pixmap(&pixmaps, ICON_SIZE),
-            Some(Pixmap {
+            bound_pixmaps(&pixmaps),
+            vec![Pixmap {
                 w: 2,
                 h: 2,
                 argb: vec![7u8; 16]
-            })
+            }]
         );
-        assert_eq!(
-            choose_pixmap(&pixmaps_of(&pixmap_reply(&[(4096, 4096, vec![0; 16])])), 22),
-            None
-        );
+        assert!(bound_pixmaps(&pixmaps_of(&pixmap_reply(&[(4096, 4096, vec![0; 16])]))).is_empty());
     }
 
     fn reply_of(value: Value<'_>) -> Message {
@@ -601,6 +712,14 @@ mod tests {
     }
 
     #[test]
+    fn a_boolean_property_is_decoded_typed() {
+        assert_eq!(bool_of(&reply_of(Value::from(true))), Some(true));
+        assert_eq!(bool_of(&reply_of(Value::from(false))), Some(false));
+        assert_eq!(bool_of(&reply_of(Value::from(1u32))), None);
+        assert_eq!(bool_of(&reply_of(Value::from("true"))), None);
+    }
+
+    #[test]
     fn a_reply_that_is_not_a_pixmap_list_or_too_large_yields_nothing() {
         let wrong = Message::signal("/x", "org.x.Y", "Z")
             .expect("a builder")
@@ -617,6 +736,16 @@ mod tests {
     }
 
     #[test]
+    fn no_dbusmenu_path_is_no_menu() {
+        assert_eq!(menu_path(Some("/NO_DBUSMENU")), None);
+        assert_eq!(
+            menu_path(Some("/NO_DBUSMENU/x")),
+            Some("/NO_DBUSMENU/x".to_owned()),
+            "only the exact marker is no menu"
+        );
+    }
+
+    #[test]
     fn status_and_menu_properties_map_to_the_model() {
         assert_eq!(status_of("Passive"), Status::Passive);
         assert_eq!(status_of("NeedsAttention"), Status::NeedsAttention);
@@ -624,6 +753,7 @@ mod tests {
         assert_eq!(status_of("weird"), Status::Active);
         assert_eq!(menu_path(Some("/MenuBar")), Some("/MenuBar".to_owned()));
         assert_eq!(menu_path(Some("/")), None);
+        assert_eq!(menu_path(Some("/NO_DBUSMENU")), None);
         assert_eq!(menu_path(Some("")), None);
         assert_eq!(menu_path(None), None);
     }

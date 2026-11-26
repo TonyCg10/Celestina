@@ -1,11 +1,12 @@
 //! The Tray piece: the status notifier items as inline icons, and the Tray
 //! page. Every input sends what the page's rows send: a click activates,
 //! a middle click activates secondarily, a right click (or the Menu key)
-//! asks for the item's menu and the wheel scrolls it. Items whose `Id` is
+//! asks for the item's menu (its own, through `ContextMenu`, when it has no
+//! dbusmenu), a left click does too on an item that is only a menu, and the
+//! wheel scrolls it. Items whose `Id` is
 //! in `bar.tray_hidden` are left out of the bar only; the page lists them.
 
-use celestina_paint::IconKey;
-use celestina_ui::{view, Key, View, ViewKind};
+use celestina_ui::{view, Key, View};
 
 use super::{
     Axis, BarCx, Face, Gesture, PageEntry, PageId, Piece, PieceAction, PieceId, PieceInput,
@@ -13,7 +14,7 @@ use super::{
 use crate::{
     copy,
     island::{
-        pages::tray::{index_of, row_key, RowIcon, Tray as Page, TrayRow, ICON_SIZE, MAX_ROWS},
+        pages::tray::{icon_view, index_of, row_key, Tray as Page, TrayRow, MAX_ROWS},
         view::centred,
     },
     tray::{Orientation, Status, TrayCommand},
@@ -68,19 +69,17 @@ impl Tray {
 }
 
 fn icon(index: usize, row: &TrayRow) -> View {
-    let key = Key::indexed("tray-icon", index as u64);
-    match &row.icon {
-        RowIcon::Theme(name) => View::new(
-            key,
-            ViewKind::Icon {
-                key: IconKey::Theme(name.clone()),
-                tint: None,
-                size: ICON_SIZE,
-            },
-        ),
-        RowIcon::Pixmap(id) => view::image(key, *id, 1.0),
+    icon_view(Key::indexed("tray-icon", index as u64), &row.icon)
+}
+
+/// The item's menu: its dbusmenu when it serves one, else the item's own
+/// (`ContextMenu`).
+fn menu_action(row: &TrayRow) -> PieceAction {
+    if row.has_menu {
+        PieceAction::TrayMenu(row.id.clone())
+    } else {
+        PieceAction::TrayContext(row.id.clone())
     }
-    .size(ICON_SIZE, ICON_SIZE)
 }
 
 impl Piece for Tray {
@@ -141,10 +140,13 @@ impl Piece for Tray {
         };
         let id = row.id.clone();
         match input.gesture {
+            // An item that is only a menu opens it on the left click: its
+            // dbusmenu, else its own.
+            Gesture::Primary if row.item_is_menu => menu_action(row),
             Gesture::Primary => PieceAction::Tray(TrayCommand::Activate(id)),
             Gesture::Middle => PieceAction::Tray(TrayCommand::SecondaryActivate(id)),
-            Gesture::Context if row.has_menu => PieceAction::TrayMenu(id),
-            Gesture::Context | Gesture::Scroll(_, 0) => PieceAction::None,
+            Gesture::Context => menu_action(row),
+            Gesture::Scroll(_, 0) => PieceAction::None,
             Gesture::Scroll(axis, steps) => {
                 let orientation = match axis {
                     Axis::Vertical => Orientation::Vertical,
@@ -158,10 +160,14 @@ impl Piece for Tray {
 
 #[cfg(test)]
 mod tests {
-    use celestina_paint::{PixmapId, Theme};
+    use celestina_paint::{IconKey, PixmapId, Role, Theme};
+    use celestina_ui::ViewKind;
 
     use super::*;
-    use crate::{island::pages::NameOwner, tray::ItemId};
+    use crate::{
+        island::pages::{tray::RowIcon, NameOwner},
+        tray::ItemId,
+    };
 
     fn row(n: usize, sni: &str, has_menu: bool) -> TrayRow {
         TrayRow {
@@ -294,6 +300,29 @@ mod tests {
         assert_eq!(v.children[1].opacity, PASSIVE_OPACITY);
     }
 
+    #[test]
+    fn a_file_icon_and_the_bundled_fallback_draw_in_the_bar() {
+        let mut rows = items();
+        rows[0].icon = RowIcon::File("/usr/share/icons/x.png".into());
+        let v = with(&rows, &[], |cx| Tray.bar(cx)).expect("icons");
+        assert!(matches!(
+            &v.children[0].children[0].kind,
+            ViewKind::Icon {
+                key: IconKey::File(_),
+                tint: None,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &v.children[1].children[0].kind,
+            ViewKind::Icon {
+                key: IconKey::Semantic("app-window"),
+                tint: Some(Role::TextLo),
+                ..
+            }
+        ));
+    }
+
     fn act(rows: &[TrayRow], hidden: &[&str], key: Key, gesture: Gesture) -> PieceAction {
         with(rows, hidden, |cx| {
             Tray.activate(&PieceInput { key, gesture, cx })
@@ -331,11 +360,32 @@ mod tests {
     }
 
     #[test]
-    fn a_menu_is_asked_only_of_an_item_that_serves_one() {
+    fn an_item_without_a_dbusmenu_is_asked_for_its_own_menu() {
         let rows = items();
         assert_eq!(
             act(&rows, &[], row_key(2), Gesture::Context),
-            PieceAction::None
+            PieceAction::TrayContext(rows[2].id.clone())
+        );
+    }
+
+    #[test]
+    fn item_is_menu_opens_the_menu_on_left_click() {
+        let mut rows = items();
+        rows[0].item_is_menu = true;
+        rows[2].item_is_menu = true;
+        assert_eq!(
+            act(&rows, &[], row_key(0), Gesture::Primary),
+            PieceAction::TrayMenu(rows[0].id.clone())
+        );
+        assert_eq!(
+            act(&rows, &[], row_key(2), Gesture::Primary),
+            PieceAction::TrayContext(rows[2].id.clone()),
+            "no dbusmenu: the item's own"
+        );
+        assert_eq!(
+            act(&rows, &[], row_key(1), Gesture::Primary),
+            PieceAction::Tray(TrayCommand::Activate(rows[1].id.clone())),
+            "an item that is not only a menu activates"
         );
     }
 

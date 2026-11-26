@@ -1,0 +1,6 @@
+registered /item/themepath,/item/missing,/item/ismenu
+ContextMenu(2409,27) item=fake-themepath
+ContextMenu(2443,27) item=fake-missing
+ContextMenu(2478,27) item=fake-ismenu
+ContextMenu(2478,27) item=fake-ismenu
+Activate(0,0) item=fake-themepath

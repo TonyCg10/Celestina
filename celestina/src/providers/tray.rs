@@ -902,7 +902,8 @@ impl Host {
             | TrayCommand::MenuEvent(id, _)
             | TrayCommand::AboutToShow(id, _)
             | TrayCommand::CloseMenu(id)
-            | TrayCommand::OpenMenu(id) => id.clone(),
+            | TrayCommand::OpenMenu(id, _, _)
+            | TrayCommand::ContextMenu(id, _, _) => id.clone(),
         };
         let Some(address) = self.address_of(&id) else {
             tracing::debug!(item = %id.bus_name, "tray: a command for an item that is not served");
@@ -912,10 +913,18 @@ impl Host {
             TrayCommand::Activate(_) => ItemCall::Activate,
             TrayCommand::SecondaryActivate(_) => ItemCall::SecondaryActivate,
             TrayCommand::Scroll(_, delta, orientation) => ItemCall::Scroll(delta, orientation),
-            TrayCommand::OpenMenu(_) => {
-                self.menu
-                    .open_menu(&self.connection, &address, &mut self.publish);
-                return;
+            TrayCommand::ContextMenu(_, x, y) => ItemCall::ContextMenu(x, y),
+            TrayCommand::OpenMenu(_, x, y) => {
+                if self
+                    .menu
+                    .open_menu(&self.connection, &address, &mut self.publish)
+                {
+                    return;
+                }
+                // No dbusmenu, or its layout failed: the item shows its own,
+                // and the page's request for ours is over.
+                (self.publish)(TrayEvent::NoMenu(id.clone()));
+                ItemCall::ContextMenu(x, y)
             }
             TrayCommand::AboutToShow(_, entry) => {
                 self.menu
@@ -927,7 +936,7 @@ impl Host {
                 return;
             }
             TrayCommand::CloseMenu(_) => {
-                self.menu.close_menu(&address);
+                self.menu.close_menu(&self.connection, &address);
                 return;
             }
         };
@@ -954,6 +963,13 @@ mod tests {
     const ITEM_PATH: &str = "/StatusNotifierItem";
     const WAIT: Duration = Duration::from_secs(5);
 
+    /// A directory that is not broad enough to be refused as a theme path.
+    fn theme_test_dir() -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join("celestina-tray-theme-test");
+        std::fs::create_dir_all(&dir).expect("a directory");
+        dir
+    }
+
     /// A status notifier item served in the test, recording its calls and
     /// answering each property after `delay`.
     struct FakeItem {
@@ -963,6 +979,8 @@ mod tests {
         menu: String,
         calls: Arc<Mutex<Vec<String>>>,
         delay: Duration,
+        theme_path: String,
+        attention_icon_name: String,
     }
 
     #[zbus::interface(name = "org.kde.StatusNotifierItem")]
@@ -998,6 +1016,21 @@ mod tests {
         }
 
         #[zbus(property)]
+        fn icon_theme_path(&self) -> String {
+            self.theme_path.clone()
+        }
+
+        #[zbus(property)]
+        fn item_is_menu(&self) -> bool {
+            true
+        }
+
+        #[zbus(property)]
+        fn attention_icon_name(&self) -> String {
+            self.attention_icon_name.clone()
+        }
+
+        #[zbus(property)]
         fn menu(&self) -> OwnedObjectPath {
             std::thread::sleep(self.delay);
             OwnedObjectPath::try_from(self.menu.as_str()).expect("a path")
@@ -1013,6 +1046,10 @@ mod tests {
 
         fn scroll(&self, delta: i32, orientation: &str) {
             lock(&self.calls).push(format!("Scroll({delta},{orientation})"));
+        }
+
+        fn context_menu(&self, x: i32, y: i32) {
+            lock(&self.calls).push(format!("ContextMenu({x},{y})"));
         }
     }
 
@@ -1030,6 +1067,8 @@ mod tests {
             menu: menu.to_owned(),
             calls: Arc::clone(&calls),
             delay: Duration::ZERO,
+            theme_path: theme_test_dir().to_string_lossy().into_owned(),
+            attention_icon_name: "mail-unread".to_owned(),
         };
         (item, calls)
     }
@@ -1200,7 +1239,10 @@ mod tests {
         );
         assert_eq!(items[0].status, Status::NeedsAttention);
         assert_eq!(items[0].icon_name, "network-wired");
-        assert_eq!(items[0].pixmap, None);
+        assert!(items[0].pixmaps.is_empty());
+        assert_eq!(items[0].icon_theme_path, Some(theme_test_dir()));
+        assert!(items[0].item_is_menu);
+        assert_eq!(items[0].attention_icon_name, "mail-unread");
         assert!(items[0].has_menu);
 
         // A pixmap-only item under a well-known name: the 4096 square is
@@ -1217,7 +1259,7 @@ mod tests {
         assert_eq!(pix_item.id.bus_name, "org.celestina.test.Pix");
         assert!(pix_item.icon_name.is_empty());
         assert!(
-            matches!(&pix_item.pixmap, Some(Pixmap { w: 16, h: 16, argb }) if argb.len() == 1024)
+            matches!(pix_item.pixmaps.as_slice(), [Pixmap { w: 16, h: 16, argb }] if argb.len() == 1024)
         );
         assert!(!pix_item.has_menu);
         let mut names = registered(&bus);
@@ -1270,10 +1312,10 @@ mod tests {
             .command(TrayCommand::SecondaryActivate(net_id.clone()))
             .expect("queued");
         provider
-            .command(TrayCommand::OpenMenu(net_id))
-            .expect("queued: served by NoMenu");
+            .command(TrayCommand::OpenMenu(net_id, 7, 9))
+            .expect("queued: served by NoMenu, so the item's own menu");
         let deadline = Instant::now() + WAIT;
-        while lock(&net_calls).len() < 3 && Instant::now() < deadline {
+        while lock(&net_calls).len() < 4 && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(20));
         }
         assert_eq!(
@@ -1281,7 +1323,8 @@ mod tests {
             [
                 "Activate(0,0)",
                 "Scroll(3,horizontal)",
-                "SecondaryActivate(0,0)"
+                "SecondaryActivate(0,0)",
+                "ContextMenu(7,9)"
             ]
         );
 
@@ -1298,6 +1341,93 @@ mod tests {
             .command(TrayCommand::Activate(ItemId::default()))
             .is_err());
         drop(net_connection);
+    }
+
+    /// Starts the host with the production menu client, serves `item` and
+    /// returns the host, its worker, its events and the item's id.
+    fn start_serving(
+        bus: &PrivateBus,
+        shutdown: &Arc<AtomicBool>,
+        item: FakeItem,
+    ) -> (
+        TrayProvider,
+        Worker,
+        Receiver<TrayEvent>,
+        Connection,
+        ItemId,
+    ) {
+        let (tx, rx) = channel();
+        let publish: Publish = Box::new(move |event| tx.send(event).is_ok());
+        let (provider, worker) = spawn_on(Ok(bus.builder()), publish, production_menu(), shutdown)
+            .expect("the tray starts");
+        assert_eq!(rx.recv_timeout(WAIT), Ok(TrayEvent::Owner(None)));
+        assert_eq!(rx.recv_timeout(WAIT), Ok(TrayEvent::Items(Vec::new())));
+        let connection = serve_item(bus, item, None);
+        let items = items_until(&rx, |items| items.len() == 1);
+        (provider, worker, rx, connection, items[0].id.clone())
+    }
+
+    fn calls_until(calls: &Arc<Mutex<Vec<String>>>, count: usize) -> Vec<String> {
+        let deadline = Instant::now() + WAIT;
+        while lock(calls).len() < count && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        lock(calls).clone()
+    }
+
+    #[test]
+    fn right_click_without_menu_calls_context_menu() {
+        let Some(bus) = PrivateBus::start("context-menu") else {
+            return;
+        };
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let (item, calls) = fake("Plain", "network-wired", Vec::new(), "/NO_DBUSMENU");
+        let (provider, worker, rx, _connection, id) = start_serving(&bus, &shutdown, item);
+        // `/NO_DBUSMENU` is no menu, so the host asks the item for its own.
+        provider
+            .command(TrayCommand::OpenMenu(id.clone(), 640, 12))
+            .expect("queued");
+        assert_eq!(calls_until(&calls, 1), ["ContextMenu(640,12)"]);
+        assert!(
+            std::iter::from_fn(|| rx.recv_timeout(Duration::from_millis(500)).ok())
+                .any(|e| matches!(e, TrayEvent::NoMenu(_))),
+            "the page is told no dbusmenu opens"
+        );
+        provider
+            .command(TrayCommand::ContextMenu(id, 3, 4))
+            .expect("queued");
+        assert_eq!(
+            calls_until(&calls, 2),
+            ["ContextMenu(640,12)", "ContextMenu(3,4)"]
+        );
+        assert!(
+            !std::iter::from_fn(|| rx.try_recv().ok()).any(|e| matches!(e, TrayEvent::Menu(..))),
+            "no menu is published for an item without one"
+        );
+        shutdown.store(true, std::sync::atomic::Ordering::Release);
+        worker.join();
+    }
+
+    #[test]
+    fn failed_layout_falls_back_to_context_menu() {
+        let Some(bus) = PrivateBus::start("layout-fails") else {
+            return;
+        };
+        let shutdown = Arc::new(AtomicBool::new(false));
+        // The item names a menu at `/Menu` that nobody serves: `GetLayout`
+        // fails at once.
+        let (item, calls) = fake("Broken", "network-wired", Vec::new(), "/Menu");
+        let (provider, worker, rx, _connection, id) = start_serving(&bus, &shutdown, item);
+        provider
+            .command(TrayCommand::OpenMenu(id, 21, 5))
+            .expect("queued");
+        assert_eq!(calls_until(&calls, 1), ["ContextMenu(21,5)"]);
+        assert!(
+            !std::iter::from_fn(|| rx.try_recv().ok()).any(|e| matches!(e, TrayEvent::Menu(..))),
+            "a failed layout opens no dbusmenu beside the item's own"
+        );
+        shutdown.store(true, std::sync::atomic::Ordering::Release);
+        worker.join();
     }
 
     #[test]

@@ -330,6 +330,9 @@ pub enum PieceAction {
     Tray(TrayCommand),
     /// The item's menu, anchored to the node the input landed on.
     TrayMenu(ItemId),
+    /// The item shows its own menu: the Island sends `ContextMenu` with the
+    /// pointer's output coordinates.
+    TrayContext(ItemId),
     /// Something the Volume piece asks of the audio worker.
     Audio(AudioAction),
     /// Something the Brightness piece asks of the brightness workers.
