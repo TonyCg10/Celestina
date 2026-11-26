@@ -103,12 +103,12 @@ pub enum Message {
     /// A monitor's brightness, from the brightness workers; `None` is
     /// unknown, never 0 %.
     Brightness(crate::providers::brightness::BrightnessEvent),
-    /// The slider popup opened or closed: the display shows nothing of the
+    /// The slider sheet opened or closed: the display shows nothing of the
     /// kinds it drives while it is open, nor the levels it asked for that
     /// arrive after it closed. Posted by the loop to itself, because an
     /// input call controls only its own surface.
     OsdSuppressed(crate::osd::Suppression),
-    /// Close the level sheet (or popup) of this surface's Island: another
+    /// Close the level sheet of this surface's Island: another
     /// output opened its own, and an input call controls only its own
     /// surface.
     CloseLevelSheet(celestina_wayland::SurfaceId),
@@ -143,4 +143,11 @@ pub enum Message {
     /// The timer of the numbered wait for the capture's reply fired: the
     /// panel opens with geometry only if it still waits.
     OverviewCaptureTimeout(u64),
+    /// An Island started or stopped showing something (or a catcher's
+    /// output went): the loop maps or destroys the catchers to match. An
+    /// input or frame call cannot create a surface, so the app posts this to
+    /// itself.
+    SyncCatchers,
+    /// A press on this catcher: the Island it serves closes what it shows.
+    CatcherPress(SurfaceId),
 }

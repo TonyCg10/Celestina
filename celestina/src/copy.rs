@@ -874,17 +874,17 @@ pub fn osd_percent(percent: u8) -> String {
     format!("{percent} %")
 }
 
-// The Volume and Brightness pieces and their popup (CEL-2-C).
+// The Volume and Brightness pieces and their sheet (CEL-2-C).
 
-/// The accessible name of the bar's Volume piece and the popup's heading
+/// The accessible name of the bar's Volume piece and the sheet's heading
 /// ("Volume").
 pub const PIECE_VOLUME: &str = "Volumen";
 
-/// The accessible name of the bar's Brightness piece and the popup's heading
+/// The accessible name of the bar's Brightness piece and the sheet's heading
 /// ("Brightness").
 pub const PIECE_BRIGHTNESS: &str = "Brillo";
 
-/// The brightness popup's heading for every monitor at once ("All").
+/// The brightness sheet's heading for every monitor at once ("All").
 pub const BRIGHTNESS_ALL: &str = "Todos";
 
 /// The name of a monitor that shares its model with another, with its
@@ -894,23 +894,23 @@ pub fn monitor_with_connector(name: &str, connector: &str) -> String {
     format!("{name} ({connector})")
 }
 
-/// The popup's heading for the microphone's row ("Microphone").
+/// The sheet's heading for the microphone's row ("Microphone").
 pub const MICROPHONE: &str = "Micrófono";
 
-/// The label of the output's mute switch in the volume popup ("Mute").
+/// The label of the output's mute switch in the volume sheet ("Mute").
 pub const MUTE: &str = "Silenciar";
 
-/// The label of the microphone's mute switch in the volume popup
+/// The label of the microphone's mute switch in the volume sheet
 /// ("Mute microphone").
 pub const MUTE_MICROPHONE: &str = "Silenciar micrófono";
 
-/// The volume popup's heading of the output devices ("Output").
+/// The volume sheet's heading of the output devices ("Output").
 pub const AUDIO_OUTPUT_DEVICE: &str = "Salida";
 
-/// The volume popup's heading of the input devices ("Input").
+/// The volume sheet's heading of the input devices ("Input").
 pub const AUDIO_INPUT_DEVICE: &str = "Entrada";
 
-/// The volume popup's heading of the applications that play sound
+/// The volume sheet's heading of the applications that play sound
 /// ("Applications").
 pub const AUDIO_APPS: &str = "Aplicaciones";
 

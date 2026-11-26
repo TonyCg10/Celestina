@@ -11,6 +11,7 @@ pub mod bubbles;
 pub mod bus;
 pub mod bus_signal;
 pub mod capture;
+pub mod catcher;
 pub mod clipboard;
 pub mod command;
 pub mod connectivity;

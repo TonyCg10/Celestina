@@ -41,16 +41,16 @@ pub struct Target {
     pub monitor: String,
 }
 
-/// The most monitors the brightness popup lists.
+/// The most monitors the brightness sheet lists.
 pub const MAX_MONITORS: usize = 8;
 
-/// A monitor as the brightness popup lists it.
+/// A monitor as the brightness sheet lists it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MonitorLevel {
     pub target: Target,
     /// The model, or else the connector (both when two share a model).
     pub name: String,
-    /// The monitor of the bar the popup hangs from.
+    /// The monitor of the bar the sheet grows from.
     pub primary: bool,
     /// `None` is unknown.
     pub percent: Option<u8>,
@@ -209,7 +209,7 @@ impl Readings {
             .flatten()
     }
 
-    /// The monitors the popup of `output`'s bar lists: that bar's own first
+    /// The monitors the sheet of `output`'s bar lists: that bar's own first
     /// (even with no reading yet), then each other output's whose monitor
     /// the worker has reported, by connector; at most [`MAX_MONITORS`].
     /// Empty when `output` does not exist.

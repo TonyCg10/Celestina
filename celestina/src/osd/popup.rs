@@ -1,25 +1,24 @@
-//! The slider popup of the Volume and Brightness pieces (CEL-2-C, plan
-//! decision 8): an `xdg_popup` of the Island's surface hung below the piece,
-//! a Haze card with the level as a slider and, for the volume, the mute
-//! switch and the microphone's own slider and mute switch.
+//! The level controls of the Volume and Brightness pieces: the body of a
+//! capsule sheet (CEL-D-002, CEL-D-003), the level as a slider and, for the
+//! volume, the mute switch and the microphone's own slider and mute switch.
+//! The body is 320 wide and draws no card: the sheet is the glass.
 //!
-//! The volume popup also lists what the audio worker's graph holds (CEL-I-004):
+//! The volume body also lists what the audio worker's graph holds (CEL-I-004):
 //! under the output the sinks, as rows of which a click makes one the default;
 //! under the microphone the sources, the same way; and last the applications
 //! that play sound, each with its own mute and slider. Each list sits under a
 //! header that folds it, and all start folded: a folded list shows the default
 //! device, or the applications that play now. The rows, and with them the
-//! popup's size, change only when a header folds or unfolds ([`Shape`]), and
-//! the popup then asks the compositor for the new size, its top edge staying
-//! where it hangs: a row updates in place (the default mark, a level), a
-//! stream that ends greys out and takes no input, and one that starts waits
-//! for the next fold or unfold.
+//! body's size, change only when a header folds or unfolds ([`Shape`]), and
+//! the sheet then follows the new size: a row updates in place (the default
+//! mark, a level), a stream that ends greys out and takes no input, and one
+//! that starts waits for the next fold or unfold.
 //!
-//! The popup acts while it is open: a slider that moves, or a switch that
+//! The body acts while it is open: a slider that moves, or a switch that
 //! flips, sends a [`Request`] to the app's sink at once (not on close), and
-//! the app turns it into worker commands ([`commands`]). What the popup
+//! the app turns it into worker commands ([`commands`]). What the body
 //! shows is the app's reading, shared through a cell the app writes and the
-//! popup reads each frame; a slider also shows its own change before the
+//! body reads each frame; a slider also shows its own change before the
 //! worker confirms it, and while the pointer is down the readings do not move
 //! it, so a late reading never pulls the handle back under the finger.
 //!
@@ -34,12 +33,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use celestina_paint::{silhouette_slices, Rect, Role, TextStyle, Theme, Weight};
+use celestina_paint::{Role, TextStyle, Theme, Weight};
 use celestina_shell::audio::AudioGraph;
 use celestina_ui::{fit_middle, slider, view, Interaction, Key, Slider, Tree, UiEvent, View};
-use celestina_wayland::{
-    AnchorEdge, FrameCx, Gravity, InputEvent, Placement, PopupAction, PopupShell, SurfaceCtl,
-};
+use celestina_wayland::InputEvent;
 
 use super::audio_rows::{
     apps_list, device_list, list_h, section_of, Audio, GraphMirror, Lists, Section, Shape,
@@ -51,10 +48,7 @@ use super::readings::Target;
 use crate::island::menu::SharedPainter;
 use crate::{
     copy,
-    island::{
-        state::SILHOUETTE_STEP,
-        view::{centred, switch, text_style},
-    },
+    island::view::{centred, switch, text_style},
     pieces::Levels,
     providers::{
         audio::{AudioCommand, Device},
@@ -67,8 +61,6 @@ use crate::{
 /// the level the wheel set rather than from what is shown.
 const WHEEL_BURST: Duration = Duration::from_millis(1500);
 
-/// The card's width, logical px.
-pub const POPUP_W: f32 = 280.0;
 /// The card's width when it lists devices and applications: room for an
 /// application's name beside its switch and slider.
 pub const AUDIO_W: f32 = 320.0;
@@ -80,15 +72,6 @@ pub const SEND_INTERVAL: Duration = Duration::from_millis(80);
 const STEP: u8 = celestina_shell::audio::STEP_PERCENT;
 /// The icon beside a heading, logical px.
 pub(super) const ICON: f32 = 18.0;
-
-/// What surrounds the card's rows: a popup draws its own Haze card; a
-/// capsule sheet is the glass already, so its body draws none and pads less
-/// above (the row of the capsule sits over it).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CardFrame {
-    Popup,
-    Sheet,
-}
 
 /// What the popup is for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -249,16 +232,6 @@ pub(super) fn slider_h(theme: &Theme) -> f32 {
     theme.slider_handle_size + 2.0 * slider::MARGIN
 }
 
-/// The popup's width: the card's, wider when it lists devices and
-/// applications.
-fn popup_width(kind: Kind, shape: Shape) -> f32 {
-    if kind == Kind::Volume && !shape.is_empty() {
-        AUDIO_W
-    } else {
-        POPUP_W
-    }
-}
-
 /// The heights of the card's children, top to bottom: for audio a heading, a
 /// slider and a mute row, then the list of devices if any; the microphone's
 /// section the same way; then the applications' list.
@@ -283,20 +256,6 @@ fn children_h(theme: &Theme, kind: Kind, microphone: bool, shape: Shape) -> Vec<
     heights
 }
 
-/// The popup's logical size: the card's padding all round and, per section, a
-/// heading, a slider and (for audio) a mute row and the list of devices, then
-/// the applications' list, a small gap between all. `shape` is ignored for
-/// brightness.
-#[must_use]
-pub fn popup_size(theme: &Theme, kind: Kind, microphone: bool, shape: Shape) -> (f32, f32) {
-    let heights = children_h(theme, kind, microphone, shape);
-    let gaps = heights.len() - 1;
-    (
-        popup_width(kind, shape),
-        2.0 * theme.spacing.md + heights.iter().sum::<f32>() + gaps as f32 * theme.spacing.sm,
-    )
-}
-
 /// The size of a level body in a capsule sheet: 320 wide, the space above
 /// its first row, the rows and the gaps between them, and the space below.
 /// `shape` is ignored for brightness.
@@ -311,33 +270,6 @@ pub fn body_size(theme: &Theme, kind: Kind, microphone: bool, shape: Shape) -> (
             + gaps as f32 * theme.spacing.sm
             + theme.spacing.md,
     )
-}
-
-/// The size of the card in `frame`.
-fn frame_size(
-    theme: &Theme,
-    frame: CardFrame,
-    kind: Kind,
-    microphone: bool,
-    shape: Shape,
-) -> (f32, f32) {
-    match frame {
-        CardFrame::Popup => popup_size(theme, kind, microphone, shape),
-        CardFrame::Sheet => body_size(theme, kind, microphone, shape),
-    }
-}
-
-/// The popup hangs centred below the piece's node `anchor` (logical px of the
-/// Island's surface), a small gap under it; the compositor slides and flips
-/// it to stay on the output.
-#[must_use]
-pub fn placement(theme: &Theme, anchor: Rect) -> Placement {
-    Placement {
-        anchor,
-        anchor_edge: AnchorEdge::Bottom,
-        gravity: Gravity::Bottom,
-        offset: (0, theme.spacing.sm as i32),
-    }
 }
 
 pub(super) fn heading(
@@ -406,7 +338,9 @@ pub(super) fn level_slider(control: Control, percent: Option<u8>, muted: bool) -
     )
 }
 
-/// The card for `levels` and `audio` in `frame`: `microphone` says whether the
+/// The card for `levels` and `audio`: the body of a capsule sheet, which is
+/// the glass already, so it draws no Haze and pads less above (the row of the
+/// capsule sits over it). `microphone` says whether the
 /// microphone's section is part of this popup and `shape` how many device and
 /// application rows it shows (the microphone decided when it opened, the rows
 /// when a section last folded or unfolded).
@@ -418,27 +352,13 @@ pub fn card(
     levels: Levels,
     audio: Audio<'_>,
     shape: Shape,
-    frame: CardFrame,
 ) -> View {
     let lists = Lists::of(kind, microphone, shape);
-    let mut card = match frame {
-        CardFrame::Popup => {
-            let (w, h) = popup_size(theme, kind, microphone, shape);
-            view::col(card_key())
-                .haze(theme.radius_md)
-                .size(w, h)
-                .padding(theme.spacing.md)
-        }
-        CardFrame::Sheet => {
-            let (w, h) = body_size(theme, kind, microphone, shape);
-            view::col(card_key()).size(w, h).padding_sides(
-                theme.spacing.xs,
-                theme.spacing.md,
-                theme.spacing.md,
-            )
-        }
-    }
-    .gap(theme.spacing.sm);
+    let (w, h) = body_size(theme, kind, microphone, shape);
+    let mut card = view::col(card_key())
+        .size(w, h)
+        .padding_sides(theme.spacing.xs, theme.spacing.md, theme.spacing.md)
+        .gap(theme.spacing.sm);
     match kind {
         Kind::Volume => {
             let out = levels.audio.output;
@@ -610,9 +530,6 @@ pub struct LevelCore {
     microphone: bool,
     /// The devices and streams: the rows listed and what they show.
     mirror: GraphMirror,
-    frame: CardFrame,
-    /// The size the compositor was last asked for (or opened at).
-    asked: (f32, f32),
     theme: Theme,
     tree: Tree,
     input: Interaction,
@@ -638,7 +555,7 @@ pub struct LevelCore {
     sink: Sink,
     cell: SharedLevels,
     graph: SharedGraph,
-    /// The monitors a brightness popup lists, when it lists several.
+    /// The monitors a brightness sheet lists, when it lists several.
     monitors: MonitorMirror,
     monitor_cell: SharedMonitors,
     /// The theme the monitors' names were last cut for.
@@ -656,8 +573,8 @@ impl std::fmt::Debug for LevelCore {
 
 impl LevelCore {
     /// The popup of `kind` over `cell`'s readings and `graph`'s devices and
-    /// streams in `theme`, under `reduced` motion, in `frame`. The
-    /// microphone's section is part of a volume popup when the microphone has
+    /// streams in `theme`, under `reduced` motion. The
+    /// microphone's section is part of a volume sheet when the microphone has
     /// a reading now, and the rows it lists are those `graph` holds now,
     /// every section folded. `fit` cuts the names to their columns during
     /// this call only: nothing stores a measure, so none can borrow a painter
@@ -666,7 +583,6 @@ impl LevelCore {
     pub fn new(
         theme: &Theme,
         kind: Kind,
-        frame: CardFrame,
         feeds: Feeds,
         sink: Sink,
         reduced: bool,
@@ -701,22 +617,14 @@ impl LevelCore {
                     shown,
                     mirror.audio(),
                     mirror.shape(),
-                    frame,
                 )
             },
             now,
         );
-        let asked = if monitors.is_multi() {
-            monitors_size(theme, monitors.row_count())
-        } else {
-            frame_size(theme, frame, kind, microphone, mirror.shape())
-        };
         LevelCore {
             kind,
             microphone,
-            asked,
             mirror,
-            frame,
             theme: theme.clone(),
             tree,
             input: Interaction::new(),
@@ -735,6 +643,12 @@ impl LevelCore {
         }
     }
 
+    /// What the card controls.
+    #[must_use]
+    pub fn kind(&self) -> Kind {
+        self.kind
+    }
+
     /// Whether the card includes the microphone.
     #[must_use]
     pub fn has_microphone(&self) -> bool {
@@ -747,31 +661,15 @@ impl LevelCore {
         self.mirror.shape()
     }
 
-    /// The size the card has now in its frame, logical px.
+    /// The size the card has now, logical px: the sheet reads it each frame,
+    /// so a header folded or unfolded moves the sheet's edge.
     #[must_use]
     pub fn size(&self) -> (f32, f32) {
         if self.monitors.is_multi() {
             monitors_size(&self.theme, self.monitors.row_count())
         } else {
-            frame_size(
-                &self.theme,
-                self.frame,
-                self.kind,
-                self.microphone,
-                self.shape(),
-            )
+            body_size(&self.theme, self.kind, self.microphone, self.shape())
         }
-    }
-
-    /// The size to ask the compositor for, when the card is no longer the size
-    /// it was last asked for or opened at (a header folded or unfolded); the
-    /// size then counts as asked.
-    pub fn resize_wanted(&mut self) -> Option<(f32, f32)> {
-        let size = self.size();
-        (size != self.asked).then(|| {
-            self.asked = size;
-            size
-        })
     }
 
     /// How long until the popup's own default mark, or a monitor row's held
@@ -811,7 +709,6 @@ impl LevelCore {
                 self.shown,
                 self.mirror.audio(),
                 self.shape(),
-                self.frame,
             )
         };
         self.tree.apply(view, now);
@@ -936,7 +833,7 @@ impl LevelCore {
     /// The rect of the card's node `key` (tests).
     #[cfg(test)]
     #[must_use]
-    pub fn node_rect(&self, key: Key) -> Option<Rect> {
+    pub fn node_rect(&self, key: Key) -> Option<celestina_paint::Rect> {
         self.tree.node_by_key(key).map(|id| self.tree.rect(id))
     }
 
@@ -1134,72 +1031,6 @@ impl LevelCore {
     }
 }
 
-/// The popup as a popup shell.
-pub struct LevelPopup {
-    core: LevelCore,
-    painter: SharedPainter,
-}
-
-impl std::fmt::Debug for LevelPopup {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LevelPopup")
-            .field("core", &self.core)
-            .finish_non_exhaustive()
-    }
-}
-
-impl LevelPopup {
-    /// The popup of `kind` over `cell` and `graph`, drawn with `painter`; its
-    /// requests go to `sink`.
-    #[must_use]
-    pub fn new(
-        painter: SharedPainter,
-        theme: &Theme,
-        kind: Kind,
-        cell: SharedLevels,
-        graph: SharedGraph,
-        monitors: MonitorFeed,
-        sink: Sink,
-        reduced: bool,
-    ) -> LevelPopup {
-        // Names are cut as the text system measures them, when a list opens.
-        let core = LevelCore::new(
-            theme,
-            kind,
-            CardFrame::Popup,
-            Feeds {
-                cell,
-                graph,
-                monitors,
-            },
-            sink,
-            reduced,
-            Instant::now(),
-            &mut shared_fit(&painter, name_style(theme)),
-        );
-        LevelPopup { core, painter }
-    }
-
-    /// How many device and application rows the card shows, for the size it
-    /// is opened at.
-    #[must_use]
-    pub fn shape(&self) -> Shape {
-        self.core.shape()
-    }
-
-    /// Whether the card includes the microphone, for the size it is opened at.
-    #[must_use]
-    pub fn has_microphone(&self) -> bool {
-        self.core.has_microphone()
-    }
-
-    /// The size the card is opened at, logical px.
-    #[must_use]
-    pub fn size(&self) -> (f32, f32) {
-        self.core.size()
-    }
-}
-
 /// The style a device or application name is cut with.
 pub(crate) fn name_style(theme: &Theme) -> TextStyle {
     text_style(theme.type_scale.body, Weight::Regular, false, Role::TextHi)
@@ -1221,97 +1052,9 @@ pub(crate) fn shared_fit(
     }
 }
 
-impl PopupShell for LevelPopup {
-    fn frame(&mut self, cx: &mut FrameCx<'_>) {
-        let Ok(mut painter) = self.painter.try_borrow_mut() else {
-            tracing::warn!("level popup: the painter is in use; frame skipped");
-            cx.ctl.request_redraw();
-            return;
-        };
-        let now = cx.now;
-        let theme = painter.theme().clone();
-        let style = text_style(theme.type_scale.body, Weight::Regular, false, Role::TextHi);
-        // The painter is borrowed here, so the names are cut with it, not
-        // with the cutter that borrows it again.
-        // The monitors' names are cut at the weight of their row; the same
-        // frame's measure, for the same reason.
-        self.core.cut_monitors(&theme, now, |name, width, weight| {
-            let style = text_style(theme.type_scale.body, weight, false, Role::TextHi);
-            fit_middle(name, width, |text| {
-                painter.text().measure(text, &style, None, 1.0).0
-            })
-        });
-        self.core.sync(&theme, now, |name, width| {
-            fit_middle(name, width, |text| {
-                painter.text().measure(text, &style, None, 1.0).0
-            })
-        });
-        if let Some(wait) = self.core.flush(now, false) {
-            cx.ctl.redraw_after(wait);
-        }
-        if let Some(wait) = self.core.graph_wait(now) {
-            cx.ctl.redraw_after(wait);
-        }
-        let radius = painter.theme().radius_md;
-        let dpr = cx.scale as f32;
-        let tree = &mut self.core.tree;
-        tree.layout(cx.size, painter.text(), dpr);
-        if let Some(fault) = tree.take_fault() {
-            tracing::warn!(%fault, "level popup: layout fault");
-        }
-        painter.begin(cx.size, dpr, cx.blur_available);
-        tree.paint(&mut painter, now);
-        painter.end();
-        let silhouette = silhouette_slices(Rect::whole(cx.size), radius, SILHOUETTE_STEP);
-        cx.ctl.set_blur_region(&silhouette);
-        cx.ctl.set_input_region(&silhouette);
-        if tree.is_animating(now) {
-            cx.ctl.request_redraw();
-        }
-    }
-
-    fn input(&mut self, ev: InputEvent, ctl: &mut SurfaceCtl<'_>) -> PopupAction {
-        let now = Instant::now();
-        let style = name_style(&self.core.theme);
-        let outcome = self
-            .core
-            .input(&ev, now, &mut shared_fit(&self.painter, style));
-        match outcome {
-            Outcome::Close => {
-                // What waits is the last thing the person chose.
-                self.core.flush(now, true);
-                PopupAction::Close
-            }
-            Outcome::Keep { changed } => {
-                // A header folded or unfolded: the card has another height,
-                // and the popup hangs at the same place with it.
-                if let Some(size) = self.core.resize_wanted() {
-                    tracing::debug!(?size, "level popup: a section folded or unfolded");
-                    ctl.resize_popup(size);
-                }
-                if changed {
-                    ctl.request_redraw();
-                }
-                if let Some(wait) = self.core.throttle.wait(now) {
-                    ctl.redraw_after(wait);
-                }
-                if let Some(wait) = self.core.graph_wait(now) {
-                    ctl.redraw_after(wait);
-                }
-                PopupAction::Keep
-            }
-        }
-    }
-
-    fn dismissed(&mut self) {
-        self.core.flush(Instant::now(), true);
-        tracing::debug!("level popup: dismissed by the compositor");
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use celestina_paint::TextStyle;
+    use celestina_paint::{Rect, TextStyle};
     use celestina_ui::BTN_LEFT;
     use celestina_wayland::Modifiers;
 
@@ -1445,7 +1188,6 @@ mod tests {
         let mut core = LevelCore::new(
             &theme,
             kind,
-            CardFrame::Popup,
             Feeds {
                 cell: Rc::clone(&cell),
                 graph: Rc::clone(&graph),
@@ -1627,7 +1369,7 @@ mod tests {
     }
 
     #[test]
-    fn the_card_fills_the_popup_in_every_shape() {
+    fn the_card_fills_the_body_in_every_shape() {
         let theme = Theme::dark();
         let shape = Shape::default();
         for (kind, levels, mic) in [
@@ -1641,7 +1383,8 @@ mod tests {
         ] {
             let rig = rig(kind, levels);
             assert_eq!(rig.core.has_microphone(), mic);
-            let size = popup_size(&theme, kind, mic, shape);
+            let size = body_size(&theme, kind, mic, shape);
+            assert_eq!(size.0, SHEET_W);
             let card = rect_of(&rig.core, card_key());
             assert_eq!((card.x, card.y, card.w, card.h), (0.0, 0.0, size.0, size.1));
             // Every control sits inside the card.
@@ -1657,52 +1400,55 @@ mod tests {
         }
         // The microphone's section only adds height.
         assert!(
-            popup_size(&theme, Kind::Volume, true, shape).1
-                > popup_size(&theme, Kind::Volume, false, shape).1
+            body_size(&theme, Kind::Volume, true, shape).1
+                > body_size(&theme, Kind::Volume, false, shape).1
         );
         assert!(
-            popup_size(&theme, Kind::Volume, false, shape).1
-                > popup_size(&theme, Kind::Brightness, false, shape).1
+            body_size(&theme, Kind::Volume, false, shape).1
+                > body_size(&theme, Kind::Brightness, false, shape).1
         );
-        // The popups of old: no graph, no list, the card's width.
-        assert_eq!(popup_size(&theme, Kind::Volume, false, shape).0, POPUP_W);
+        // The brightness body is as wide as the volume's.
+        assert_eq!(body_size(&theme, Kind::Brightness, false, shape).0, SHEET_W);
     }
 
-    /// A rig whose card is a capsule sheet's body.
-    fn sheet_rig(levels: Levels, graph: AudioGraph) -> Rig {
+    #[test]
+    fn the_brightness_body_is_320_wide_single_or_listed() {
         let theme = Theme::dark();
-        let sent = Rc::new(std::cell::RefCell::new(Vec::new()));
-        let sink: Sink = {
-            let sent = Rc::clone(&sent);
-            Rc::new(move |request| sent.borrow_mut().push(request))
+        // The single slider: 320 wide, the level padding all round.
+        let rig = rig(Kind::Brightness, brightness(Some(60)));
+        let single = body_size(&theme, Kind::Brightness, false, Shape::default());
+        assert_eq!(single.0, SHEET_W);
+        assert_eq!(rig.core.size(), single);
+        let card = rect_of(&rig.core, card_key());
+        assert_eq!((card.w, card.h), single);
+        let first = rect_of(&rig.core, Key::named("level-heading-brightness"));
+        assert_eq!(first.y, theme.spacing.xs);
+        // Several monitors: the list is the same 320 wide, padded the same.
+        let feed = MonitorFeed {
+            rows: (0..3)
+                .map(|at| MonitorRow {
+                    name: format!("monitor {at}"),
+                    primary: at == 0,
+                })
+                .collect(),
+            levels: Rc::new(RefCell::new(vec![Some(20), Some(40), None])),
         };
-        let cell: SharedLevels = Rc::new(Cell::new(levels));
-        let graph: SharedGraph = Rc::new(RefCell::new(graph));
-        let monitors = MonitorFeed::default();
-        let monitor_cell = Rc::clone(&monitors.levels);
-        let mut core = LevelCore::new(
-            &theme,
-            Kind::Volume,
-            CardFrame::Sheet,
-            Feeds {
-                cell: Rc::clone(&cell),
-                graph: Rc::clone(&graph),
-                monitors,
-            },
-            sink,
-            false,
-            Instant::now(),
-            &mut cut,
+        let listed = rig_full(
+            Kind::Brightness,
+            brightness(Some(20)),
+            AudioGraph::default(),
+            feed,
+            cut,
         );
-        let size = core.size();
-        core.tree.layout_measured(size, fake_measure);
-        Rig {
-            core,
-            sent,
-            cell,
-            graph,
-            monitor_cell,
-        }
+        let size = monitors_size(&theme, 3);
+        assert_eq!(size.0, SHEET_W);
+        assert_eq!(listed.core.size(), size);
+        let card = rect_of(&listed.core, card_key());
+        assert_eq!((card.w, card.h), size);
+        let first = rect_of(&listed.core, Key::named("level-heading-all"));
+        assert_eq!(first.y, theme.spacing.xs);
+        let rows = rect_of(&listed.core, Key::named("level-monitors"));
+        assert_eq!(rows.y + rows.h + theme.spacing.md, size.1);
     }
 
     #[test]
@@ -1713,7 +1459,7 @@ mod tests {
             (audio(Some((30, false)), None), false),
             (audio(Some((30, false)), Some((80, true))), true),
         ] {
-            let rig = sheet_rig(levels, AudioGraph::default());
+            let rig = rig(Kind::Volume, levels);
             assert_eq!(rig.core.has_microphone(), mic);
             let size = body_size(&theme, Kind::Volume, mic, shape);
             assert_eq!(size.0, SHEET_W);
@@ -1747,10 +1493,6 @@ mod tests {
             body_size(&theme, Kind::Volume, true, shape).1
                 > body_size(&theme, Kind::Volume, false, shape).1
         );
-        // The popup's frame is unchanged: its card pads `md` all round.
-        let (_, popup) = popup_size(&theme, Kind::Volume, false, shape);
-        let (_, body) = body_size(&theme, Kind::Volume, false, shape);
-        assert_eq!(popup - body, theme.spacing.md - theme.spacing.xs);
     }
 
     #[test]
@@ -1966,7 +1708,6 @@ mod tests {
             core.shown,
             core.mirror.audio(),
             core.shape(),
-            core.frame,
         )
     }
 
@@ -2020,7 +1761,7 @@ mod tests {
         assert!(ys.windows(2).all(|w| w[0] < w[1]), "not in order: {ys:?}");
         // The labels are the copy's, and the card holds all of it.
         let theme = Theme::dark();
-        let size = popup_size(&theme, Kind::Volume, true, rig.core.shape());
+        let size = body_size(&theme, Kind::Volume, true, rig.core.shape());
         let card = rect_of(&rig.core, card_key());
         assert_eq!((card.w, card.h), size);
         assert_eq!(size.0, AUDIO_W);
@@ -2184,60 +1925,31 @@ mod tests {
 
     #[test]
     fn a_header_click_changes_the_height_and_keeps_the_top_edge() {
-        use celestina_wayland::popup::{positioner_geometry, resolve};
-        let theme = Theme::dark();
         let mut rig = rig_with(
             Kind::Volume,
             audio(Some((30, false)), Some((80, false))),
             full_graph(),
         );
-        // Nothing to ask while nothing folded or unfolded.
-        assert_eq!(rig.core.resize_wanted(), None);
         let folded = rig.core.size();
-        // The piece the popup hangs from, on a 1920 x 1080 output.
-        let anchor = Rect {
-            x: 900.0,
-            y: 4.0,
-            w: 120.0,
-            h: 28.0,
-        };
-        let place = |size: (f32, f32)| {
-            let bounds = celestina_wayland::PixelRect {
-                x: 0,
-                y: 0,
-                w: 1920,
-                h: 1080,
-            };
-            resolve(
-                &placement(&theme, anchor),
-                positioner_geometry(anchor, size),
-                bounds,
-            )
-        };
-        let before = place(folded);
         click(&mut rig, section_key(Section::Output));
-        let wanted = rig.core.resize_wanted();
-        let Some(unfolded) = wanted else {
-            panic!("the click asks for a size");
-        };
+        let unfolded = rig.core.size();
         assert_eq!(unfolded.0, folded.0, "the width stays");
         assert!(unfolded.1 > folded.1, "{unfolded:?} grows from {folded:?}");
-        // Asked once: the next frame asks for nothing more.
-        assert_eq!(rig.core.resize_wanted(), None);
-        let after = place(unfolded);
-        assert_eq!(after.y, before.y, "the top edge stays");
-        assert_eq!(after.x + after.w / 2, before.x + before.w / 2, "centred");
-        assert!(after.h > before.h);
-        // Folding it back asks for the old size.
+        // The size is what the sheet reads: the same until something folds.
+        assert_eq!(rig.core.size(), unfolded);
+        relayout(&mut rig);
+        let card = rect_of(&rig.core, card_key());
+        assert_eq!((card.x, card.y), (0.0, 0.0), "the top edge stays");
+        assert_eq!((card.w, card.h), unfolded);
+        // Folding it back gives the old size.
         click(&mut rig, section_key(Section::Output));
-        assert_eq!(rig.core.resize_wanted(), Some(folded));
-        assert_eq!(place(folded), before);
+        assert_eq!(rig.core.size(), folded);
         // A click on a row does not change the size.
         click(&mut rig, section_key(Section::Output));
-        rig.core.resize_wanted();
         relayout(&mut rig);
+        let unfolded = rig.core.size();
         click(&mut rig, device_key(6));
-        assert_eq!(rig.core.resize_wanted(), None);
+        assert_eq!(rig.core.size(), unfolded);
     }
 
     #[test]
@@ -2256,7 +1968,7 @@ mod tests {
         assert!(rig.core.sync(&Theme::dark(), Instant::now(), cut));
         assert!(has_node(&rig, device_key(6)) && marked(&rig, 6));
         assert!(!has_node(&rig, device_key(5)));
-        assert_eq!((rig.core.size(), rig.core.resize_wanted()), (folded, None));
+        assert_eq!(rig.core.size(), folded);
         // (b) A device that appeared after the open becomes the default: it
         // is the row, checked, and the old default is not offered.
         let mut graph = full_graph();
@@ -2275,7 +1987,7 @@ mod tests {
             .audio()
             .labels
             .contains(&(7, "USB headset".to_owned())));
-        assert_eq!((rig.core.size(), rig.core.resize_wanted()), (folded, None));
+        assert_eq!(rig.core.size(), folded);
         relayout(&mut rig);
         click(&mut rig, device_key(7));
         assert!(rig.sent.borrow().is_empty(), "the default asks for nothing");
@@ -2389,6 +2101,7 @@ mod tests {
     fn a_header_works_from_the_keyboard() {
         let mut rig = rig_with(Kind::Volume, audio(Some((30, false)), None), full_graph());
         let now = Instant::now();
+        let folded = rig.core.size();
         assert!(!has_node(&rig, device_key(6)));
         // Tab stops: the output's slider and mute row, then its header.
         for _ in 0..3 {
@@ -2398,7 +2111,7 @@ mod tests {
         relayout(&mut rig);
         assert!(rig.core.mirror.audio().folds.is_open(Section::Output));
         assert!(has_node(&rig, device_key(6)));
-        assert!(rig.core.resize_wanted().is_some());
+        assert!(rig.core.size().1 > folded.1, "the unfold grew the body");
         // The header keeps the focus: Space folds it again.
         rig.core.input(&key(0x20), now, &mut cut);
         relayout(&mut rig);
@@ -2426,7 +2139,6 @@ mod tests {
         assert!(!has_node(&rig, slider_key(Control::Stream(21))));
         assert!(!has_node(&rig, slider_key(Control::Stream(22))));
         assert_eq!(rig.core.size(), folded);
-        assert_eq!(rig.core.resize_wanted(), None);
         // Unfolding and folding Aplicaciones lists them again.
         toggle(&mut rig, Section::Apps);
         assert!(has_node(&rig, slider_key(Control::Stream(22))));
@@ -2472,10 +2184,8 @@ mod tests {
         );
         assert!(rig.sent.borrow().is_empty());
         // The size and the rows are the ones it had.
-        let size = popup_size(&Theme::dark(), Kind::Volume, true, rig.core.shape());
+        let size = body_size(&Theme::dark(), Kind::Volume, true, rig.core.shape());
         assert_eq!(rig.core.size(), size);
-        assert_eq!(rig.core.resize_wanted(), Some(size), "the unfolds asked");
-        assert_eq!(rig.core.resize_wanted(), None);
         relayout(&mut rig);
         let card = rect_of(&rig.core, card_key());
         assert_eq!((card.w, card.h), size);
@@ -2738,7 +2448,7 @@ mod tests {
                 .outputs
                 .push(device(100 + id, &format!("Sink {id}"), id == 0));
         }
-        let mut rig = sheet_rig(audio(Some((30, false)), None), graph);
+        let mut rig = rig_with(Kind::Volume, audio(Some((30, false)), None), graph);
         toggle(&mut rig, Section::Output);
         let rows = (100..112)
             .filter(|id| rig.core.tree.node_by_key(device_key(*id)).is_some())
@@ -2755,7 +2465,6 @@ mod tests {
     fn rows_update_in_place_while_the_height_stays_until_the_next_fold() {
         let mut rig = rig_with(Kind::Volume, audio(Some((30, false)), None), full_graph());
         toggle(&mut rig, Section::Apps);
-        rig.core.resize_wanted();
         let opened_card = rect_of(&rig.core, card_key());
         let opened_slider = rect_of(&rig.core, slider_key(Control::Stream(21)));
         {
@@ -2774,7 +2483,6 @@ mod tests {
             rect_of(&rig.core, slider_key(Control::Stream(21))),
             opened_slider
         );
-        assert_eq!(rig.core.resize_wanted(), None);
         assert_eq!(
             rig.core
                 .tree
@@ -2926,18 +2634,10 @@ mod tests {
         let shape = mirror.shape();
         let mut tree = Tree::new(false, &theme);
         tree.apply(
-            card(
-                &theme,
-                Kind::Volume,
-                true,
-                levels,
-                mirror.audio(),
-                shape,
-                CardFrame::Popup,
-            ),
+            card(&theme, Kind::Volume, true, levels, mirror.audio(), shape),
             Instant::now(),
         );
-        tree.layout_measured(popup_size(&theme, Kind::Volume, true, shape), fake_measure);
+        tree.layout_measured(body_size(&theme, Kind::Volume, true, shape), fake_measure);
         let x = |key| match tree.node_by_key(key) {
             Some(id) => tree.rect(id).x,
             None => panic!("no node for {key:?}"),
@@ -2994,26 +2694,26 @@ mod tests {
     }
 
     #[test]
-    fn one_monitor_keeps_the_single_slider_popup() {
+    fn one_monitor_keeps_the_single_slider_body() {
         let rig = rig_monitors(&[("LG ULTRAGEAR+", true, Some(30))]);
         let theme = Theme::dark();
         assert_eq!(
             rig.core.size(),
-            popup_size(&theme, Kind::Brightness, false, Shape::default())
+            body_size(&theme, Kind::Brightness, false, Shape::default())
         );
-        assert_eq!(rig.core.size().0, POPUP_W);
+        assert_eq!(rig.core.size().0, SHEET_W);
         assert!(!in_tree(&rig, slider_key(Control::AllMonitors)));
         assert!(!in_tree(&rig, monitor_slider(0)));
         assert!(in_tree(&rig, slider_key(Control::Brightness)));
     }
 
     #[test]
-    fn several_monitors_open_the_list_at_the_audio_width() {
+    fn several_monitors_open_the_list_at_the_sheet_width() {
         let rig = rig_monitors(&three());
         let theme = Theme::dark();
         let size = monitors_size(&theme, 3);
         assert_eq!(rig.core.size(), size);
-        assert_eq!(size.0, AUDIO_W);
+        assert_eq!(size.0, SHEET_W);
         let card = rect_of(&rig.core, card_key());
         assert_eq!((card.x, card.y, card.w, card.h), (0.0, 0.0, size.0, size.1));
         // All, the divider, then the rows in order, each inside the card.
@@ -3324,7 +3024,6 @@ mod tests {
         assert!(rig.core.sync(&Theme::dark(), Instant::now(), cut));
         relayout(&mut rig);
         assert_eq!(rig.core.size(), size);
-        assert_eq!(rig.core.resize_wanted(), None);
         assert_eq!(rect_of(&rig.core, card_key()), card);
         assert_eq!(rect_of(&rig.core, monitor_slider(1)), row);
         assert_eq!(

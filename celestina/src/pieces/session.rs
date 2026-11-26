@@ -1,10 +1,13 @@
-//! The Session piece: a power glyph at the end of the bar. A click opens the
-//! session menu below it (CEL-I-006); it has no page of its own.
+//! The Session piece: a power glyph at the end of the bar. A click grows its
+//! capsule into the session menu's sheet (CEL-I-006, CEL-D-003); it has no
+//! page of its own.
 
 use celestina_paint::Role;
 use celestina_ui::{view, Key, View};
 
-use super::{conn_glyph, BarCx, Gesture, PageEntry, Piece, PieceAction, PieceId, PieceInput};
+use super::{
+    conn_glyph, BarCx, Gesture, PageEntry, Piece, PieceAction, PieceId, PieceInput, SheetKind,
+};
 use crate::copy;
 
 /// The glyph's size, logical px.
@@ -41,7 +44,7 @@ impl Piece for Session {
 
     fn activate(&self, input: &PieceInput<'_>) -> PieceAction {
         match (input.key == node_key(), input.gesture) {
-            (true, Gesture::Primary) => PieceAction::SessionMenu,
+            (true, Gesture::Primary) => PieceAction::Sheet(SheetKind::Session),
             _ => PieceAction::None,
         }
     }
@@ -68,7 +71,10 @@ mod tests {
                 assert_eq!(*key, celestina_paint::IconKey::Semantic("power"));
                 assert_eq!((*tint, *size), (Some(Role::TextHi), 16.0));
                 let act = |key, gesture| Session.activate(&PieceInput { key, gesture, cx });
-                assert_eq!(act(node_key(), Gesture::Primary), PieceAction::SessionMenu);
+                assert_eq!(
+                    act(node_key(), Gesture::Primary),
+                    PieceAction::Sheet(SheetKind::Session)
+                );
                 for gesture in [
                     Gesture::Middle,
                     Gesture::Context,

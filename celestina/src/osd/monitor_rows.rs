@@ -1,10 +1,10 @@
-//! The monitor list of the brightness popup (CEL-I-003): with two monitors or
+//! The monitor list of the brightness sheet (CEL-I-003): with two monitors or
 //! more, an "All" heading with the mean level and a slider that sets every
 //! monitor with a reading, a divider, and one compact row per monitor (its
-//! name, its slider, its percent). With one monitor the popup is the single
+//! name, its slider, its percent). With one monitor the sheet is the single
 //! slider of old and none of this is built.
 //!
-//! The rows, and with them the popup's size, are fixed when the popup opens:
+//! The rows, and with them the sheet's size, are fixed when the sheet opens:
 //! a monitor that appears later is listed the next time. A row updates in
 //! place, as the readings arrive ([`MonitorMirror::adopt`]), and a monitor
 //! with no reading is greyed out and takes no input.
@@ -21,8 +21,9 @@ use celestina_paint::{Role, Theme, Weight};
 use celestina_ui::{view, Key, View};
 
 use super::audio_rows::{compact_h, fixed};
-use super::popup::AUDIO_W;
-use super::popup::{card_key, heading, heading_h, level_slider, slider_h, slider_key, Control};
+use super::popup::{
+    card_key, heading, heading_h, level_slider, slider_h, slider_key, Control, SHEET_W,
+};
 use crate::{
     copy,
     island::view::{centred, text_style},
@@ -35,19 +36,19 @@ pub const MONITOR_PERCENT_W: f32 = 38.0;
 /// The divider's height, logical px.
 pub const DIVIDER_H: f32 = 1.0;
 
-/// A monitor's row as the popup lists it.
+/// A monitor's row as the sheet lists it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MonitorRow {
     pub name: String,
-    /// The monitor of the bar the popup hangs from: first, in bold.
+    /// The monitor of the bar the sheet opens on: first, in bold.
     pub primary: bool,
 }
 
-/// What the app writes and the popup reads: each listed monitor's level, in
+/// What the app writes and the sheet reads: each listed monitor's level, in
 /// the order of the rows; `None` is unknown.
 pub type SharedMonitors = Rc<RefCell<Vec<Option<u8>>>>;
 
-/// What the popup opens over: the rows and the shared levels.
+/// What the sheet opens over: the rows and the shared levels.
 #[derive(Clone, Debug, Default)]
 pub struct MonitorFeed {
     pub rows: Vec<MonitorRow>,
@@ -62,14 +63,16 @@ pub fn mean_level(levels: &[Option<u8>]) -> Option<u8> {
     u8::try_from((known.iter().sum::<u32>() + n / 2) / n).ok()
 }
 
-/// The popup's size when it lists `rows` monitors: the audio width, the card's
-/// padding all round, and the heading, the slider, the divider and the rows
-/// (which touch each other), a small gap between those four.
+/// The body's size when it lists `rows` monitors: the sheet's width, the space
+/// above and below as a level body has it, and the heading, the slider, the
+/// divider and the rows (which touch each other), a small gap between those
+/// four.
 #[must_use]
 pub fn monitors_size(theme: &Theme, rows: usize) -> (f32, f32) {
     (
-        AUDIO_W,
-        2.0 * theme.spacing.md
+        SHEET_W,
+        theme.spacing.xs
+            + theme.spacing.md
             + heading_h(theme)
             + slider_h(theme)
             + DIVIDER_H
@@ -78,9 +81,9 @@ pub fn monitors_size(theme: &Theme, rows: usize) -> (f32, f32) {
     )
 }
 
-/// The popup's copy of the monitor list: the rows it listed when it opened,
+/// The sheet's copy of the monitor list: the rows it listed when it opened,
 /// the names cut to their column, what it shows now (the app's reading with
-/// the popup's own changes on top) and the last reading it took in. The same
+/// the sheet's own changes on top) and the last reading it took in. The same
 /// rule as the single level, for each row on its own: a reading is adopted
 /// when it differs from the last one taken in for that row, never merely
 /// because it differs from what is shown.
@@ -91,14 +94,14 @@ pub struct MonitorMirror {
     labels: Vec<String>,
     shown: Vec<Option<u8>>,
     seen: Vec<Option<u8>>,
-    /// The last level the popup asked of each row and when: until the
+    /// The last level the sheet asked of each row and when: until the
     /// monitor reads it back, or [`ASK_HOLD`] after the ask, other readings
     /// (the read-backs of the drag's earlier writes) are taken in but not
     /// shown, so the row does not jump back after a release.
     asked: Vec<Option<(u8, Instant)>>,
 }
 
-/// How long a row keeps showing the level the popup asked of it while the
+/// How long a row keeps showing the level the sheet asked of it while the
 /// monitor's readings say otherwise: one DDC settle.
 pub const ASK_HOLD: Duration = BRIGHTNESS_SETTLE;
 
@@ -279,7 +282,7 @@ fn monitor_row(theme: &Theme, at: usize, row: &MonitorRow, label: &str, level: O
         .child(fixed(percent))
 }
 
-/// The card of a popup that lists several monitors.
+/// The body of a sheet that lists several monitors.
 #[must_use]
 pub fn monitors_card(theme: &Theme, mirror: &MonitorMirror) -> View {
     let (w, h) = monitors_size(theme, mirror.rows.len());
@@ -290,9 +293,8 @@ pub fn monitors_card(theme: &Theme, mirror: &MonitorMirror) -> View {
         .enumerate()
         .map(|(at, row)| monitor_row(theme, at, row, &mirror.labels[at], mirror.shown[at]));
     view::col(card_key())
-        .haze(theme.radius_md)
         .size(w, h)
-        .padding(theme.spacing.md)
+        .padding_sides(theme.spacing.xs, theme.spacing.md, theme.spacing.md)
         .gap(theme.spacing.sm)
         .child(heading(
             theme,

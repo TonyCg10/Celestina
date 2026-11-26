@@ -30,6 +30,7 @@ use crate::notifications::banners::{self, BannerAction, BannerStack};
 use crate::{
     bar,
     bubbles::{self, Bubbles, BubblesHandle, BubblesNews},
+    catcher::{self, Catchers},
     clipboard::{ClipboardDuty, ClipboardMessage, ClipboardState},
     command::{Presence, Verb},
     connectivity::{self, state::ConnectivityState, ConnectivityHandle, Forwarded},
@@ -46,9 +47,9 @@ use crate::{
     lock::LockHandle,
     media::control::{route, MediaControl, Routed, Snapshot as MediaSnapshot},
     message::Message,
-    notifications::{self, NotificationsState},
+    notifications::NotificationsState,
     osd::{
-        control::{self, Controls, LevelRedraw, Opened, Opening, Place},
+        control::{self, Controls, Opened, Opening},
         verbs::{self as level_verbs, NoWorkers},
         Suppression,
     },
@@ -76,7 +77,6 @@ use crate::{
         tray::TrayProvider,
         weather::WeatherReading,
     },
-    session_menu::{SessionMenu, SessionSlot},
     tray::{
         menu::{AskSink, Chain, ChoiceSlot as TrayChoiceSlot, MenuContext, MenuModel, TrayMenu},
         ItemId, MenuTree, TrayCommand, TrayEvent,
@@ -385,8 +385,6 @@ pub struct App {
     settings: ShellSettings,
     /// Where the open menu leaves the row chosen in it.
     menu_choice: ChoiceSlot,
-    /// What the session menu chose, read once its popup is gone.
-    session_choice: SessionSlot,
     model: Option<NiriModel>,
     /// Who holds the bus names the Notifications and Tray pages depend on;
     /// nobody until the owner detection of CEL-1-F / CEL-1-G fills it.
@@ -411,6 +409,8 @@ pub struct App {
     notifications: NotificationsState,
     /// The banners' surface, while a banner shows.
     banners: Option<BannerSurface>,
+    /// The catchers under the Islands that show something (CEL-D-003).
+    catchers: Catchers,
     /// Why the run stopped on a failure, for the binary to report.
     fatal: Rc<OnceCell<String>>,
     refusal_logged: bool,
@@ -455,7 +455,7 @@ pub struct App {
     /// The on-screen display duty: its surface and its readings.
     osds: crate::osd::surface::Osds,
     /// The audio and brightness readings the bar's pieces show, and the
-    /// slider popup that is open.
+    /// level sheet that is open.
     controls: Controls,
     /// The phone duty's worker, set once the loop runs (CEL-2-J).
     phone: Rc<OnceCell<PhoneHandle>>,
@@ -513,7 +513,6 @@ impl App {
             appearance,
             settings,
             menu_choice: ChoiceSlot::default(),
-            session_choice: SessionSlot::default(),
             model: None,
             owners: NameOwner::default(),
             keyboard: None,
@@ -524,6 +523,7 @@ impl App {
             sender: Rc::new(OnceCell::new()),
             notifications: NotificationsState::new(notifications),
             banners: None,
+            catchers: Catchers::default(),
             fatal,
             refusal_logged: false,
             metrics,
@@ -879,7 +879,7 @@ impl App {
         }
     }
 
-    /// Closes the level sheet or popup that is open, on its Island.
+    /// Closes the level sheet that is open, on its Island.
     fn close_open_level_control(&mut self, ctl: &mut RuntimeCtl<'_>) {
         let Some(surface) = self.controls.open_surface() else {
             return;
@@ -888,16 +888,15 @@ impl App {
             (self.islands.get_mut(surface), ctl.surface(surface))
         {
             island.close_level_sheet(&mut surface_ctl);
-            island.close_level_popup(&mut surface_ctl);
         }
     }
 
-    /// Opens the level control of `kind` at `place` on `surface`'s Island and
+    /// Opens the level sheet of `kind` from `piece` on `surface`'s Island and
     /// tells the display: what was released first, then what is quiet now.
     fn open_level(
         &mut self,
         kind: crate::osd::popup::Kind,
-        place: Place,
+        piece: celestina_ui::Key,
         surface: SurfaceId,
         shared: &SharedPainter,
         ctl: &mut SurfaceCtl<'_>,
@@ -911,7 +910,7 @@ impl App {
         let Some(island) = self.islands.get_mut(surface) else {
             return;
         };
-        let Opened { opened, released } = self.controls.open(kind, place, island, ctl, &opening);
+        let Opened { opened, released } = self.controls.open(kind, piece, island, ctl, &opening);
         if let Some(released) = released {
             self.post(Message::OsdSuppressed(released.suppression));
             if let Some(elsewhere) = released.elsewhere {
@@ -941,7 +940,7 @@ impl App {
     }
 
     /// The `osd` duty or the bar's layout changed: with the duty off the
-    /// readings are forgotten (so the pieces vanish) and an open slider popup
+    /// readings are forgotten (so the pieces vanish) and an open level sheet
     /// closes. Whether a layout holds the brightness piece is the runtime's
     /// to read, in `OsdRuntime::apply`.
     fn levels_settings_changed(
@@ -973,30 +972,17 @@ impl App {
     }
 
     /// The readings changed: the Islands draw the pieces again and an open
-    /// popup shows the new levels.
+    /// sheet shows the new levels.
     fn levels_changed(&mut self, ctl: &mut RuntimeCtl<'_>) {
         self.redraw_all(ctl);
         self.popup_refreshed(ctl);
     }
 
-    /// An open slider popup shows what the readings and the audio graph hold
+    /// An open level sheet shows what the readings and the audio graph hold
     /// now.
     fn popup_refreshed(&mut self, ctl: &mut RuntimeCtl<'_>) {
-        let surface = match self.controls.refresh() {
-            Some(LevelRedraw::Island(surface)) => Some(surface),
-            Some(LevelRedraw::Popup(popup)) => ctl.popup_surface(popup),
-            None => None,
-        };
-        if let Some(mut surface) = surface.and_then(|s| ctl.surface(s)) {
+        if let Some(mut surface) = self.controls.refresh().and_then(|s| ctl.surface(s)) {
             surface.request_redraw();
-        }
-    }
-
-    /// The slider popup is gone (seen from an input call, which controls
-    /// only its own surface): the loop is told to let the display show again.
-    fn level_popup_closed(&mut self) {
-        if let Some(released) = self.controls.closed() {
-            self.post(Message::OsdSuppressed(released));
         }
     }
 
@@ -1335,8 +1321,12 @@ impl App {
             tracing::debug!(output = output.0, "the output is gone: no page to open");
             return;
         };
+        let claimed = self.polkit_claims_keyboard();
         if let (Some(island), Some(mut ctl)) = (self.islands.get_mut(surface), ctl.surface(surface))
         {
+            // The Island hears the claim before the verb: its own flag is
+            // only refreshed on frame and input.
+            island.set_keyboard_claimed(claimed);
             island.command(&Verb::IslandOpen(PageId::NOTIFICATIONS), &mut ctl);
         }
     }
@@ -1394,9 +1384,12 @@ impl App {
                     tracing::info!(?verb, "no output: the verb has no Island");
                     return;
                 };
+                let claimed = self.polkit_claims_keyboard();
                 if let (Some(island), Some(mut ctl)) =
                     (self.islands.get_mut(surface), ctl.surface(surface))
                 {
+                    // The Island hears the claim before the verb.
+                    island.set_keyboard_claimed(claimed);
                     island.command(&verb, &mut ctl);
                 }
             }
@@ -1462,10 +1455,13 @@ impl App {
                     tracing::info!(?verb, "no output: the verb has no Island");
                     return;
                 };
+                let claimed = self.polkit_claims_keyboard();
                 if let (Some(island), Some(mut ctl)) =
                     (self.islands.get_mut(surface), ctl.surface(surface))
                 {
-                    let toggle = notifications::toggle_verb(island.page());
+                    // The Island hears the claim before the verb.
+                    island.set_keyboard_claimed(claimed);
+                    let toggle = island.notifications_toggle_verb();
                     island.command(&toggle, &mut ctl);
                 }
             }
@@ -1674,8 +1670,12 @@ impl App {
         }) else {
             return;
         };
+        let claimed = self.polkit_claims_keyboard();
         if let (Some(island), Some(mut ctl)) = (self.islands.get_mut(surface), ctl.surface(surface))
         {
+            // The Island hears the claim before the verb: its own flag is
+            // only refreshed on frame and input.
+            island.set_keyboard_claimed(claimed);
             island.command(&Verb::IslandOpen(page), &mut ctl);
         }
     }
@@ -1776,30 +1776,11 @@ impl App {
                     self.level_action(action, surface);
                 }
                 IslandAction::OpenLevelSheet { kind, piece } => {
-                    self.open_level(kind, Place::Sheet(piece), surface, shared, ctl);
+                    self.open_level(kind, piece, surface, shared, ctl);
                 }
-                IslandAction::OpenLevelPopup { kind, anchor } => {
-                    self.open_level(kind, Place::Popup(anchor), surface, shared, ctl);
-                }
-                IslandAction::OpenSessionMenu { anchor } => {
-                    let Ok(painter) = shared.try_borrow() else {
-                        tracing::warn!("the painter is in use; the session menu is not opened");
-                        continue;
-                    };
-                    let theme = painter.theme().clone();
-                    drop(painter);
-                    self.session_choice.set(None);
-                    let menu = SessionMenu::new(
-                        Rc::clone(shared),
-                        &theme,
-                        self.appearance.reduced_motion,
-                        Rc::clone(&self.session_choice),
-                    );
-                    let size = menu.size();
-                    if let Some(island) = self.islands.get_mut(surface) {
-                        island.open_session_menu(anchor, size, Box::new(menu), ctl);
-                    }
-                }
+                // No popup grab is held, so the verb goes out at once; the
+                // lock maps over the closing sheet.
+                IslandAction::Session(action) => self.post(Message::Command(action.verb())),
                 IslandAction::OpenMenu { more, keyboard } => {
                     let Ok(painter) = shared.try_borrow() else {
                         tracing::warn!("the painter is in use; the menu is not opened");
@@ -1893,6 +1874,59 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Posts a [`Message::SyncCatchers`] when an Island shows (or stopped
+    /// showing) something its catcher does not match. Every change of what is
+    /// shown comes with a frame or an input call on its surface, which is
+    /// where this runs.
+    fn catchers_due(&self) {
+        let now = std::time::Instant::now();
+        let due = self
+            .islands
+            .iter()
+            .any(|slot| slot.island.wants_catcher(now) != self.catchers.has(slot.surface));
+        if due {
+            self.post(Message::SyncCatchers);
+        }
+    }
+
+    /// Maps a catcher under every Island that shows something and destroys
+    /// the ones whose Island shows nothing.
+    fn sync_catchers(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        let now = std::time::Instant::now();
+        for slot in self.islands.iter() {
+            let wants = slot.island.wants_catcher(now);
+            match (wants, self.catchers.has(slot.surface)) {
+                (true, false) => match ctl.create_layer_surface(catcher::spec(slot.output)) {
+                    Ok(surface) => self.catchers.add(slot.surface, slot.output, surface),
+                    Err(err) => {
+                        tracing::error!(output = slot.output.0, %err, "no catcher on this output");
+                    }
+                },
+                (false, true) => {
+                    if let Some(surface) = self.catchers.take(slot.surface) {
+                        ctl.destroy_surface(surface);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// A press on the catcher `pressed`: its Island closes whatever it shows
+    /// (the page, the sheet, what waits), as a press outside the sheet does.
+    fn catcher_pressed(&mut self, pressed: SurfaceId, ctl: &mut RuntimeCtl<'_>) {
+        let Some(island) = self.catchers.island_of(pressed) else {
+            return;
+        };
+        let (Some(mut surface), Some(slot)) = (
+            ctl.surface(island),
+            self.islands.slots.iter_mut().find(|s| s.surface == island),
+        ) else {
+            return;
+        };
+        slot.island.command(&Verb::IslandClose, &mut surface);
     }
 
     /// What is on the Notifications page counts as seen: while an Island
@@ -2548,6 +2582,9 @@ impl PromptHost for PolkitHost<'_, '_> {
             let Some(mut surface) = self.ctl.surface(slot.surface) else {
                 continue;
             };
+            // The Island yields the keyboard from now on and what it shows
+            // (its page, a sheet, what waits) closes.
+            slot.island.set_keyboard_claimed(true);
             if slot.island.anything_open() {
                 slot.island.command(&Verb::IslandClose, &mut surface);
             }
@@ -2799,13 +2836,8 @@ impl Shell for App {
                 // A level sheet closes (and sends what its throttle holds)
                 // while its Island still exists: `Sheets` has no Drop flush.
                 self.islands.close_level_sheets(output);
+                self.catchers.remove_output(output);
                 let gone = self.islands.remove_output(output);
-                // A session menu that went with its Island sends no close:
-                // a row chosen in it is dropped, never fired by a later
-                // popup's close.
-                if !gone.is_empty() {
-                    self.session_choice.set(None);
-                }
                 if self.keyboard.is_some_and(|k| gone.contains(&k)) {
                     self.keyboard = None;
                 }
@@ -2939,6 +2971,22 @@ impl Shell for App {
                 return;
             }
         }
+        if self.catchers.owns(cx.surface) {
+            match self.painter.as_ref().map(|p| p.try_borrow_mut()) {
+                Some(Ok(mut painter)) => {
+                    // Nothing is painted: a transparent buffer maps it.
+                    painter.begin(cx.size, cx.scale as f32, false);
+                    painter.end();
+                    cx.ctl.set_blur_region(&[]);
+                    cx.ctl.set_input_region(&catcher::region_for(cx.size));
+                }
+                _ => {
+                    tracing::warn!("the painter is in use; the catcher's frame is skipped");
+                    cx.ctl.request_redraw();
+                }
+            }
+            return;
+        }
         if let (Some(shared), Some(banners)) = (self.painter.as_ref(), self.banners.as_mut()) {
             if banners.surface == cx.surface {
                 match shared.try_borrow_mut() {
@@ -2955,6 +3003,7 @@ impl Shell for App {
                 return;
             }
         }
+        let claimed = self.polkit_claims_keyboard();
         let (Some(shared), Some(island)) =
             (self.painter.as_ref(), self.islands.get_mut(cx.surface))
         else {
@@ -2980,6 +3029,7 @@ impl Shell for App {
             phone_duty: self.settings.current().duties.phone == Duty::On,
             bubbles: &self.bubbles_state,
         };
+        island.set_keyboard_claimed(claimed);
         island.frame(
             cx,
             &mut painter,
@@ -2989,6 +3039,9 @@ impl Shell for App {
         );
         drop(painter);
         self.settle_level_sheet(cx.surface);
+        // A sheet that opened from the queue in this frame is seen too.
+        self.mark_read_if_viewed();
+        self.catchers_due();
     }
 
     fn input(&mut self, ev: InputEvent, ctl: &mut SurfaceCtl<'_>) {
@@ -3011,6 +3064,14 @@ impl Shell for App {
             }
             let output = banners.output;
             self.banners_act(input.actions, output);
+            return;
+        }
+        if self.catchers.owns(surface) {
+            // The press is spent here: it closes what the Island shows and
+            // never reaches the window under it.
+            if catcher::closes(&ev) {
+                self.post(Message::CatcherPress(surface));
+            }
             return;
         }
         match ev {
@@ -3036,49 +3097,37 @@ impl Shell for App {
             return;
         }
         let closed = matches!(ev, InputEvent::PopupClosed { .. });
-        // Taken at once, so a choice never outlives its menu: if the close
-        // is dropped below, the destructive verb is dropped with it rather
-        // than fired by some later popup's close.
-        let session_choice = if closed {
-            self.session_choice.take()
-        } else {
-            None
-        };
+        let claimed = self.polkit_claims_keyboard();
         let (Some(shared), Some(island)) = (self.painter.clone(), self.islands.get_mut(surface))
         else {
             return;
         };
         let actions = match shared.try_borrow_mut() {
-            Ok(mut painter) => island.input(ev, ctl, &mut painter),
+            Ok(mut painter) => {
+                island.set_keyboard_claimed(claimed);
+                island.input(ev, ctl, &mut painter)
+            }
             Err(_) => {
                 tracing::warn!("the painter is in use; the input is dropped");
                 return;
             }
         };
         let tray_menu_open = island.tray_menu_open();
-        let level_popup_open = island.level_popup_open();
         self.act(actions, surface, &shared, ctl);
         self.settle_level_sheet(surface);
         self.mark_read_if_viewed();
+        self.catchers_due();
         // The menu is gone: a row chosen in it is made now. The Island has
         // one popup at a time, so the slot is that popup's.
         if closed {
             if let Some(choice) = self.menu_choice.take() {
                 self.menu_chose(choice, surface, ctl);
             }
-            // The session menu's row goes out as the same command the bus
-            // and the keybindings send, now that no popup grab is held.
-            if let Some(action) = session_choice {
-                self.post(Message::Command(action.verb()));
-            }
             // A tray menu's chosen entry goes to its item once the chain
             // is gone, and the host hears that the chain closed.
             let chosen = self.tray_choice.borrow_mut().take();
             if let Some((item, entry)) = chosen {
                 self.tray_command(TrayCommand::MenuEvent(item, entry));
-            }
-            if !level_popup_open && self.controls.popup_open_on(surface) {
-                self.level_popup_closed();
             }
             if !tray_menu_open
                 && self
@@ -3243,7 +3292,6 @@ impl Shell for App {
                     (self.islands.get_mut(surface), ctl.surface(surface))
                 {
                     island.close_level_sheet(&mut surface_ctl);
-                    island.close_level_popup(&mut surface_ctl);
                 }
             }
             Message::OsdSuppressed(suppression) => {
@@ -3263,6 +3311,8 @@ impl Shell for App {
                 keybinds,
             } => self.overview_keybinds_loaded(generation, keybinds, ctl),
             Message::OverviewClosed { surface } => ctl.destroy_surface(surface),
+            Message::SyncCatchers => self.sync_catchers(ctl),
+            Message::CatcherPress(surface) => self.catcher_pressed(surface, ctl),
             Message::OverviewCaptureTimeout(generation) => {
                 let steps = self.overview.flow.timeout(generation);
                 if !steps.is_empty() {

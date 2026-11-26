@@ -19,6 +19,7 @@ pub mod bar_tree;
 pub mod cadence;
 pub mod clock;
 pub mod menu;
+mod page_sheets;
 pub mod pages;
 mod sheets;
 pub mod state;
@@ -35,9 +36,7 @@ use celestina_shell::{
     connectivity::Action, glance::Today, phone::PhoneState, settings::BarLayout,
 };
 use celestina_ui::{Interaction, Key, Tree, UiEvent, BTN_LEFT};
-use celestina_wayland::{
-    CloseReason, FrameCx, InputEvent, KeyboardInteractivity, PopupId, PopupShell, SurfaceCtl,
-};
+use celestina_wayland::{CloseReason, FrameCx, InputEvent, PopupId, PopupShell, SurfaceCtl};
 
 use crate::{
     bar::silhouette::{self, Shape},
@@ -49,12 +48,13 @@ use crate::{
     osd::popup as level_popup,
     pieces::{
         self, AudioAction, AudioLevels, BarCx, BrightnessAction, Gesture, Levels, PageId,
-        PieceAction,
+        PieceAction, SheetKind,
     },
     providers::{
         magnetita::MediaKind, niri::NiriModel, notifications::NotificationsCommand,
         sysmon::SysReading, weather::WeatherReading,
     },
+    session_menu::SessionAction,
     sheet::{Measure, Next, Sheets},
     tray::{scroll_steps, ItemId, Orientation, TrayCommand},
 };
@@ -62,10 +62,9 @@ use bar_tree::BarTree;
 use cadence::{Cadence, Offer, Redraws, Wake, SYSMON_BAR_PERIOD};
 use clock::{ClockTick, SecondTick};
 use pages::{
-    activity, bluetooth as bluetooth_page, clipboard as clipboard_page, clock as clock_page,
-    media::{self as media_page, MediaState},
-    network as network_page, notifications, page_view, phone as phone_page, power as power_page,
-    sysmon as sysmon_page, tabs,
+    clipboard as clipboard_page,
+    media::MediaState,
+    page_view,
     tray::{self as tray_page, IconCache, Pixmaps, TrayList, TrayRow},
     HistoryRow, NameOwner, PageCx,
 };
@@ -117,25 +116,16 @@ pub enum IslandAction {
     /// The Brightness piece's wheel: the app commands the brightness workers
     /// for this Island's output.
     Brightness(BrightnessAction),
-    /// The Volume piece (`piece`, a node of the bar) asked for its sheet: the
-    /// app builds the body and hands it to [`Island::open_level_sheet`].
+    /// The Volume or Brightness piece (`piece`, a node of the bar) asked for
+    /// its sheet: the app builds the body and hands it to
+    /// [`Island::open_level_sheet`].
     OpenLevelSheet {
         kind: level_popup::Kind,
         piece: Key,
     },
-    /// The Brightness piece was clicked: the app builds the slider popup and
-    /// hands it to [`Island::open_level_popup`], anchored at `anchor` (a
-    /// rect of the surface).
-    OpenLevelPopup {
-        kind: level_popup::Kind,
-        anchor: Rect,
-    },
-    /// The Session piece was clicked: the app builds the session menu and
-    /// hands it to [`Island::open_session_menu`], anchored at `anchor` (a
-    /// rect of the surface).
-    OpenSessionMenu {
-        anchor: Rect,
-    },
+    /// A row of the session sheet was chosen (the confirmation card's
+    /// button for the dangerous ones): the app posts its verb at once.
+    Session(SessionAction),
     /// A transport button of the Phone page: the app asks Magnetita for
     /// the same request `phone media` makes.
     PhoneMedia(MediaKind),
@@ -327,6 +317,10 @@ pub struct Island {
     phone: PhoneState,
     /// Whether the phone duty is on, as the last frame saw it.
     phone_duty: bool,
+    /// Whether a polkit prompt holds the keyboard (N-25): nothing opens and
+    /// the surface asks for no keyboard while it does. The app sets it
+    /// before every frame and input call.
+    keyboard_claimed: bool,
     /// The minimised windows the bar's pieces read (CEL-2-J).
     bubbles: Bubbles,
     /// The pixmaps uploaded for the items' icons.
@@ -340,11 +334,6 @@ pub struct Island {
     /// The bar's zone capsules, from the first layout handed over
     /// ([`Island::set_bar`]) on; `None` only between [`Island::new`] and it.
     bar: Option<BarTree>,
-    /// The Volume or Brightness slider popup, while it is open. It hangs from
-    /// the bar, so it outlives the page.
-    level_popup: Option<PopupId>,
-    /// The session menu, while it is open. It hangs from the bar too.
-    session_menu: Option<PopupId>,
     /// The capsule sheet that is open, and what waits for it to close.
     sheets: Sheets,
     /// What the Volume and Brightness pieces read.
@@ -419,14 +408,13 @@ impl Island {
             delete_held: false,
             phone: PhoneState::Absent,
             phone_duty: false,
+            keyboard_claimed: false,
             bubbles: Bubbles::default(),
             icons: IconCache::default(),
             media: MediaState::default(),
             covers: HashMap::new(),
             scroll: ScrollRemainder::default(),
             bar: None,
-            level_popup: None,
-            session_menu: None,
             sheets: Sheets::default(),
             levels: Levels::default(),
             tray_menu_on_bar: false,
@@ -483,10 +471,10 @@ impl Island {
         }
     }
 
-    /// Whether the System page is the one the open Island shows: the only
-    /// page that reads the newest reading.
+    /// Whether the System page is the one shown (the Island's or a sheet's):
+    /// the only page that reads the newest reading.
     fn sysmon_page_open(&self) -> bool {
-        self.state.is_open() && self.state.shown_page() == PageId::SYSMON
+        self.page_shown() == Some(PageId::SYSMON)
     }
 
     /// The bar's layout in force on this Island: what [`Island::set_bar`]
@@ -522,7 +510,7 @@ impl Island {
             return false;
         }
         self.connectivity.clone_from(state);
-        let open = self.state.is_open();
+        let open = self.page_shown().is_some();
         self.stale |= open;
         self.invalidate_bar();
         open || self.bar.is_some()
@@ -595,10 +583,11 @@ impl Island {
         }
     }
 
-    /// Whether the Clipboard page is the one shown right now.
+    /// Whether the Clipboard page is the one shown right now (the Island's or
+    /// a sheet's).
     #[must_use]
     pub fn shows_clipboard_page(&self) -> bool {
-        self.state.is_open() && self.state.shown_page() == PageId::CLIPBOARD
+        self.page_shown() == Some(PageId::CLIPBOARD)
     }
 
     /// What a click or Enter on the Clipboard page's node `key` does: a verb
@@ -643,12 +632,15 @@ impl Island {
 
     /// Delete on the focused clipboard row removes its entry.
     fn delete_key(&mut self) -> Option<IslandAction> {
-        let id = self.page.highlight().focused?;
+        let key = {
+            let (tree, _) = self.shown_page_input()?;
+            tree.key_of(tree.highlight().focused?)
+        };
         let action = clipboard_page::remove_index(
             &self.clip_panel,
             &self.theme,
             self.state.max_page_size(),
-            self.page.key_of(id),
+            key,
         )?;
         self.run_clipboard(action)
     }
@@ -665,11 +657,11 @@ impl Island {
         self.state.exclusive_zone()
     }
 
-    /// Whether the Notifications page is on screen (or growing): what the
-    /// person sees there counts as seen.
+    /// Whether the Notifications page is on screen (or growing), as the
+    /// Island's page or a sheet: what the person sees there counts as seen.
     #[must_use]
     pub fn shows_notifications(&self) -> bool {
-        self.page() == Some(PageId::NOTIFICATIONS)
+        self.page_shown() == Some(PageId::NOTIFICATIONS)
     }
 
     /// The open page, if any.
@@ -693,7 +685,8 @@ impl Island {
     /// Whether `model` changes what this Island shows (and is worth a frame).
     #[must_use]
     pub fn shows_a_change(&self, model: Option<&NiriModel>) -> bool {
-        self.rows_from(model) != self.rows || (self.state.is_open() && model != self.model.as_ref())
+        self.rows_from(model) != self.rows
+            || (self.page_shown().is_some() && model != self.model.as_ref())
     }
 
     fn rows_from(&self, model: Option<&NiriModel>) -> Vec<Row> {
@@ -778,8 +771,8 @@ impl Island {
         if phone_duty != self.phone_duty {
             self.phone_duty = phone_duty;
             // A page that no longer exists is not left open.
-            if !phone_duty && self.state.is_open() && self.state.shown_page() == PageId::PHONE {
-                self.state.switch(PageId::ACTIVITY, now, self.reduced);
+            if !phone_duty {
+                self.phone_duty_off(now);
             }
             seen = true;
         }
@@ -815,8 +808,12 @@ impl Island {
             }
         }
         if seen {
-            self.stale |= self.state.is_open();
+            self.stale |= self.page_shown().is_some();
             self.invalidate_bar();
+        }
+        if self.menu.is_some() && self.page_shown().is_none() {
+            // The sheet went by another way than a press: its menu goes too.
+            self.close_page_menus(&mut cx.ctl);
         }
         self.hold_sysmon(sysmon, now, &mut cx.ctl);
         self.tick_clock(now, &mut cx.ctl);
@@ -916,7 +913,7 @@ impl Island {
             .and_then(|(secs, offset)| Today::from_unix(secs, offset));
         if today != self.today {
             self.today = today;
-            self.stale |= self.state.is_open();
+            self.stale |= self.page_shown().is_some();
             self.invalidate_bar();
         }
     }
@@ -949,27 +946,8 @@ impl Island {
             .apply(view::capsule_with(&self.theme, &self.clock, rows, w), now);
         let shown = self.state.shown_page();
         let page = page_view(shown);
-        let cx = PageCx {
-            clipboard: &self.clip_panel,
-            theme: &self.theme,
-            max_size: self.state.max_page_size(),
-            model: self.model.as_ref(),
-            output: &self.output,
-            owners: &self.owners,
-            do_not_disturb: self.do_not_disturb,
-            history: &self.history,
-            items: &self.tray_rows,
-            sysmon: self.page_sysmon.as_ref(),
-            weather: self.weather.as_ref(),
-            today: self.today,
-            month_offset: self.month_offset,
-            utc_offset: clock::utc_offset(),
-            connectivity: &self.connectivity,
-            phone: &self.phone,
-            media: &self.media,
-        };
-        self.state
-            .request_page_size(page.wants(&cx), now, self.reduced);
+        let wants = page.wants(&self.page_cx());
+        self.state.request_page_size(wants, now, self.reduced);
         let slide = self.state.slide(now);
         let moving = slide != 0.0 || self.applied_slide != 0.0;
         if moving {
@@ -981,7 +959,7 @@ impl Island {
                 shown,
                 page.title(),
                 &self.clock_seconds,
-                page.view(&cx),
+                page.view(&self.page_cx()),
                 w,
                 self.state.page_size(),
                 slide,
@@ -991,9 +969,12 @@ impl Island {
         if moving {
             self.page.set_reduced_motion(self.reduced);
         }
+        self.apply_page_sheet(now);
         if let Some(key) = self.pending_focus.take() {
             if self.shows_clipboard_page() {
-                self.page_input.focus_key(&mut self.page, key);
+                if let Some((tree, input)) = self.shown_page_input() {
+                    input.focus_key(tree, key);
+                }
             }
         }
         self.applied_slide = slide;
@@ -1084,17 +1065,17 @@ impl Island {
     /// the bar's capsules while the bar is on); the input region is those
     /// silhouettes at rest and the whole surface while open (so a click
     /// outside the page reaches the Island and closes it); the keyboard is
-    /// `None` at rest and `OnDemand` while open (ADR 0007).
+    /// `None` at rest and `Exclusive` while anything is shown: niri gives an
+    /// exclusive layer surface on `Top` the keyboard at once, so Escape, Tab
+    /// and Enter work from the first frame (an `OnDemand` one is focused only
+    /// by a press that finds it already asking). The catcher takes the
+    /// presses below the surface.
     fn sync_ctl(&self, ctl: &mut SurfaceCtl<'_>, now: Instant) {
         let shapes = self.shapes(now);
         let open = self.anything_shown(now);
         ctl.set_blur_region(&silhouette::union(&shapes));
         ctl.set_input_region(&silhouette::input_region(&shapes, open, self.size));
-        ctl.set_keyboard_interactivity(if open {
-            KeyboardInteractivity::OnDemand
-        } else {
-            KeyboardInteractivity::None
-        });
+        ctl.set_keyboard_interactivity(self.keyboard_interactivity(now));
     }
 
     /// Whether the page or a sheet is painted (closing ones included): the
@@ -1107,6 +1088,10 @@ impl Island {
 
     /// Grows into `page`, or slides to it while already open.
     fn open(&mut self, page: PageId, now: Instant) {
+        if self.keyboard_claimed {
+            tracing::info!("island open: a polkit prompt holds the keyboard; nothing was done");
+            return;
+        }
         if page == PageId::PHONE && !self.phone_duty {
             tracing::info!("island open phone: the phone duty is off; nothing was done");
             return;
@@ -1136,12 +1121,7 @@ impl Island {
     }
 
     fn close(&mut self, now: Instant) {
-        if self.month_offset != 0 {
-            self.month_offset = 0;
-            self.stale = true;
-        }
-        self.forget_confirmation();
-        self.delete_held = false;
+        self.forget_page_state();
         if self.state.is_open() {
             self.page_input
                 .pointer(&mut self.page, &InputEvent::PointerLeave, now);
@@ -1188,6 +1168,11 @@ impl Island {
         now: Instant,
     ) -> bool {
         match *ev {
+            // Escape closes the page sheet's open menu first; the sheet stays.
+            _ if self.menu_takes_escape(ev) => {
+                self.close_menu(ctl);
+                true
+            }
             InputEvent::PopupClosed { id, reason } => {
                 if self.menu_closed(id, reason, now) {
                     self.sync_ctl(ctl, now);
@@ -1197,12 +1182,7 @@ impl Island {
             }
             // The popup's grab still delivers presses on the Island (the
             // same client): like a native menu, such a press only closes it.
-            InputEvent::PointerPress { .. }
-                if self.menu.is_some()
-                    || self.tray_menu.is_some()
-                    || self.level_popup.is_some()
-                    || self.session_menu.is_some() =>
-            {
+            InputEvent::PointerPress { .. } if self.menu.is_some() || self.tray_menu.is_some() => {
                 self.close_menu(ctl);
                 true
             }
@@ -1244,8 +1224,8 @@ impl Island {
             self.sheets.revision(),
         );
         let actions = self.dispatch(ev, now, measure);
-        // The page is closing: its menus go with it.
-        if !self.state.is_open() {
+        // The page or sheet is closing: its menus go with it.
+        if self.page_shown().is_none() {
             self.close_page_menus(ctl);
         }
         let after = (
@@ -1418,11 +1398,12 @@ impl Island {
         let mut out = Vec::new();
         for (key, gesture, action) in input.asked {
             let scroll = matches!(gesture, Gesture::Scroll(..));
-            let page = matches!(action, PieceAction::OpenPage(_));
-            let request = page || matches!(action, PieceAction::Sheet(_));
+            let request = matches!(action, PieceAction::OpenPage(_) | PieceAction::Sheet(_));
             match action {
                 PieceAction::None => {}
-                PieceAction::OpenPage(page) => self.open(page, now),
+                PieceAction::OpenPage(page) => {
+                    out.extend(self.sheet_request(key, SheetKind::Page(page), now));
+                }
                 PieceAction::Sheet(kind) => out.extend(self.sheet_request(key, kind, now)),
                 PieceAction::FocusWorkspace(id) => out.push(IslandAction::FocusWorkspace(id)),
                 PieceAction::Tray(command) => out.push(IslandAction::Tray(command)),
@@ -1437,9 +1418,6 @@ impl Island {
                     }
                 }
                 PieceAction::Audio(action) => out.push(IslandAction::Audio(action)),
-                PieceAction::Brightness(BrightnessAction::Popup) => {
-                    out.extend(self.popup_action(key, level_popup::Kind::Brightness));
-                }
                 PieceAction::Brightness(action) => out.push(IslandAction::Brightness(action)),
                 PieceAction::Notification(command) => out.push(IslandAction::Notification(command)),
                 PieceAction::Connectivity(action) => out.push(IslandAction::Connectivity(action)),
@@ -1450,9 +1428,8 @@ impl Island {
                 }),
                 PieceAction::OpenSelector => out.push(IslandAction::OpenSelector),
                 PieceAction::Media(command) => out.push(IslandAction::Media(command)),
-                PieceAction::SessionMenu => out.extend(self.session_menu_action(key)),
             }
-            if open && !scroll && !page && self.state.is_open() {
+            if open && !scroll && self.state.is_open() {
                 self.close(now);
             }
             if sheet && !scroll && !request && self.sheets.is_open() {
@@ -1460,96 +1437,6 @@ impl Island {
             }
         }
         out
-    }
-
-    /// The action that opens `kind`'s slider popup below the bar node `key`.
-    fn popup_action(&self, key: Key, kind: level_popup::Kind) -> Option<IslandAction> {
-        let anchor = self.bar.as_ref()?.node_rect(key)?;
-        Some(IslandAction::OpenLevelPopup { kind, anchor })
-    }
-
-    /// The action that opens the session menu below the bar node `key`.
-    fn session_menu_action(&self, key: Key) -> Option<IslandAction> {
-        let anchor = self.bar.as_ref()?.node_rect(key)?;
-        Some(IslandAction::OpenSessionMenu { anchor })
-    }
-
-    /// Opens the session `menu` of `size` below the piece at `anchor` (the
-    /// rect [`IslandAction::OpenSessionMenu`] carried) and returns it. `None`
-    /// while another popup of this Island is open or the bar is off.
-    pub fn open_session_menu(
-        &mut self,
-        anchor: Rect,
-        size: (f32, f32),
-        menu: Box<dyn PopupShell>,
-        ctl: &mut SurfaceCtl<'_>,
-    ) -> Option<PopupId> {
-        if self.bar.is_none() || self.any_popup_open() {
-            return None;
-        }
-        let id = ctl.open_popup(level_popup::placement(&self.theme, anchor), size, menu);
-        tracing::debug!(output = %self.output, popup = id.0, "island: session menu opened");
-        self.session_menu = Some(id);
-        Some(id)
-    }
-
-    /// Whether a popup of this Island is open: its menu, a tray menu, a
-    /// slider popup or the session menu.
-    fn any_popup_open(&self) -> bool {
-        self.menu.is_some()
-            || self.tray_menu.is_some()
-            || self.level_popup.is_some()
-            || self.session_menu.is_some()
-    }
-
-    /// Whether a level popup could open here once the one it replaces is
-    /// closed: the bar is on and no other popup is in the way.
-    #[must_use]
-    pub fn level_popup_fits(&self) -> bool {
-        self.bar.is_some()
-            && self.menu.is_none()
-            && self.tray_menu.is_none()
-            && self.session_menu.is_none()
-    }
-
-    /// Whether the session menu hangs from this Island right now.
-    #[must_use]
-    pub fn session_menu_open(&self) -> bool {
-        self.session_menu.is_some()
-    }
-
-    /// Opens the slider `popup` of `size` below the piece at `anchor` (the
-    /// rect [`IslandAction::OpenLevelPopup`] carried) and returns it. `None`
-    /// while another popup of this Island is open or the bar is off.
-    pub fn open_level_popup(
-        &mut self,
-        anchor: Rect,
-        size: (f32, f32),
-        popup: Box<dyn PopupShell>,
-        ctl: &mut SurfaceCtl<'_>,
-    ) -> Option<PopupId> {
-        if self.bar.is_none() || self.any_popup_open() {
-            return None;
-        }
-        let id = ctl.open_popup(level_popup::placement(&self.theme, anchor), size, popup);
-        tracing::debug!(output = %self.output, popup = id.0, "island: level popup opened");
-        self.level_popup = Some(id);
-        Some(id)
-    }
-
-    /// Whether a slider popup hangs from this Island right now.
-    #[must_use]
-    pub fn level_popup_open(&self) -> bool {
-        self.level_popup.is_some()
-    }
-
-    /// Closes the slider popup from the Island's side (the `osd` duty went
-    /// off); the runtime still reports `PopupClosed`.
-    pub fn close_level_popup(&mut self, ctl: &mut SurfaceCtl<'_>) {
-        if let Some(id) = self.level_popup.take() {
-            ctl.close_popup(id);
-            ctl.request_redraw();
-        }
     }
 
     /// Opens the overflow `menu` of `size` below the overflow button at
@@ -1563,7 +1450,7 @@ impl Island {
         menu: Box<dyn PopupShell>,
         ctl: &mut SurfaceCtl<'_>,
     ) {
-        if self.menu.is_some() || !self.state.is_open() {
+        if self.menu.is_some() || self.page_shown().is_none() {
             return;
         }
         let id = ctl.open_popup(menu::placement(more), size, menu);
@@ -1584,11 +1471,7 @@ impl Island {
         ctl: &mut SurfaceCtl<'_>,
     ) -> Option<PopupId> {
         let on_bar = self.bar_menu_asked && self.bar.is_some();
-        if self.menu.is_some()
-            || self.tray_menu.is_some()
-            || self.session_menu.is_some()
-            || !(on_bar || self.on_tray_page())
-        {
+        if self.menu.is_some() || self.tray_menu.is_some() || !(on_bar || self.on_tray_page()) {
             return None;
         }
         let id = ctl.open_popup(crate::tray::menu::placement(&self.theme, row), size, menu);
@@ -1854,14 +1737,14 @@ impl Island {
         let bar_changed =
             pieces::media::bar_signature(&next) != pieces::media::bar_signature(&self.media);
         self.media = next;
-        let page_shown = self.state.is_open() && self.state.shown_page() == PageId::MEDIA;
+        let on_page = self.page_shown() == Some(PageId::MEDIA);
         if bar_changed {
             self.invalidate_bar();
         }
-        if page_shown {
+        if on_page {
             self.stale = true;
         }
-        bar_changed || page_shown
+        bar_changed || on_page
     }
 
     /// Gives every cover texture back to `pixmaps`.
@@ -1881,14 +1764,9 @@ impl Island {
     /// could otherwise keep the keyboard from the card (N-25).
     pub(crate) fn close_menu(&mut self, ctl: &mut SurfaceCtl<'_>) {
         self.tray_menu_on_bar = false;
-        for id in [
-            self.menu.take(),
-            self.tray_menu.take(),
-            self.level_popup.take(),
-            self.session_menu.take(),
-        ]
-        .into_iter()
-        .flatten()
+        for id in [self.menu.take(), self.tray_menu.take()]
+            .into_iter()
+            .flatten()
         {
             ctl.close_popup(id);
             ctl.request_redraw();
@@ -1921,15 +1799,17 @@ impl Island {
         } else if self.tray_menu == Some(id) {
             self.tray_menu = None;
             self.tray_menu_on_bar = false;
-        } else if self.level_popup == Some(id) {
-            self.level_popup = None;
-        } else if self.session_menu == Some(id) {
-            self.session_menu = None;
         } else {
             return false;
         }
-        if reason == CloseReason::Dismissed && self.state.is_open() {
-            self.close(now);
+        if reason == CloseReason::Dismissed {
+            if self.state.is_open() {
+                self.close(now);
+            } else if self.sheets.page().is_some() {
+                // A page sheet closes as the page does.
+                self.sheets.drop_queue();
+                self.close_sheet(now);
+            }
         }
         true
     }
@@ -1944,6 +1824,9 @@ impl Island {
     }
 
     fn reopen_at(&mut self, now: Instant) {
+        if self.reopen_sheet(now) {
+            return;
+        }
         let page = self.state.shown_page();
         self.close(now);
         // A single step back to the capsule, whatever the motion setting.
@@ -1971,82 +1854,6 @@ impl Island {
             IslandAction::OpenMenu { more, .. } => Some(IslandAction::OpenMenu { more, keyboard }),
             action => Some(action),
         }
-    }
-
-    /// What a click or Enter on the node `key` does.
-    fn activate(&mut self, key: Key, now: Instant) -> Option<IslandAction> {
-        if let Some(handled) = self.clipboard_activate(key) {
-            handled
-        } else if key == view::capsule_key() {
-            self.open(self.state.shown_page(), now);
-            None
-        } else if key == view::close_key() {
-            self.close(now);
-            None
-        } else if key == view::more_key() {
-            let id = self.page.node_by_key(key)?;
-            Some(IslandAction::OpenMenu {
-                more: self.page.rect(id),
-                keyboard: false,
-            })
-        } else if let Some(page) = tabs::page_of(key) {
-            self.open(page, now);
-            None
-        } else if let Some(step) = clock_page::month_step(key) {
-            let offset = step.apply(self.month_offset);
-            if offset != self.month_offset {
-                self.month_offset = offset;
-                self.stale = true;
-            }
-            None
-        } else if key == sysmon_page::open_key() {
-            Some(IslandAction::OpenApp(sysmon_page::MONITOR_DESKTOP_ID))
-        } else if let Some(action) = self.connectivity_action(key) {
-            Some(IslandAction::Connectivity(action))
-        } else if let Some(action) =
-            media_page::action_for(&self.media, &self.theme, self.state.max_page_size(), key)
-        {
-            Some(action)
-        } else if let Some(action) = notifications::action_for(
-            &self.history,
-            &self.owners,
-            &self.theme,
-            self.state.max_page_size(),
-            key,
-        ) {
-            Some(action)
-        } else if let Some(action) = phone_page::action_for(&self.phone, key) {
-            Some(action)
-        } else {
-            // No optimistic state: the compositor's event closes the loop.
-            activity::action_for(
-                self.model.as_ref()?,
-                &self.output,
-                &self.theme,
-                self.state.max_page_size(),
-                key,
-            )
-        }
-    }
-
-    /// What the row `key` of the connectivity page on screen offers: only
-    /// the page shown answers, and only for a row it drew with an action.
-    fn connectivity_action(&self, key: Key) -> Option<Action> {
-        if !self.state.is_open() {
-            return None;
-        }
-        let action_for = match self.state.shown_page() {
-            PageId::NETWORK => network_page::action_for,
-            PageId::BLUETOOTH => bluetooth_page::action_for,
-            PageId::POWER => power_page::action_for,
-            _ => return None,
-        };
-        action_for(
-            &self.connectivity,
-            &self.theme,
-            self.state.max_page_size(),
-            key,
-        )
     }
 
     /// Runs an Island verb of `org.celestina.Shell1`; other verbs are not
@@ -2123,6 +1930,10 @@ impl Redraws for SurfaceCtl<'_> {
 
 #[cfg(test)]
 mod tests {
+    use super::pages::{
+        activity, bluetooth as bluetooth_page, clock as clock_page, media as media_page,
+        network as network_page, power as power_page, sysmon as sysmon_page, tabs,
+    };
     use super::*;
     use crate::providers::niri::{Window, Workspace};
     use celestina_shell::audio::Direction;
@@ -2590,14 +2401,15 @@ mod tests {
             ))]
         );
         assert!(!island.state.is_open(), "nothing opened a page");
-        // The bell opens the Notifications page.
+        // The bell opens the Notifications page as a sheet.
         let bell = centre(bar_rect(&island, Key::named("bell")));
         assert!(click_at(&mut island, bell, BTN_LEFT, t0).is_empty());
-        assert_eq!(island.page(), Some(PageId::NOTIFICATIONS));
+        assert_eq!(island.sheets.page(), Some(PageId::NOTIFICATIONS));
+        assert_eq!(island.page(), None, "the Island's page stays shut");
     }
 
     #[test]
-    fn the_level_pieces_appear_with_a_reading_and_ask_for_their_workers_and_sheet_or_popup() {
+    fn the_level_pieces_appear_with_a_reading_and_ask_for_their_workers_and_sheet() {
         use crate::pieces::Level;
         let (mut island, t0) = bar_island(1920.0);
         let volume = Key::named("volume");
@@ -2681,34 +2493,16 @@ mod tests {
         assert!(click_at(&mut island, at, BTN_RIGHT, t0).is_empty());
         assert_eq!(
             click_at(&mut island, at, BTN_LEFT, t0),
-            [IslandAction::OpenLevelPopup {
+            [IslandAction::OpenLevelSheet {
                 kind: level_popup::Kind::Brightness,
-                anchor: bar_rect(&island, brightness),
+                piece: brightness,
             }]
         );
         assert!(!island.state.is_open(), "no piece opened a page");
     }
 
     #[test]
-    fn the_level_popup_is_one_of_the_islands_popups() {
-        let (mut island, t0) = bar_island(1920.0);
-        island.level_popup = Some(PopupId(7));
-        assert!(island.level_popup_open());
-        // Not its menu's, not another's.
-        assert!(!island.menu_closed(PopupId(1), CloseReason::Shell, t0));
-        assert!(island.level_popup_open());
-        assert!(island.menu_closed(PopupId(7), CloseReason::Shell, t0));
-        assert!(!island.level_popup_open());
-        // A compositor dismissal is a click outside: it closes an open page.
-        island.set_reduced_motion(true);
-        island.open(PageId::ACTIVITY, t0);
-        island.level_popup = Some(PopupId(8));
-        assert!(island.menu_closed(PopupId(8), CloseReason::Dismissed, t0));
-        assert!(!island.state.is_open());
-    }
-
-    #[test]
-    fn the_session_piece_asks_for_its_menu_anchored_at_its_node() {
+    fn the_session_piece_opens_its_sheet() {
         let (mut island, t0) = bar_island(1920.0);
         let session = Key::named("session");
         let at = centre(bar_rect(&island, session));
@@ -2717,31 +2511,142 @@ mod tests {
             InputEvent::PointerMotion { x: at.0, y: at.1 },
             t0,
         );
-        assert_eq!(
-            click_at(&mut island, at, BTN_LEFT, t0),
-            [IslandAction::OpenSessionMenu {
-                anchor: bar_rect(&island, session)
-            }]
+        assert!(
+            click_at(&mut island, at, BTN_LEFT, t0).is_empty(),
+            "the Island builds the body itself: no round trip to the app"
         );
-        assert!(click_at(&mut island, at, BTN_RIGHT, t0).is_empty());
+        step(&mut island, t0);
+        assert_eq!(
+            island.sheets.kind(),
+            Some(crate::pieces::SheetKind::Session)
+        );
+        assert_eq!(island.sheets.piece(), Some(session));
         assert!(!island.state.is_open(), "no page opened");
+        assert_eq!(
+            island.sheets.body_size(),
+            Some(crate::session_menu::list_size(&island.theme))
+        );
+        // The piece again closes it.
+        assert!(click_at(&mut island, at, BTN_LEFT, t0 + ms(400)).is_empty());
+        assert!(!island.sheets.is_open());
+    }
+
+    /// The session sheet open and settled, with its first look done.
+    fn session_sheet() -> (Island, Instant) {
+        let (mut island, t0) = bar_island(1920.0);
+        let session = Key::named("session");
+        let at = centre(bar_rect(&island, session));
+        assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
+        step(&mut island, t0);
+        let t = t0 + ms(400);
+        step(&mut island, t);
+        (island, t)
+    }
+
+    /// The centre of the session body's node `key`, in surface coordinates.
+    fn session_node_at(island: &Island, key: Key, now: Instant) -> (f32, f32) {
+        let sheet = shown_rect(island, now);
+        let Some(r) = island.sheets.body_node_rect(key) else {
+            panic!("no session node {key:?}");
+        };
+        (
+            sheet.x + r.x + r.w / 2.0,
+            sheet.y + geometry::ROW_H + r.y + r.h / 2.0,
+        )
     }
 
     #[test]
-    fn the_session_menu_is_one_of_the_islands_popups() {
-        let (mut island, t0) = bar_island(1920.0);
-        island.session_menu = Some(PopupId(9));
-        assert!(island.session_menu_open() && island.any_popup_open());
-        assert!(!island.menu_closed(PopupId(1), CloseReason::Shell, t0));
-        assert!(island.session_menu_open());
-        assert!(island.menu_closed(PopupId(9), CloseReason::Shell, t0));
-        assert!(!island.session_menu_open() && !island.any_popup_open());
-        // A compositor dismissal is a click outside: it closes an open page.
-        island.set_reduced_motion(true);
-        island.open(PageId::ACTIVITY, t0);
-        island.session_menu = Some(PopupId(10));
-        assert!(island.menu_closed(PopupId(10), CloseReason::Dismissed, t0));
-        assert!(!island.state.is_open());
+    fn a_session_choice_is_one_action_and_the_sheet_closes() {
+        let (mut island, t) = session_sheet();
+        let at = session_node_at(&island, SessionAction::Lock.key(), t);
+        assert_eq!(
+            click_at(&mut island, at, BTN_LEFT, t),
+            [IslandAction::Session(SessionAction::Lock)]
+        );
+        assert!(!island.sheets.is_open(), "the sheet is closing");
+        assert!(island.sheets.is_shown(t), "on its exit motion");
+        assert!(!island.sheets.has_queued());
+    }
+
+    #[test]
+    fn a_dangerous_row_asks_first_and_the_sheet_grows_down() {
+        let (mut island, t) = session_sheet();
+        let list = island.sheets.body_size();
+        assert_eq!(
+            list,
+            Some(crate::session_menu::list_size(&island.theme)),
+            "the list's own size"
+        );
+        let before = shown_rect(&island, t);
+        assert_eq!(before.y, 8.0);
+        let at = session_node_at(&island, SessionAction::Reboot.key(), t);
+        assert!(
+            click_at(&mut island, at, BTN_LEFT, t).is_empty(),
+            "asking is no action"
+        );
+        let grown = island.sheets.body_size();
+        assert!(grown.is_some_and(|g| g.1 > list.map_or(0.0, |l| l.1)));
+        // The sheet follows its body: the same top, a taller sheet.
+        let later = t + ms(600);
+        step(&mut island, later);
+        let after = shown_rect(&island, later);
+        assert_eq!(after.y, 8.0, "the top edge stays");
+        assert!(after.h > before.h);
+        // Cancel shrinks it back.
+        let cancel = session_node_at(&island, crate::session_menu::cancel_key(), later);
+        assert!(click_at(&mut island, cancel, BTN_LEFT, later).is_empty());
+        assert_eq!(island.sheets.body_size(), list);
+        let end = later + ms(600);
+        step(&mut island, end);
+        let back = shown_rect(&island, end);
+        assert_eq!((back.y, back.h), (before.y, before.h));
+    }
+
+    #[test]
+    fn the_confirm_card_measures_its_question_with_the_measure_in_hand() {
+        let (mut island, t) = session_sheet();
+        let calls = Cell::new(0_u32);
+        let mut measure = |s: &str, st: &TextStyle, w: Option<f32>| {
+            calls.set(calls.get() + 1);
+            if w.is_some() {
+                (200.0, 48.0)
+            } else {
+                fake_measure(s, st, w)
+            }
+        };
+        let at = session_node_at(&island, SessionAction::PowerOff.key(), t);
+        feed_with(
+            &mut island,
+            InputEvent::PointerMotion { x: at.0, y: at.1 },
+            t,
+            &mut measure,
+        );
+        feed_with(&mut island, press(at.0, at.1, BTN_LEFT), t, &mut measure);
+        let seen = calls.get();
+        feed_with(&mut island, release(at.0, at.1, BTN_LEFT), t, &mut measure);
+        assert!(
+            calls.get() > seen,
+            "the question was measured by the call's"
+        );
+        assert_eq!(
+            island.sheets.body_size(),
+            Some(crate::session_menu::confirm_size(&island.theme, 48.0)),
+            "the card is as tall as the measured question"
+        );
+    }
+
+    #[test]
+    fn escape_in_the_confirm_card_cancels_and_escape_in_the_list_closes_the_sheet() {
+        let (mut island, t) = session_sheet();
+        let list = island.sheets.body_size();
+        let at = session_node_at(&island, SessionAction::LogOut.key(), t);
+        click_at(&mut island, at, BTN_LEFT, t);
+        assert_ne!(island.sheets.body_size(), list, "the card is shown");
+        assert!(feed(&mut island, escape(), t).is_empty());
+        assert!(island.sheets.is_open(), "Escape on the card goes back");
+        assert_eq!(island.sheets.body_size(), list);
+        assert!(feed(&mut island, escape(), t).is_empty());
+        assert!(!island.sheets.is_open(), "Escape on the list closes");
     }
 
     #[test]
@@ -2749,11 +2654,16 @@ mod tests {
         let (mut island, t0) = bar_island(1920.0);
         island.set_reduced_motion(true);
         island.open(PageId::ACTIVITY, t0);
-        // The bell slides the open page to Notifications; it stays open.
+        // The bell closes the Island's page and opens the Notifications
+        // sheet once it is gone.
         let bell = centre(bar_rect(&island, Key::named("bell")));
         assert!(click_at(&mut island, bell, BTN_LEFT, t0).is_empty());
-        assert_eq!(island.page(), Some(PageId::NOTIFICATIONS));
-        // The wheel on the tray icon scrolls and keeps the page.
+        assert!(!island.state.is_open(), "one thing at a time");
+        assert!(island.sheets.has_queued());
+        let t1 = t0 + ms(400);
+        step(&mut island, t1);
+        assert_eq!(island.sheets.page(), Some(PageId::NOTIFICATIONS));
+        // The wheel on the tray icon scrolls and keeps the sheet.
         let icon = centre(bar_rect(&island, tray_page::row_key(0)));
         let wheel = InputEvent::Axis {
             x: icon.0,
@@ -2761,19 +2671,21 @@ mod tests {
             horizontal: 0.0,
             vertical: -15.0,
         };
-        assert_eq!(feed(&mut island, wheel, t0).len(), 1);
-        assert!(island.state.is_open());
-        // A dot focuses its workspace and closes the page, as a click
+        assert_eq!(feed(&mut island, wheel, t1).len(), 1);
+        assert!(island.sheets.is_open());
+        // A dot focuses its workspace and closes the sheet, as a click
         // outside it does.
         let dot = centre(bar_rect(&island, Key::indexed("dot", 1)));
         assert_eq!(
-            click_at(&mut island, dot, BTN_LEFT, t0),
+            click_at(&mut island, dot, BTN_LEFT, t1),
             [IslandAction::FocusWorkspace(1)]
         );
-        assert!(!island.state.is_open());
+        assert!(!island.sheets.is_open());
         // A right click on the icon asks for its menu and closes the page.
-        island.open(PageId::ACTIVITY, t0);
-        let actions = click_at(&mut island, icon, BTN_RIGHT, t0);
+        let t2 = t1 + ms(400);
+        step(&mut island, t2);
+        island.open(PageId::ACTIVITY, t2);
+        let actions = click_at(&mut island, icon, BTN_RIGHT, t2);
         assert!(matches!(
             actions.as_slice(),
             [IslandAction::OpenTrayMenu {
@@ -3466,7 +3378,7 @@ mod tests {
                     .highlight()
                     .focused
                     .map(|id| island.page.key_of(id))
-                    .and_then(|key| island.connectivity_action(key));
+                    .and_then(|key| island.connectivity_action(page, key));
                 assert_eq!(acted, None, "{page:?}");
             }
         }
@@ -3909,7 +3821,7 @@ mod tests {
     }
 
     #[test]
-    fn the_glance_pieces_read_the_bars_slices_and_a_click_opens_their_pages() {
+    fn the_glance_pieces_read_the_bars_slices_and_a_click_opens_their_page_sheets() {
         let (mut island, t0) = bar_island(1920.0);
         island.set_bar(&glance_layout());
         // Nothing to read yet: no sysmon, no weather; the date alone shows.
@@ -3937,15 +3849,21 @@ mod tests {
         assert_eq!(island.bar_cx().sysmon, Some(&sample(23)));
         assert_eq!(island.page_sysmon(), Some(&sample(77)));
 
+        let mut t = t0;
         for (key, page) in [
             (Key::named("sysmon"), PageId::SYSMON),
             (Key::named("weather"), PageId::CLOCK),
             (Key::named("clock-date"), PageId::CLOCK),
         ] {
-            island.close(t0);
+            island.close_everything(t);
+            t += Duration::from_millis(400);
+            step(&mut island, t);
             let at = centre(bar_rect(&island, key));
-            assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
-            assert_eq!(island.page(), Some(page), "{key:?}");
+            assert!(click_at(&mut island, at, BTN_LEFT, t).is_empty());
+            step(&mut island, t);
+            assert_eq!(island.sheets.page(), Some(page), "{key:?}");
+            assert_eq!(island.sheets.piece(), Some(key));
+            assert_eq!(island.page(), None, "the Island's page stays shut");
         }
     }
 
@@ -4441,9 +4359,9 @@ mod tests {
             ),
             [IslandAction::Media(MediaCommand::PlayPause)]
         );
-        // The piece's click opens the page.
+        // The piece's click opens the page as a sheet.
         click_at(&mut island, centre(centre_of), BTN_LEFT, t0);
-        assert_eq!(island.page(), Some(PageId::MEDIA));
+        assert_eq!(island.sheets.page(), Some(PageId::MEDIA));
         // The page's keys act like their buttons.
         for (key, want) in [
             (media_page::prev_key(), MediaCommand::Previous),
@@ -4455,19 +4373,14 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                island.on_event(UiEvent::Click(key), t0),
-                Some(IslandAction::Media(want.clone())),
-                "{want:?}"
-            );
-            assert_eq!(
-                island.on_event(UiEvent::Activate(key), t0),
-                Some(IslandAction::Media(want))
+                island.page_action(PageId::MEDIA, key, t0),
+                Some(IslandAction::Media(want)),
             );
         }
         // A duty switched off takes the buttons away.
         island.set_media(&mut px, false, &[], None);
         assert_eq!(
-            island.on_event(UiEvent::Click(media_page::play_key()), t0),
+            island.page_action(PageId::MEDIA, media_page::play_key(), t0),
             None
         );
     }
@@ -4611,8 +4524,8 @@ mod tests {
 
     use crate::osd::monitor_rows::MonitorFeed;
     use crate::osd::popup::{
-        body_size, CardFrame, Feeds, LevelCore, Request as LevelRequest, SharedGraph, SharedLevels,
-        Sink, SHEET_W,
+        body_size, Feeds, LevelCore, Request as LevelRequest, SharedGraph, SharedLevels, Sink,
+        SHEET_W,
     };
     use crate::pieces::Level;
     use crate::sheet::geometry::{self, Hit};
@@ -4683,7 +4596,6 @@ mod tests {
         LevelCore::new(
             theme,
             level_popup::Kind::Volume,
-            CardFrame::Sheet,
             Feeds {
                 cell,
                 graph,
@@ -4766,6 +4678,78 @@ mod tests {
         let t = t0 + ms(400);
         step(&mut island, t);
         (island, t)
+    }
+
+    /// A brightness body at 70 % over one monitor, its requests sent nowhere.
+    fn brightness_core(theme: &Theme) -> LevelCore {
+        let sink: Sink = Rc::new(|_| {});
+        let cell: SharedLevels = Rc::new(Cell::new(Levels {
+            audio: AudioLevels::default(),
+            brightness: Some(70),
+        }));
+        let graph: SharedGraph = Rc::new(RefCell::new(AudioGraph::default()));
+        let mut fit = |name: &str, _: f32| name.to_owned();
+        LevelCore::new(
+            theme,
+            level_popup::Kind::Brightness,
+            Feeds {
+                cell,
+                graph,
+                monitors: MonitorFeed::default(),
+            },
+            sink,
+            false,
+            Instant::now(),
+            &mut fit,
+        )
+    }
+
+    #[test]
+    fn the_brightness_piece_opens_its_sheet() {
+        let (mut island, t0) = level_island();
+        let at = centre(bar_rect(&island, brightness_key()));
+        assert_eq!(
+            click_at(&mut island, at, BTN_LEFT, t0),
+            [IslandAction::OpenLevelSheet {
+                kind: level_popup::Kind::Brightness,
+                piece: brightness_key(),
+            }]
+        );
+        assert!(!island.sheets.is_open(), "the app builds the body first");
+        // The app hands the body back: the sheet grows from the end capsule.
+        let core = brightness_core(&island.theme);
+        let body = core.size();
+        assert_eq!(body.0, SHEET_W);
+        assert!(island.open_level_sheet_at(brightness_key(), core, t0));
+        step(&mut island, t0);
+        assert_eq!(
+            island.sheets.kind(),
+            Some(crate::pieces::SheetKind::Brightness)
+        );
+        assert!(island.level_sheet_open());
+        // Pressing the piece again closes it.
+        assert!(click_at(&mut island, at, BTN_LEFT, t0 + ms(400)).is_empty());
+        assert!(!island.sheets.is_open());
+    }
+
+    #[test]
+    fn switching_the_volume_sheet_to_the_brightness_sheet_morphs_in_place() {
+        let (mut island, t0) = level_island();
+        assert!(open_on(&mut island, volume(), t0));
+        let t = t0 + ms(400);
+        step(&mut island, t);
+        let core = brightness_core(&island.theme);
+        assert!(island.open_level_sheet_at(brightness_key(), core, t));
+        step(&mut island, t);
+        // One sheet, switched: it never closed and nothing waits.
+        assert!(island.sheets.is_open());
+        assert!(!island.sheets.has_queued());
+        assert_eq!(
+            island.sheets.kind(),
+            Some(crate::pieces::SheetKind::Brightness)
+        );
+        assert_eq!(island.sheets.piece(), Some(brightness_key()));
+        assert!(island.level_sheet_open());
     }
 
     #[test]
@@ -5658,4 +5642,6 @@ mod tests {
         step(&mut island, t + ms(400));
         assert!(island.sheets.is_open() && !island.state.is_open());
     }
+
+    mod page_sheets;
 }

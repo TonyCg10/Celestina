@@ -50,6 +50,12 @@ pub fn more_key() -> Key {
     Key::named("more")
 }
 
+/// The overflow button of a page shown as a capsule sheet.
+#[must_use]
+pub fn sheet_more_key() -> Key {
+    Key::named("sheet-more")
+}
+
 /// The page's title: its view's, from the piece table.
 #[must_use]
 pub fn page_title(page: PageId) -> &'static str {
@@ -294,6 +300,60 @@ pub fn page(
         .child(tabs::tabs(theme, open, body_w))
 }
 
+/// A page sheet's width, logical px: the Island page's.
+pub const PAGE_SHEET_W: f32 = 420.0;
+
+/// The size of a page sheet's body whose page content is `content_h` tall:
+/// the top padding, the header, the gap, the content and the bottom padding.
+#[must_use]
+pub fn page_sheet_size(theme: &Theme, content_h: f32) -> (f32, f32) {
+    (
+        PAGE_SHEET_W,
+        theme.spacing.xs + TITLE_ROW_H + theme.spacing.sm + content_h + theme.spacing.lg,
+    )
+}
+
+/// The body of a page sheet (CEL-D-003): a header row with the page's
+/// `title` and the overflow button, then the page's `content` in a clipped
+/// box `content_h` tall. No clock, no close button and no tabs: the sheet is
+/// closed by the way it was opened, and the Island's tabs stay on the Island.
+#[must_use]
+pub fn page_sheet(theme: &Theme, title: &str, content: View, content_h: f32) -> View {
+    let size = page_sheet_size(theme, content_h);
+    let title = view::text(
+        Key::named("sheet-title"),
+        title,
+        text_style(
+            theme.type_scale.title,
+            Weight::Semibold,
+            false,
+            Role::TextHi,
+        ),
+    )
+    .grow();
+    let header = centred(view::row(Key::named("sheet-header")))
+        .height(TITLE_ROW_H)
+        .gap(theme.spacing.sm)
+        .child(title)
+        .child(button(
+            theme,
+            sheet_more_key(),
+            "sheet-more-label",
+            copy::MORE,
+        ));
+    let body_w = (size.0 - 2.0 * theme.spacing.lg).max(0.0);
+    let body = view::col(Key::named("sheet-content"))
+        .size(body_w, content_h)
+        .clip()
+        .child(content);
+    view::col(Key::named("page-sheet"))
+        .size(size.0, size.1)
+        .padding_sides(theme.spacing.xs, theme.spacing.lg, theme.spacing.lg)
+        .gap(theme.spacing.sm)
+        .child(header)
+        .child(body)
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Instant;
@@ -469,6 +529,45 @@ mod tests {
         for key in [close_key(), tabs::tab_key(PageId::TRAY), Key::named("body")] {
             assert_eq!(x(&rest, key), x(&left, key));
         }
+    }
+
+    #[test]
+    fn a_page_sheet_is_a_header_and_the_content_in_a_clipped_box() {
+        let theme = Theme::dark();
+        let content_h = 120.0;
+        let tree = laid_out(page_sheet(&theme, "Red", content(), content_h));
+        let (w, h) = page_sheet_size(&theme, content_h);
+        assert_eq!(w, PAGE_SHEET_W);
+        let root = rect_of(&tree, Key::named("page-sheet"));
+        assert_eq!((root.x, root.y, root.w, root.h), (0.0, 0.0, w, h));
+        let header = rect_of(&tree, Key::named("sheet-header"));
+        assert_eq!(header.h, TITLE_ROW_H);
+        assert_eq!(header.y, theme.spacing.xs);
+        assert_eq!(header.x, theme.spacing.lg);
+        let more = rect_of(&tree, sheet_more_key());
+        assert_eq!(more.x + more.w, w - theme.spacing.lg, "at the right");
+        let title = rect_of(&tree, Key::named("sheet-title"));
+        assert!(title.x + title.w <= more.x);
+        let body = rect_of(&tree, Key::named("sheet-content"));
+        assert_eq!(body.y, header.y + header.h + theme.spacing.sm);
+        assert_eq!(
+            (body.x, body.w, body.h),
+            (theme.spacing.lg, w - 2.0 * theme.spacing.lg, content_h)
+        );
+        assert_eq!(body.y + body.h + theme.spacing.lg, h);
+        let probe = rect_of(&tree, Key::named("probe"));
+        assert_eq!((probe.x, probe.y), (body.x, body.y));
+        // No clock, no close button, no tabs, no Island overflow button.
+        for key in [
+            Key::named("page-clock"),
+            close_key(),
+            more_key(),
+            Key::named("tabs"),
+            tabs::tab_key(PageId::ACTIVITY),
+        ] {
+            assert!(tree.node_by_key(key).is_none(), "{key:?}");
+        }
+        assert_ne!(sheet_more_key(), more_key());
     }
 
     #[test]

@@ -234,15 +234,21 @@ pub struct Levels {
 /// jump from one end of the range to the other.
 pub const MAX_WHEEL_STEPS: u8 = 4;
 
-/// The menus a capsule can grow into (CEL-D-002). Part B adds the
-/// brightness, the session menu and the pages; Part D the workspaces.
+/// The menus a capsule can grow into (CEL-D-002, CEL-D-003). Part D adds the
+/// workspaces.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SheetKind {
     Volume,
+    Brightness,
+    /// The session menu (CEL-I-006).
+    Session,
+    /// An Island page, with its overflow button: what a bar piece that asked
+    /// for a page opens.
+    Page(PageId),
 }
 
 /// What the Volume piece asks for. The default output is the one it drives;
-/// the microphone is in the popup.
+/// the microphone is in its sheet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AudioAction {
     /// Move the level `steps` steps (at most [`MAX_WHEEL_STEPS`]).
@@ -256,8 +262,6 @@ pub enum AudioAction {
 pub enum BrightnessAction {
     /// Move the level `steps` steps (at most [`MAX_WHEEL_STEPS`]).
     Step(Direction, u8),
-    /// Open the slider popup below the piece.
-    Popup,
 }
 
 /// The step action a wheel gesture of `steps` whole steps (the Wayland sign:
@@ -325,10 +329,9 @@ pub enum PieceAction {
     Tray(TrayCommand),
     /// The item's menu, anchored to the node the input landed on.
     TrayMenu(ItemId),
-    /// Something the Volume piece asks of the audio worker, or its popup.
+    /// Something the Volume piece asks of the audio worker.
     Audio(AudioAction),
-    /// Something the Brightness piece asks of the brightness workers, or its
-    /// popup.
+    /// Something the Brightness piece asks of the brightness workers.
     Brightness(BrightnessAction),
     /// Something the notification server does.
     Notification(NotificationsCommand),
@@ -342,8 +345,6 @@ pub enum PieceAction {
     OpenSelector,
     /// Something the media worker does to the shown player.
     Media(MediaCommand),
-    /// Open the session menu below the node the input landed on.
-    SessionMenu,
 }
 
 /// One thing the bar can hold.

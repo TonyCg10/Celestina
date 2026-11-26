@@ -2,16 +2,17 @@
 //! output, absent until a reading of that monitor exists (so merely placing
 //! the piece in a layout reads nothing: the DDC worker is asked to detect by
 //! the app, once, when the duty is on and a layout holds the piece). The
-//! wheel moves the level and a click opens the slider popup.
+//! wheel moves the level and a click grows the capsule into the brightness
+//! sheet.
 //!
-//! The piece only describes and asks: the popup is built and the workers
+//! The piece only describes and asks: the sheet is built and the workers
 //! commanded by the app.
 
 use celestina_ui::{Key, View};
 
 use super::{
     level, wheel, Axis, BarCx, BrightnessAction, Gesture, PageEntry, Piece, PieceAction, PieceId,
-    PieceInput,
+    PieceInput, SheetKind,
 };
 use crate::copy;
 
@@ -62,7 +63,7 @@ impl Piece for Brightness {
             return PieceAction::None;
         }
         match input.gesture {
-            Gesture::Primary => PieceAction::Brightness(BrightnessAction::Popup),
+            Gesture::Primary => PieceAction::Sheet(SheetKind::Brightness),
             Gesture::Scroll(Axis::Vertical, steps) => {
                 wheel(steps).map_or(PieceAction::None, |(direction, count)| {
                     PieceAction::Brightness(BrightnessAction::Step(direction, count))
@@ -141,7 +142,7 @@ mod tests {
         let l = Some(50);
         assert_eq!(
             ask(l, key(), Gesture::Primary),
-            PieceAction::Brightness(BrightnessAction::Popup)
+            PieceAction::Sheet(SheetKind::Brightness)
         );
         assert_eq!(
             ask(l, key(), Gesture::Scroll(Axis::Vertical, -1)),

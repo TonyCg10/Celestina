@@ -61,11 +61,11 @@ pub enum OsdTick {
     Reaped,
 }
 
-/// A slider popup opening or closing, as the display hears it (posted by the
+/// A slider sheet opening or closing, as the display hears it (posted by the
 /// loop to itself, because an input call controls only its own surface).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Suppression {
-    /// A popup driving these kinds opened.
+    /// A sheet driving these kinds opened.
     Open(&'static [Kind]),
     /// It closed; `asked` is the last level it asked of each kind (`None`
     /// for a mute toggle), so their read-backs are not announced. `written`
@@ -342,7 +342,7 @@ impl Inner {
             return;
         };
         // A refusal is logged by the handle; the next settings change, or the
-        // next volume popup, asks again.
+        // next volume sheet, asks again.
         self.graph_told = handle.request(AudioCommand::Graph(true)).is_ok();
     }
 
@@ -488,7 +488,7 @@ impl OsdRuntime {
 
     /// Asks the audio worker again for the graph when the settings want it
     /// and an earlier ask was refused (a full queue); nothing when it was
-    /// told or the volume piece is absent. Called when a volume popup opens.
+    /// told or the volume piece is absent. Called when a volume sheet opens.
     pub fn retry_graph_gate(&self) {
         self.inner.borrow_mut().tell_graph_consumer();
     }
@@ -837,7 +837,7 @@ mod tests {
         }
         runtime.apply(&placed());
         assert_eq!(told_audio(&commands).len(), audio::COMMAND_QUEUE);
-        // Nothing asks it again by itself; the popup's opening does, once.
+        // Nothing asks it again by itself; the sheet's opening does, once.
         runtime.retry_graph_gate();
         assert_eq!(told_audio(&commands), [AudioCommand::Graph(true)]);
         runtime.retry_graph_gate();

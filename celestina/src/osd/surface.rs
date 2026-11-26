@@ -228,9 +228,9 @@ impl Osds {
         self.brightness_read(event, focused, now, &mut host);
     }
 
-    /// The slider popup opened or closed: while it is open the kinds it
+    /// The slider sheet opened or closed: while it is open the kinds it
     /// drives show nothing and one of them on screen leaves, because the
-    /// popup shows its own value; the readings it drives still move the
+    /// sheet shows its own value; the readings it drives still move the
     /// baselines, and the levels it asked for that arrive after it closed
     /// are not announced either (see `celestina_shell::osd::Osd::release`).
     pub fn set_suppressed(
@@ -317,7 +317,7 @@ impl Osds {
                 written,
             } => {
                 // A DDC write and its read-back take a settle of their own
-                // for each monitor the popup wrote, one after another.
+                // for each monitor the sheet wrote, one after another.
                 let more = u32::try_from(written.saturating_sub(1)).unwrap_or(u32::MAX);
                 let now = now.saturating_add(BRIGHTNESS_SETTLE.saturating_mul(more));
                 self.machine.release(kinds, &asked, now);
@@ -720,10 +720,10 @@ mod tests {
         osds.audio_read(volume(40, false), None, T, &mut host);
         osds.audio_read(volume(45, false), None, T, &mut host);
         assert!(osds.live.as_ref().is_some_and(|l| l.shown.is_some()));
-        // The popup opens: what is on screen leaves through the exit.
+        // The sheet opens: what is on screen leaves through the exit.
         osds.suppress(Suppression::Open(VOLUME), T, &mut host);
         assert!(osds.live.as_ref().is_some_and(|l| l.shown.is_none()));
-        // The popup drives the volume: nothing is shown for it.
+        // The sheet drives the volume: nothing is shown for it.
         osds.audio_read(volume(60, false), None, T, &mut host);
         assert!(osds.live.as_ref().is_some_and(|l| l.shown.is_none()));
         assert_eq!(host.created.len(), 1);

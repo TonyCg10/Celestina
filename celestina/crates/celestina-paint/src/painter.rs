@@ -12,9 +12,7 @@ use celestina_wayland::egl::{max_texture_side, EglError};
 use celestina_wayland::Rect;
 
 use crate::atlas::{Atlas, GlyphKey, PAGE};
-use crate::backend::{
-    Backend, BackendInit, GlyphQuad, GpuError, ImageHandle, ImageKind, SpotShape,
-};
+use crate::backend::{Backend, BackendInit, GlyphQuad, GpuError, ImageHandle, ImageKind};
 use crate::color::{unit, Color};
 use crate::haze::{grain_texels, GrainError, HazePlan, GRAIN_SIZE};
 use crate::icon::{
@@ -22,7 +20,6 @@ use crate::icon::{
     IconCache, IconKey, PixmapId,
 };
 use crate::soft_edge::{self, Cuts, SOFT_SIGMAS};
-use crate::spotlight;
 use crate::text::{TextRun, TextSystem};
 use crate::theme::Theme;
 
@@ -210,9 +207,6 @@ pub struct CutRow {
     pub cuts: Cuts,
 }
 
-/// The pill widths the spotlight image is built for, in device px.
-const SPOT_STEP_PX: f32 = 8.0;
-
 /// The one painter of the process.
 pub struct Painter {
     backend: Backend,
@@ -235,8 +229,6 @@ pub struct Painter {
     blur_available: bool,
     /// Whether the missing row images were already warned about.
     row_warned: bool,
-    /// Whether the missing spotlight image was already warned about.
-    spot_warned: bool,
 }
 
 impl std::fmt::Debug for Painter {
@@ -298,7 +290,6 @@ impl Painter {
             dpr: 1.0,
             blur_available: false,
             row_warned: false,
-            spot_warned: false,
         })
     }
 
@@ -782,71 +773,6 @@ impl Painter {
             );
         }
         layers
-    }
-
-    /// The spotlight under a sheet's `pill`: a faint cone and core of light,
-    /// blurred, at `alpha`. One cached image, remade when the pill's device
-    /// width (in steps of 8 px) or the ratio changes.
-    pub fn spotlight(&mut self, pill: Rect, alpha: f32) {
-        let alpha = unit(alpha);
-        if !(pill.w > 0.0 && pill.w.is_finite() && pill.x.is_finite() && pill.y.is_finite())
-            || alpha <= 0.0
-        {
-            return;
-        }
-        let dpr = self.dpr;
-        // Quantised, so a pill that slides and widens reuses one image for
-        // a run of frames: the light is blurred past the difference.
-        let width_px = ((pill.w * dpr / SPOT_STEP_PX).round() * SPOT_STEP_PX).max(SPOT_STEP_PX);
-        // Built for the rounded width, so the cache is exact for its key.
-        let built = Rect {
-            w: width_px / dpr,
-            ..pill
-        };
-        let bounds = spotlight::spot_bounds(built);
-        let size = (
-            (bounds.w * dpr).ceil().max(1.0) as u32,
-            (bounds.h * dpr).ceil().max(1.0) as u32,
-        );
-        if size.0.max(size.1) > self.max_texture_side {
-            return;
-        }
-        let margin = 3.0 * spotlight::CONE_SIGMA;
-        let at = |corners: [(f32, f32); 4]| corners.map(|(x, y)| (x + margin, y + margin));
-        let foot = Rect {
-            x: 0.0,
-            y: 0.0,
-            ..spotlight::foot(built)
-        };
-        let shapes = [
-            SpotShape {
-                corners: at(spotlight::cone_corners(foot)),
-                gradient: (margin, margin + spotlight::CONE_H),
-                stops: spotlight::CONE_STOPS.to_vec(),
-                sigma: spotlight::CONE_SIGMA,
-            },
-            SpotShape {
-                corners: at(spotlight::core_corners(foot)),
-                gradient: (margin, margin + spotlight::CORE_H),
-                stops: spotlight::CORE_STOPS.to_vec(),
-                sigma: spotlight::CORE_SIGMA,
-            },
-        ];
-        let key = (width_px as u32, dpr.to_bits());
-        let Some(image) = self.backend.spot_image(key, size, dpr, &shapes) else {
-            if !self.spot_warned {
-                self.spot_warned = true;
-                tracing::warn!("cannot make the spotlight image; it is not drawn");
-            }
-            return;
-        };
-        let drawn = Rect {
-            x: pill.x + pill.w / 2.0 - bounds.w / 2.0,
-            y: bounds.y,
-            w: size.0 as f32 / dpr,
-            h: size.1 as f32 / dpr,
-        };
-        self.backend.draw_spot(image, drawn, alpha);
     }
 
     /// Scales subsequent draws by `s` about (`cx`, `cy`), for the press

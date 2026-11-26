@@ -58,12 +58,17 @@ pub fn question_width(theme: &Theme) -> f32 {
     MENU_W - 2.0 * theme.spacing.sm - 2.0 * theme.spacing.md
 }
 
-/// The list's size: five rows, the divider and the padding.
+/// The list's size: five rows, the divider (with its margins) and the
+/// body's padding (`xs` on top, `sm` below and at the sides).
 #[must_use]
 pub fn list_size(theme: &Theme) -> (f32, f32) {
     (
         MENU_W,
-        5.0 * theme.row_height + DIVIDER_H + 2.0 * theme.spacing.xs + 2.0 * theme.spacing.sm,
+        5.0 * theme.row_height
+            + DIVIDER_H
+            + 2.0 * theme.spacing.xs
+            + theme.spacing.xs
+            + theme.spacing.sm,
     )
 }
 
@@ -96,10 +101,11 @@ pub fn view(theme: &Theme, mode: Mode, question_h: f32) -> View {
         Mode::List => list_size(theme),
         Mode::Confirm(_) => confirm_size(theme, question_h),
     };
-    let mut card = view::col(menu_key())
-        .haze(theme.radius_md)
-        .size(w, h)
-        .padding(theme.spacing.sm);
+    let mut card = view::col(menu_key()).size(w, h).padding_sides(
+        theme.spacing.xs,
+        theme.spacing.sm,
+        theme.spacing.sm,
+    );
     for action in SessionAction::ROWS {
         if mode == Mode::Confirm(action) {
             card = card.child(confirm(theme, action));

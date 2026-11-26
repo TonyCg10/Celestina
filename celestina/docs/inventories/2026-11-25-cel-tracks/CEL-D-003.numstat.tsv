@@ -1,0 +1,127 @@
+# CEL-D-003 exact change inventory
+
+Base revision	f24a1ed501bf98394789d0d7937137b88f21b9d3
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-paint/src/backend.rs
+Pathspec	celestina/crates/celestina-paint/src/lib.rs
+Pathspec	celestina/crates/celestina-paint/src/painter.rs
+Pathspec	celestina/crates/celestina-paint/src/spotlight.rs
+Pathspec	celestina/crates/celestina-ui/src/paint.rs
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets.md
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/01-brightness-sheet.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/02-session-sheet.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/03-session-confirm-card.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/04-system-sheet.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/05-notifications-sheet.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/06-overflow-menu.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/07-tour-1-volume.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/08-tour-2-system.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/09-tour-3-brightness.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/10-tour-4-session.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/11-tour-5-closed.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/12-other-capsule-opens-notifications.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/13-focus-closed-1s.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/13-focus-session-sheet.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/13-focus-volume-sheet.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-session-open.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-session-outside-press-closed-1s.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-system-closed-3s.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-system-tab-1.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-system-tab-2.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-volume-escape-closed-1s.jpg
+Pathspec	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-volume-open.jpg
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-003.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/catcher.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/island/bar_tree.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/page_sheets.rs
+Pathspec	celestina/src/island/sheets.rs
+Pathspec	celestina/src/island/tests/page_sheets.rs
+Pathspec	celestina/src/island/view.rs
+Pathspec	celestina/src/lib.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/src/osd/control.rs
+Pathspec	celestina/src/osd/mod.rs
+Pathspec	celestina/src/osd/monitor_rows.rs
+Pathspec	celestina/src/osd/popup.rs
+Pathspec	celestina/src/osd/readings.rs
+Pathspec	celestina/src/osd/surface.rs
+Pathspec	celestina/src/pieces/brightness.rs
+Pathspec	celestina/src/pieces/mod.rs
+Pathspec	celestina/src/pieces/session.rs
+Pathspec	celestina/src/session_menu/mod.rs
+Pathspec	celestina/src/session_menu/view.rs
+Pathspec	celestina/src/sheet/body.rs
+Pathspec	celestina/src/sheet/mod.rs
+Pathspec	celestina/src/sheet/motion.rs
+Pathspec	celestina/tests/polkit_guards.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	93881266a5c9dbd222052d225d584835821331997d7eeefa071c56b8f34cce1e	celestina/Cargo.lock
+1	1	5819522a8a595cbb0f998e79bf793a12e648b19aa59efb8cfb42fa9e994a8550	celestina/Cargo.toml
+37	2	9efdc3c860ac60f096e68689033ef76c53579dc0fa6600be63b7b9fc2a228cc6	celestina/VALIDATION.md
+0	105	6cf8bcf3312a45875db5ba08dfecc37d4ca62aab5d0c9b53bb7624d3540ac698	celestina/crates/celestina-paint/src/backend.rs
+0	1	e3e6040cb9f4a70ddf49245d55fc6242425e5580590953c9a091480c33d4f956	celestina/crates/celestina-paint/src/lib.rs
+1	75	a72fd4464d5bb0b4db8960e68afb4a2eed6ef236f3ba624536957e115cb651d2	celestina/crates/celestina-paint/src/painter.rs
+0	120	deleted	celestina/crates/celestina-paint/src/spotlight.rs
+44	4	e6bcf6cc71360ea1854576fc852070613d0ebc35c92b9e2d9fe429f586bccdc6	celestina/crates/celestina-ui/src/paint.rs
+98	0	37282ef75e9259d26e996498916a13d1fe37ecf226c4a413c88f79bc826cfe86	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets.md
+-	-	048200a58062bf9b0f3ee96625a0c78c3ceae78a852b60755460af2f5659a36d	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/01-brightness-sheet.jpg
+-	-	4ea345ff879e58004b297e63b69734f59bf6f849d54837e9eaa3134bb20c0dbe	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/02-session-sheet.jpg
+-	-	a338f5cec21db3412b79e3d66fed86eeb8f90cbf5c27761b10252ac112777f5e	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/03-session-confirm-card.jpg
+-	-	2c394043b5ac6a77e6116ad3c4be24297eab8bd305897e09e244198e39ce83fa	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/04-system-sheet.jpg
+-	-	dc738440e3fa34625cf4c5d0384db48e0e0f630374793211f7a7216627182d15	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/05-notifications-sheet.jpg
+-	-	90a84c18c1c28dbefad1841c5b572bc66809768bdd70f2df2d3215f1a95905ed	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/06-overflow-menu.jpg
+-	-	b2c7daf12ab2268035ed2c9d0c0cfe26f58b091e584908c5308bde2be69cd50b	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/07-tour-1-volume.jpg
+-	-	831d6a26999178ff05f48a033ecc1c1a1e1ced5a173cfb398c5a320cd70c94f6	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/08-tour-2-system.jpg
+-	-	c143a467638faf952e91fb00d7443db1fa678f5a9eb937442fb41db2b3958863	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/09-tour-3-brightness.jpg
+-	-	8d36ba312f716b3ee5c779e40d732e0d788c1e92110f43611e2e8b441bea86d9	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/10-tour-4-session.jpg
+-	-	d34fa30a7a63eb7cacd1ab845414fcee8b34166a96e0ddaaa9681c16048ed19e	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/11-tour-5-closed.jpg
+-	-	8c64e45c5e0f7045616cf21636ffa734eb01823fd49a8032286ad4553ded2e18	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/12-other-capsule-opens-notifications.jpg
+-	-	9f17391c9efe23fcfdeff2dda81ee2d7e83401de9e3717e14baf7b71e1e5247c	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/13-focus-closed-1s.jpg
+-	-	dfc7d359439e5b6177180e8b1a2869a765bd85c574f76beb91803d18f9f7d7d6	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/13-focus-session-sheet.jpg
+-	-	10e63bfe7f48a697c6663aa68a7b1f0396f58020459bde92859c3df62d822029	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/13-focus-volume-sheet.jpg
+-	-	476c3a7cef25b8667ee0d0194ad768cdcebe5080e70161738ff904033cb28893	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-session-open.jpg
+-	-	0f87af86011ece146bc25e653fffb07a310145b330e3c133af29c540997d2d56	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-session-outside-press-closed-1s.jpg
+-	-	7360ff8d91203f1274bcd397408f8c74fc4a94c0cdae4ead86994e409e8f8177	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-system-closed-3s.jpg
+-	-	13cd965034040328897a6909d7f958704c84e2687799c760746a706601379d61	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-system-tab-1.jpg
+-	-	ed9cfff2a521c5477394b7e650ebaf2e2c67c0fbfbca579dab82f8428e51091a	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-system-tab-2.jpg
+-	-	361b9b8b01f3c50250475eab6b0e2a7b290de62c82d49d8934c5abe8349accf0	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-volume-escape-closed-1s.jpg
+-	-	04d08855289800a4e8f7f66153fee2dde6f35b32b3dde7f929312b98d9515cdb	celestina/docs/evidence/2026-11-25-cel-d-003-menus-as-sheets/14-volume-open.jpg
+127	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-003.numstat.tsv
+1	1	d68a2512e2e43621e3e4be8e3fa6ef8cd5d64690356c0ccada518dad3740a3d2	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+128	78	09f596e1bb92367035c52a2ec05137bc8b3abc9f9327d2d421196a1b42f22d0a	celestina/src/app.rs
+194	0	73f0f50571424dc0ff11e73234f0a7cf0251ffb9152836880b702baf96ce9edf	celestina/src/catcher.rs
+10	10	6a581b30b7df68a7532fda5a1e566a06e017596bc2ee7af332425ea5912c4828	celestina/src/copy.rs
+31	2	3c75ee324599508ae858491980d94d3a1d96857c767bd6bd85123714ad387834	celestina/src/island/bar_tree.rs
+343	357	11ccc14c0fc83ab695cc8b9d6aff28299fbe66ad5ae6ee5cde3c4a022ff9e176	celestina/src/island/mod.rs
+287	0	e475be6eedca7dee53f2cddb06393ff51bc24bc9b2585156c1012eb4d4d84cb2	celestina/src/island/page_sheets.rs
+142	25	6f82dbc455c8a4590c56fd218aa058e8d19226737e3cdb5e11032f951143c750	celestina/src/island/sheets.rs
+783	0	d6b0658f08ace4d9cba78dce8dba958f8d20f42ccc22c74686180eea0f9da3e2	celestina/src/island/tests/page_sheets.rs
+99	0	4ff8609997e5608b0f7a5b998915a5e8ddf0902e814de3158da71c33207a49f7	celestina/src/island/view.rs
+1	0	1c32288e5802a352084c3d6aac7954ccac3a2f6594febd657b279f878828d1e6	celestina/src/lib.rs
+9	2	2a3d24d754e9419225cdce2ace4ac3c19902feff8932a8ed3a3ccd488cae7467	celestina/src/message.rs
+137	201	c0490fdac4df7ee5f79509414b11ddc585a09c5e84bb484ff52cdaecb3abd41e	celestina/src/osd/control.rs
+5	5	5a2faebcbe31415445ef0f7e81f14859d3ed129e7c9169c6a223d87529f0f380	celestina/src/osd/mod.rs
+23	21	01d32583d0de2a3f0617e6905a29abbaad396291934ec8d15200df2458e6f8cb	celestina/src/osd/monitor_rows.rs
+107	408	f023b39faa0d469d9b13fab76ea13592e48f7ba52da2de5d217a46cb0955dbb9	celestina/src/osd/popup.rs
+4	4	9a5940a8b9d9af2714b4bb2ef0d5642428d2c4c5b5524dd969f96f6304a61505	celestina/src/osd/readings.rs
+5	5	e44375134cc657de1668602c9572d92e09ba194632f309672b4cbeecb362b98f	celestina/src/osd/surface.rs
+6	5	99d445a6f1db84cec2a43f8c939acd15157794e54244fc7d64b16102b3368c91	celestina/src/pieces/brightness.rs
+11	10	ef743b83aedcb15c0586e7aa604dc6d7529a87fd326a968c9f8ba2f4aef1080c	celestina/src/pieces/mod.rs
+11	5	1fe5d425c872805025e471e3279c150564bafe4bda82eab5a737d8fd0d042b69	celestina/src/pieces/session.rs
+79	198	b4fb246e7cecb13c4a47fe9a7d7c2b50cbfec22b3faa1994d8ae57e1ffe1f966	celestina/src/session_menu/mod.rs
+12	6	9284f28111c1f0c182d445a34dde074eb5be302000f961122f8035d4773b0ee0	celestina/src/session_menu/view.rs
+192	5	944d0ce335949c3e82121e78febf49723734b4f27e88078528ab0c20594a4f47	celestina/src/sheet/body.rs
+78	16	6f987edd318e76cf0425b603f64dbd31afacdc2143e1721e273a8c0a97e31370	celestina/src/sheet/mod.rs
+75	34	aa5ad023f43c2cab08442b2ccb354faf1ce289f8987e4c4610b04ace0aced1b9	celestina/src/sheet/motion.rs
+50	6	fe983b67e2759825633a4034a0cedb202c43f08fb19d12bb9ac123fb06546201	celestina/tests/polkit_guards.rs
+1	0	a1b27ba1195a115d68ecb44e24761e049fea88bbed31a1ba7cecf92c163c6f7c	docs/version-history.tsv

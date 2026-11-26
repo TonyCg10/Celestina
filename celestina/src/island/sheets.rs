@@ -8,12 +8,13 @@ use std::time::Instant;
 
 use celestina_paint::{Painter, Rect};
 use celestina_ui::Key;
-use celestina_wayland::{InputEvent, SurfaceCtl};
+use celestina_wayland::{InputEvent, KeyboardInteractivity, SurfaceCtl};
 
 use super::{Island, IslandAction, Measure};
 use crate::{
     osd::popup::{Kind, LevelCore},
-    pieces::SheetKind,
+    pieces::{PageId, SheetKind},
+    session_menu::SessionCore,
     sheet::{
         geometry::{self, Hit},
         Anchor, BodyOutcome, Next, Request, SheetBody,
@@ -21,10 +22,10 @@ use crate::{
 };
 
 /// The Escape key.
-const XKB_KEY_ESCAPE: u32 = 0xff1b;
+pub(super) const XKB_KEY_ESCAPE: u32 = 0xff1b;
 
 impl Island {
-    /// Opens the volume sheet of `piece` (a node of the bar, the one the
+    /// Opens the level sheet of `piece` (a node of the bar, the one the
     /// [`IslandAction::OpenLevelSheet`] named) with `core` as its body: it
     /// grows from the piece's capsule, or switches the sheet already open on
     /// that capsule. Anything else shown closes first and the sheet opens once
@@ -50,8 +51,27 @@ impl Island {
         core: LevelCore,
         now: Instant,
     ) -> bool {
-        // What waited for a close that has ended opens first: a request now
-        // must not slip past it.
+        let kind = match core.kind() {
+            Kind::Volume => SheetKind::Volume,
+            Kind::Brightness => SheetKind::Brightness,
+        };
+        self.open_sheet_at(piece, kind, SheetBody::Level(Box::new(core)), now)
+    }
+
+    /// Opens `body` as the sheet of `kind` on `piece`'s capsule: it grows
+    /// from it, switches the sheet already open on that capsule, or waits for
+    /// what else is shown to close. `false` when the bar has no such piece.
+    pub(super) fn open_sheet_at(
+        &mut self,
+        piece: Key,
+        kind: SheetKind,
+        body: SheetBody,
+        now: Instant,
+    ) -> bool {
+        if self.keyboard_claimed {
+            tracing::info!("island: a polkit prompt holds the keyboard; no sheet opens");
+            return false;
+        }
         self.open_what_waited(now);
         let Some(zone) = self.bar.as_ref().and_then(|bar| bar.zone_of(piece)) else {
             return false;
@@ -62,8 +82,8 @@ impl Island {
         let request = Request {
             zone,
             piece,
-            kind: SheetKind::Volume,
-            body: SheetBody::Level(Box::new(core)),
+            kind,
+            body,
         };
         let page_shown = self.state.is_open() || self.state.progress(now) > 0.0;
         let switchable = self.sheets.is_open() && self.sheets.zone(now) == Some(zone);
@@ -75,6 +95,8 @@ impl Island {
             self.close_sheet(now);
             self.sheets.queue(Next::Sheet(request));
         } else {
+            // A page sheet switched away from takes its state with it.
+            self.page_sheet_ends();
             self.sheets
                 .open(request, &anchor, &self.theme, now, self.reduced);
         }
@@ -109,10 +131,35 @@ impl Island {
     }
 
     pub(super) fn close_level_sheet_at(&mut self, now: Instant) {
-        if matches!(self.sheets.kind(), Some(SheetKind::Volume)) && self.sheets.is_open() {
+        if self.sheets.has_level() && self.sheets.is_open() {
             self.close_sheet(now);
         }
         self.sheets.drop_queue();
+    }
+
+    /// The keyboard the surface asks for at `now`: `Exclusive` while anything
+    /// is shown or waits, `None` at rest.
+    pub(super) fn keyboard_interactivity(&self, now: Instant) -> KeyboardInteractivity {
+        // A polkit prompt holds the keyboard: nothing here takes it (N-25).
+        if self.anything_shown(now) && !self.keyboard_claimed {
+            KeyboardInteractivity::Exclusive
+        } else {
+            KeyboardInteractivity::None
+        }
+    }
+
+    /// Whether the app owes this Island a catcher (`crate::catcher`) at
+    /// `now`: exactly while a page or a sheet is shown, closing ones and
+    /// what waits included.
+    #[must_use]
+    pub fn wants_catcher(&self, now: Instant) -> bool {
+        self.anything_shown(now) && !self.keyboard_claimed
+    }
+
+    /// Whether a polkit prompt holds the keyboard. While it does nothing
+    /// opens, the surface asks for no keyboard and the catcher goes.
+    pub fn set_keyboard_claimed(&mut self, claimed: bool) {
+        self.keyboard_claimed = claimed;
     }
 
     /// Whether anything of the Island is open: its page, a sheet, or what
@@ -164,6 +211,7 @@ impl Island {
 
     /// Starts the sheet's close.
     pub(super) fn close_sheet(&mut self, now: Instant) {
+        self.page_sheet_ends();
         if let Some(anchor) = self.sheet_anchor() {
             self.sheets.close(&anchor, now);
         }
@@ -177,7 +225,8 @@ impl Island {
     }
 
     /// What a piece's sheet request does: the open piece again closes its
-    /// sheet; any other asks the app to build the body.
+    /// sheet; the session menu and a page are built here (neither measures
+    /// anything); a level sheet asks the app to build the body.
     pub(super) fn sheet_request(
         &mut self,
         key: Key,
@@ -190,6 +239,25 @@ impl Island {
         }
         let kind = match kind {
             SheetKind::Volume => Kind::Volume,
+            SheetKind::Brightness => Kind::Brightness,
+            SheetKind::Page(page) => {
+                if page == PageId::PHONE && !self.phone_duty {
+                    tracing::info!("a phone sheet: the phone duty is off; nothing was done");
+                } else {
+                    self.open_page_sheet(key, page, now);
+                }
+                return None;
+            }
+            SheetKind::Session => {
+                let core = SessionCore::new(&self.theme, self.reduced, now);
+                self.open_sheet_at(
+                    key,
+                    SheetKind::Session,
+                    SheetBody::Session(Box::new(core)),
+                    now,
+                );
+                return None;
+            }
         };
         Some(IslandAction::OpenLevelSheet { kind, piece: key })
     }
@@ -214,10 +282,21 @@ impl Island {
 
     /// Opens a request that waited, if its piece is still on the bar.
     fn open_request(&mut self, request: Request, now: Instant) {
+        if self.keyboard_claimed {
+            return;
+        }
+        if request.kind == SheetKind::Page(PageId::PHONE) && !self.phone_duty {
+            tracing::info!("island: a waiting phone sheet; the phone duty is off; not opened");
+            return;
+        }
         let Some(anchor) = self.live_anchor(request.zone, request.piece) else {
             tracing::debug!("island: a waiting sheet's piece is gone; not opened");
             return;
         };
+        // What the page read while the request waited was not watched.
+        if matches!(request.kind, SheetKind::Page(_)) {
+            self.stale = true;
+        }
         self.sheets
             .open(request, &anchor, &self.theme, now, self.reduced);
     }
@@ -232,6 +311,7 @@ impl Island {
             Some(anchor) => self.sheets.follow(&anchor, now),
             None if self.sheets.is_open() => {
                 tracing::debug!(output = %self.output, "island: the sheet's piece left the bar; closing");
+                self.page_sheet_ends();
                 if let Some(anchor) = self.sheets.last_anchor() {
                     self.sheets.close(&anchor, now);
                 }
@@ -250,9 +330,9 @@ impl Island {
             return;
         };
         let mut bar = self.bar.as_mut();
-        let mut row = |p: &mut Painter| {
+        let mut row = |p: &mut Painter, open: Option<Key>, dim: f32| {
             if let Some(bar) = bar.as_deref_mut() {
-                bar.paint_row(p, now, zone);
+                bar.paint_row(p, now, zone, open, dim);
             }
         };
         self.sheets.paint(painter, &anchor, now, &mut row);
@@ -298,15 +378,30 @@ impl Island {
                 keysym,
                 pressed: true,
                 ..
-            } if keysym == XKB_KEY_ESCAPE => {
+            } if keysym == XKB_KEY_ESCAPE && !self.sheets.body_takes_escape() => {
                 self.sheets.drop_queue();
                 self.close_sheet(now);
                 Some(Vec::new())
             }
-            InputEvent::Key { .. } => {
+            InputEvent::Key {
+                keysym, pressed, ..
+            } => {
+                if Island::is_delete(keysym) {
+                    if !pressed {
+                        self.delete_held = false;
+                    } else if self.sheets.page() == Some(PageId::CLIPBOARD) {
+                        // One press removes one entry; a held key's repeat
+                        // needs a release in between.
+                        let held = std::mem::replace(&mut self.delete_held, true);
+                        return Some(if held {
+                            Vec::new()
+                        } else {
+                            self.delete_key().into_iter().collect()
+                        });
+                    }
+                }
                 let outcome = self.sheets.input(ev, &anchor, now, measure);
-                self.apply_outcome(outcome, now);
-                Some(Vec::new())
+                Some(self.apply_outcome(outcome, now))
             }
             InputEvent::PointerLeave => {
                 self.sheets.leave_body(now, measure);
@@ -321,15 +416,13 @@ impl Island {
                 // it goes.
                 if !press && self.sheets.body_holds_pointer() {
                     let outcome = self.sheets.input(ev, &anchor, now, measure);
-                    self.apply_outcome(outcome, now);
-                    return Some(Vec::new());
+                    return Some(self.apply_outcome(outcome, now));
                 }
                 match geometry::hit(rect, x, y) {
                     Hit::Body => {
                         self.pointer_is_the_sheets(true, now);
                         let outcome = self.sheets.input(ev, &anchor, now, measure);
-                        self.apply_outcome(outcome, now);
-                        Some(Vec::new())
+                        Some(self.apply_outcome(outcome, now))
                     }
                     Hit::Row => {
                         self.sheets.leave_body(now, measure);
@@ -373,11 +466,35 @@ impl Island {
             .pointer(&mut self.capsule, &InputEvent::PointerLeave, now);
     }
 
-    /// What a body asked after an event: Escape in it closes the sheet.
-    fn apply_outcome(&mut self, outcome: BodyOutcome, now: Instant) {
-        if outcome == BodyOutcome::Close {
-            self.sheets.drop_queue();
-            self.close_sheet(now);
+    /// What a body asked after an event: Escape in it closes the sheet; a
+    /// session choice closes it too and is the one action that comes out; a
+    /// page's node is read as the page reads it, and its overflow button asks
+    /// for the menu.
+    fn apply_outcome(&mut self, outcome: BodyOutcome, now: Instant) -> Vec<IslandAction> {
+        match outcome {
+            BodyOutcome::Keep { .. } => Vec::new(),
+            BodyOutcome::Close => {
+                self.sheets.drop_queue();
+                self.close_sheet(now);
+                Vec::new()
+            }
+            BodyOutcome::Session(action) => {
+                self.sheets.drop_queue();
+                self.close_sheet(now);
+                vec![IslandAction::Session(action)]
+            }
+            BodyOutcome::Activate { key, keyboard: _ } => {
+                let Some(page) = self.sheets.page() else {
+                    return Vec::new();
+                };
+                self.page_action(page, key, now).into_iter().collect()
+            }
+            BodyOutcome::More { rect, keyboard } => {
+                vec![IslandAction::OpenMenu {
+                    more: rect,
+                    keyboard,
+                }]
+            }
         }
     }
 }

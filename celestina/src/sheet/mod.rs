@@ -19,7 +19,7 @@ use celestina_paint::{CutRow, Painter, Rect, Role, TextStyle, Theme};
 use celestina_ui::{Key, Scroll, Tree};
 use celestina_wayland::InputEvent;
 
-pub use body::{BodyOutcome, SheetBody};
+pub use body::{BodyOutcome, PageBody, SheetBody};
 use geometry::ROW_H;
 use motion::{Indicator, SheetMotion};
 
@@ -209,6 +209,23 @@ impl Sheets {
         open || queued
     }
 
+    /// The page of the open sheet (not closing), when it shows one.
+    #[must_use]
+    pub fn page(&self) -> Option<PageId> {
+        self.open
+            .as_ref()
+            .filter(|o| !o.motion.is_closing())
+            .and_then(|o| o.body.page())
+    }
+
+    /// The open sheet's page body (not closing), when it is one.
+    pub fn page_body_mut(&mut self) -> Option<&mut PageBody> {
+        self.open
+            .as_mut()
+            .filter(|o| !o.motion.is_closing())
+            .and_then(|o| o.body.page_body_mut())
+    }
+
     /// Something waits for the open thing to close.
     #[must_use]
     pub fn has_queued(&self) -> bool {
@@ -357,11 +374,37 @@ impl Sheets {
         self.bump();
     }
 
+    /// Takes the open sheet away at once, with no exit motion: what its body
+    /// holds goes out first. The next [`Sheets::open`] then grows from the
+    /// capsule again.
+    pub fn drop_open(&mut self, now: Instant) {
+        if let Some(mut old) = self.open.take() {
+            old.body.flush(now);
+            self.leaving = None;
+            self.scroll = Scroll::default();
+            self.indicator.hide(now);
+            self.hovering = false;
+            self.bump();
+        }
+    }
+
     /// Makes `next` wait for the open thing to finish closing (it replaces
     /// what waited).
     pub fn queue(&mut self, next: Next) {
         self.queued = Some(next);
         self.bump();
+    }
+
+    /// The page of the page sheet that waits, if one does.
+    #[must_use]
+    pub fn queued_page_sheet(&self) -> Option<PageId> {
+        match &self.queued {
+            Some(Next::Sheet(Request {
+                kind: SheetKind::Page(page),
+                ..
+            })) => Some(*page),
+            _ => None,
+        }
     }
 
     /// Gives up what waited.
@@ -454,9 +497,25 @@ impl Sheets {
                 return BodyOutcome::Keep { changed: moved };
             }
         }
-        let outcome = o.body.input(&translated(ev, dx, dy), now, measure);
+        let mut outcome = o.body.input(&translated(ev, dx, dy), now, measure);
+        // The overflow button's rect leaves in the surface's coordinates.
+        if let BodyOutcome::More { rect, keyboard } = outcome {
+            outcome = BodyOutcome::More {
+                rect: Rect {
+                    x: rect.x + dx,
+                    y: rect.y + dy,
+                    ..rect
+                },
+                keyboard,
+            };
+        }
         self.retarget(now);
-        if matches!(outcome, BodyOutcome::Keep { changed: true }) {
+        // A click that activates a node redraws the button released, whether
+        // or not the page then changes.
+        if matches!(
+            outcome,
+            BodyOutcome::Keep { changed: true } | BodyOutcome::Activate { .. }
+        ) {
             self.bump();
         }
         outcome
@@ -471,6 +530,15 @@ impl Sheets {
             o.body.input(&InputEvent::PointerLeave, now, measure);
             self.bump();
         }
+    }
+
+    /// Whether the open body takes Escape itself (a confirmation card goes
+    /// back to its list) instead of the sheet closing.
+    #[must_use]
+    pub fn body_takes_escape(&self) -> bool {
+        self.open
+            .as_ref()
+            .is_some_and(|o| !o.motion.is_closing() && o.body.takes_escape())
     }
 
     /// Whether a drag is held on the body.
@@ -508,14 +576,15 @@ impl Sheets {
     }
 
     /// Paints the sheet: its Haze, the row through the window (blurred where
-    /// the window cuts it, under the indicator pill), the spotlight and the
-    /// bodies. `row` paints the capsule's pieces.
+    /// the window cuts it, under the indicator pill) and the bodies. `row`
+    /// paints the capsule's pieces, given the open piece and the opacity of
+    /// the others.
     pub fn paint(
         &mut self,
         painter: &mut Painter,
         anchor: &Anchor,
         now: Instant,
-        row: &mut dyn FnMut(&mut Painter),
+        row: &mut dyn FnMut(&mut Painter, Option<Key>, f32),
     ) {
         let Some(rect) = self.rect(anchor, now) else {
             return;
@@ -530,6 +599,8 @@ impl Sheets {
         let window = geometry::row_window(rect);
         let cuts = geometry::cuts(anchor.capsule, rect);
         let pill = self.indicator.pill(now);
+        let open = self.open.as_ref().map(|o| o.piece);
+        let dim = self.indicator.dim(now);
         let mut draw = |p: &mut Painter| {
             if let Some((r, alpha)) = pill {
                 p.push_state();
@@ -537,7 +608,7 @@ impl Sheets {
                 p.fill_rounded(r, PILL_RADIUS, hover);
                 p.pop_state();
             }
-            row(p);
+            row(p, open, dim);
         };
         if cuts.left || cuts.right {
             let cut = CutRow {
@@ -551,15 +622,6 @@ impl Sheets {
             painter.push_clip(window, radius);
             draw(painter);
             painter.pop_clip();
-        }
-        // The spotlight falls from the pill into the menu.
-        if let Some((pill, _)) = pill {
-            let spot = self.indicator.spot_opacity(now);
-            if spot > 0.0 {
-                painter.push_clip(rect, radius);
-                painter.spotlight(pill, spot);
-                painter.pop_clip();
-            }
         }
         // The bodies, each under one rounded clip of the viewport.
         let view = geometry::viewport(rect);

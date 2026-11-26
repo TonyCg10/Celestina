@@ -1,33 +1,158 @@
 //! What a capsule sheet shows under its row: a body, laid out in its own
 //! coordinates ((0, 0) is the body box's top-left) and painted translated to
-//! where the sheet puts it. Part A has one body, the volume's level card.
+//! where the sheet puts it: the level cards and the session menu.
 
 use std::time::{Duration, Instant};
 
-use celestina_paint::{Painter, Role, Theme, Weight};
-use celestina_ui::{fit_middle, Tree};
+use celestina_paint::{Painter, Rect, Role, Theme, Weight};
+use celestina_ui::{fit_middle, Interaction, Key, Tree, UiEvent, View};
 use celestina_wayland::InputEvent;
 
 use super::Measure;
 use crate::{
-    island::view::text_style,
+    island::view::{sheet_more_key, text_style},
     osd::popup::{LevelCore, Outcome},
+    pieces::PageId,
+    session_menu::{self, SessionAction, SessionCore},
 };
+
+/// An Island page shown as a capsule sheet (CEL-D-003): the page's tree and
+/// its pointer and keyboard state, under a header the Island builds.
+pub struct PageBody {
+    page: PageId,
+    theme: Theme,
+    size: (f32, f32),
+    tree: Tree,
+    input: Interaction,
+}
+
+impl std::fmt::Debug for PageBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PageBody")
+            .field("page", &self.page)
+            .field("size", &self.size)
+            .finish_non_exhaustive()
+    }
+}
+
+impl PageBody {
+    /// The body of `page` showing `view`, `size` big.
+    #[must_use]
+    pub fn new(
+        page: PageId,
+        theme: &Theme,
+        reduced: bool,
+        view: View,
+        size: (f32, f32),
+        now: Instant,
+    ) -> PageBody {
+        let mut tree = Tree::new(reduced, theme);
+        tree.apply(view, now);
+        PageBody {
+            page,
+            theme: theme.clone(),
+            size,
+            tree,
+            input: Interaction::new(),
+        }
+    }
+
+    /// The page this body shows.
+    #[must_use]
+    pub fn page(&self) -> PageId {
+        self.page
+    }
+
+    /// Shows `view` at `size`: what the pointer and keyboard held stays.
+    pub fn apply(&mut self, view: View, size: (f32, f32), now: Instant) {
+        self.size = size;
+        self.tree.apply(view, now);
+    }
+
+    /// The tree and its input state, for what the Island does with the
+    /// focused node.
+    pub fn parts(&mut self) -> (&mut Tree, &mut Interaction) {
+        (&mut self.tree, &mut self.input)
+    }
+
+    fn set_theme(&mut self, theme: &Theme) -> bool {
+        if *theme == self.theme {
+            return false;
+        }
+        self.theme = theme.clone();
+        self.tree.set_theme(theme);
+        true
+    }
+
+    /// The node of `key`, as a body outcome: the overflow button asks for its
+    /// menu, anything else is the page's to read.
+    fn outcome_of(&self, key: Key, keyboard: bool) -> BodyOutcome {
+        if key == sheet_more_key() {
+            if let Some(id) = self.tree.node_by_key(key) {
+                return BodyOutcome::More {
+                    rect: self.tree.rect(id),
+                    keyboard,
+                };
+            }
+        }
+        BodyOutcome::Activate { key, keyboard }
+    }
+
+    fn input(&mut self, ev: &InputEvent, now: Instant) -> BodyOutcome {
+        let before = self.tree.highlight();
+        let events = match ev {
+            InputEvent::Key { .. } | InputEvent::FocusLost => self.input.key(&mut self.tree, ev),
+            InputEvent::PopupClosed { .. } | InputEvent::FocusEnter { .. } => Vec::new(),
+            _ => self.input.pointer(&mut self.tree, ev, now),
+        };
+        let changed = !events.is_empty() || self.tree.highlight() != before;
+        for event in events {
+            match event {
+                UiEvent::Escape => return BodyOutcome::Close,
+                UiEvent::Click(key) => return self.outcome_of(key, false),
+                UiEvent::Activate(key) => return self.outcome_of(key, true),
+                UiEvent::HoverChanged(..)
+                | UiEvent::Scroll(..)
+                | UiEvent::FieldChanged(_)
+                | UiEvent::SliderChanged(..) => {}
+            }
+        }
+        BodyOutcome::Keep { changed }
+    }
+}
 
 /// A sheet's body.
 #[derive(Debug)]
 pub enum SheetBody {
     /// The volume's (or, later, the brightness') sliders and rows.
     Level(Box<LevelCore>),
+    /// The session menu's rows and its confirmation card.
+    Session(Box<SessionCore>),
+    /// An Island page: its content under a header with the overflow button.
+    Page(Box<PageBody>),
 }
 
 /// What a body asks of its sheet after an event.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BodyOutcome {
     /// The sheet stays; `changed` when the body looks different.
     Keep { changed: bool },
     /// The body is done (Escape): the sheet closes.
     Close,
+    /// A session row was chosen: the sheet closes and the Island posts it.
+    Session(SessionAction),
+    /// A node of a page body was clicked or activated (`keyboard`): the
+    /// Island reads it as the page does.
+    Activate { key: Key, keyboard: bool },
+    /// The overflow button was chosen: `rect` is the button's, in body
+    /// coordinates until [`super::Sheets::input`] moves it to the surface's.
+    More { rect: Rect, keyboard: bool },
+}
+
+/// The height of a session question wrapped at `width`, with `measure`.
+fn question_h(measure: &mut Measure<'_>, text: &str, size: f32, width: f32) -> f32 {
+    let style = text_style(size, Weight::Regular, false, Role::DangerFillInk);
+    measure(text, &style, Some(width)).1
 }
 
 impl SheetBody {
@@ -36,6 +161,8 @@ impl SheetBody {
     pub fn size(&self) -> (f32, f32) {
         match self {
             SheetBody::Level(core) => core.size(),
+            SheetBody::Session(core) => core.size(),
+            SheetBody::Page(body) => body.size,
         }
     }
 
@@ -45,6 +172,7 @@ impl SheetBody {
     pub fn takes_wheel(&self, x: f32, y: f32, now: Instant) -> bool {
         match self {
             SheetBody::Level(core) => core.slider_at(x, y, now).is_some(),
+            SheetBody::Session(_) | SheetBody::Page(_) => false,
         }
     }
 
@@ -54,6 +182,7 @@ impl SheetBody {
     pub fn held(&self) -> bool {
         match self {
             SheetBody::Level(core) => core.held(),
+            SheetBody::Session(_) | SheetBody::Page(_) => false,
         }
     }
 
@@ -64,6 +193,7 @@ impl SheetBody {
             SheetBody::Level(core) => {
                 core.flush(now, true);
             }
+            SheetBody::Session(_) | SheetBody::Page(_) => {}
         }
     }
 
@@ -71,6 +201,14 @@ impl SheetBody {
     pub fn layout(&mut self, lay: &mut dyn FnMut(&mut Tree, (f32, f32))) {
         match self {
             SheetBody::Level(core) => core.layout_in(lay),
+            SheetBody::Session(core) => core.layout_in(lay),
+            SheetBody::Page(body) => {
+                let size = body.size;
+                lay(&mut body.tree, size);
+                if let Some(fault) = body.tree.take_fault() {
+                    tracing::warn!(page = ?body.page, %fault, "page sheet: layout fault");
+                }
+            }
         }
     }
 
@@ -78,6 +216,8 @@ impl SheetBody {
     pub fn paint(&mut self, painter: &mut Painter, now: Instant) {
         match self {
             SheetBody::Level(core) => core.paint(painter, now),
+            SheetBody::Session(core) => core.paint(painter, now),
+            SheetBody::Page(body) => body.tree.paint(painter, now),
         }
     }
 
@@ -86,6 +226,8 @@ impl SheetBody {
     pub fn is_animating(&self, now: Instant) -> bool {
         match self {
             SheetBody::Level(core) => core.is_animating(now),
+            SheetBody::Session(core) => core.is_animating(now),
+            SheetBody::Page(body) => body.tree.is_animating(now),
         }
     }
 
@@ -98,6 +240,7 @@ impl SheetBody {
                 .into_iter()
                 .flatten()
                 .min(),
+            SheetBody::Session(_) | SheetBody::Page(_) => None,
         }
     }
 
@@ -107,6 +250,36 @@ impl SheetBody {
     pub fn node_rect(&self, key: celestina_ui::Key) -> Option<celestina_paint::Rect> {
         match self {
             SheetBody::Level(core) => core.node_rect(key),
+            SheetBody::Session(core) => core.node_rect(key),
+            SheetBody::Page(body) => body.tree.node_by_key(key).map(|id| body.tree.rect(id)),
+        }
+    }
+
+    /// Whether Escape is the body's own (the session's confirmation card goes
+    /// back to the list) rather than the sheet's close.
+    #[must_use]
+    pub fn takes_escape(&self) -> bool {
+        match self {
+            SheetBody::Level(_) => false,
+            SheetBody::Session(core) => core.asking(),
+            SheetBody::Page(_) => false,
+        }
+    }
+
+    /// The page the body shows, when it is an Island page.
+    #[must_use]
+    pub fn page(&self) -> Option<PageId> {
+        match self {
+            SheetBody::Page(body) => Some(body.page),
+            SheetBody::Level(_) | SheetBody::Session(_) => None,
+        }
+    }
+
+    /// The page body, when it is one.
+    pub fn page_body_mut(&mut self) -> Option<&mut PageBody> {
+        match self {
+            SheetBody::Page(body) => Some(body),
+            SheetBody::Level(_) | SheetBody::Session(_) => None,
         }
     }
 
@@ -135,6 +308,15 @@ impl SheetBody {
                     Outcome::Keep { changed } => BodyOutcome::Keep { changed },
                 }
             }
+            SheetBody::Session(core) => {
+                let mut fit = |text: &str, size, width| question_h(measure, text, size, width);
+                match core.input(ev, now, &mut fit) {
+                    session_menu::Outcome::Close(Some(action)) => BodyOutcome::Session(action),
+                    session_menu::Outcome::Close(None) => BodyOutcome::Close,
+                    session_menu::Outcome::Keep { changed } => BodyOutcome::Keep { changed },
+                }
+            }
+            SheetBody::Page(body) => body.input(ev, now),
         }
     }
 
@@ -154,6 +336,11 @@ impl SheetBody {
                 core.flush(now, false);
                 changed
             }
+            SheetBody::Session(core) => {
+                let mut fit = |text: &str, size, width| question_h(measure, text, size, width);
+                core.set_theme(theme, now, &mut fit)
+            }
+            SheetBody::Page(body) => body.set_theme(theme),
         }
     }
 }

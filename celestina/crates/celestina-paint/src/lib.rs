@@ -10,7 +10,6 @@ mod haze;
 mod icon;
 mod painter;
 pub mod soft_edge;
-pub mod spotlight;
 mod text;
 mod theme;
 

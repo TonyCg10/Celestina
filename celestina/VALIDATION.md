@@ -1544,10 +1544,45 @@ None has been run and none is closed by an agent.
 - **Pass condition:** the end capsule grows into the menu with a small bounce
   and the row of icons stays where it was; icons cut by the menu's edge blur
   and fade toward the edge, and a cut icon still opens its menu; the
-  spotlight falls from the volume piece; with every section unfolded the menu
-  scrolls; the wheel over a slider moves the slider and does not scroll the
+  spotlight CEL-D-002 first drew under the volume piece was replaced by the
+  focus indicator in CEL-D-003 (see VAL-CEL-D-003); with every section
+  unfolded the menu scrolls; the wheel over a slider moves the slider and does not scroll the
   menu; Escape and a press outside close it; dragging a slider shows no
   on-screen display; opening the menu on the second output closes the first
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-002](docs/evidence/2026-11-25-cel-d-002-capsule-sheets.md)
+
+## VAL-CEL-D-003 — Every piece's menu grows out of its capsule
+
+- **Status:** pending
+- **Related implementation:** CEL-D-003 (the brightness, session and page
+  menus of the bar's pieces as capsule sheets, the level and session
+  `xdg_popup` paths removed;
+  [design](../docs/superpowers/specs/2026-11-25-celestina-capsule-sheets-design.md),
+  [plan](../docs/superpowers/plans/2026-11-25-celestina-capsule-sheets-plan.md))
+- **Requires:** the deployed shell after the landing of CEL-D-003, the
+  default bar (workspaces, notifications, sysmon, volume, brightness,
+  clipboard, session), a monitor that answers DDC for the brightness piece,
+  and a second output for the last step
+- **Procedure:** press each piece in turn: brightness, session, sysmon,
+  clipboard, the network and bluetooth pieces, the clock, the notifications
+  bell. While one sheet is open, press another piece of the same capsule.
+  Open the session list and press Lock, then press Restart and read the
+  confirm card. Press the overflow button of a page sheet. With a sheet open
+  on one capsule, press a piece of the other capsule. With a menu open, look
+  at the other pieces of its capsule and at the open piece, then close the
+  menu
+- **Pass condition:** each piece opens its own sheet out of its capsule and
+  the Island pill does not open; switching between two pieces of one capsule
+  is one motion of the same panel; Lock locks the session at once and a
+  dangerous row (Log out, Restart, Shut down) still asks first; the overflow
+  button opens its menu over the sheet, under the button; with a menu open,
+  the other pieces of its capsule dim, the open one keeps its grey pill and
+  there is no light under it, and the pieces return to full opacity when the
+  menu closes; a press on another capsule closes
+  the open sheet, then opens that capsule's sheet; tray item menus and the
+  Island's own menu still open as popups
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-003](docs/evidence/2026-11-25-cel-d-003-menus-as-sheets.md)

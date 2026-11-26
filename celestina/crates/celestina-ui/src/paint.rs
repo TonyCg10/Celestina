@@ -23,6 +23,7 @@ use crate::{
     slider::{self, SliderPaint},
     tree::{NodeId, Scope, Slot, Tree, Visit},
     view::ViewKind,
+    Key,
 };
 
 /// The alpha the accent is painted at behind selected text: a wash that
@@ -41,23 +42,41 @@ impl Tree {
     /// to its subtree; a clip after its own fill; the focus ring on top of
     /// its children (a text field shows its caret instead). Leaving nodes whose fade settled are pruned first.
     pub fn paint(&mut self, painter: &mut Painter, now: Instant) {
-        self.paint_scoped(painter, now, Scope::All);
+        self.paint_scoped(painter, now, Scope::All, &|_| 1.0);
     }
 
     /// [`Tree::paint`] without the node `skip` and its subtree: the rest of
     /// the walk is unchanged.
     pub fn paint_except(&mut self, painter: &mut Painter, now: Instant, skip: NodeId) {
-        self.paint_scoped(painter, now, Scope::Except(skip));
+        self.paint_scoped(painter, now, Scope::Except(skip), &|_| 1.0);
     }
 
     /// Paints only the subtrees of `parent`'s children: not the node's own
     /// box, haze or ring. The slides of `parent` and its ancestors still
     /// shift them; their recoil scale and opacity do not apply.
     pub fn paint_children(&mut self, painter: &mut Painter, now: Instant, parent: NodeId) {
-        self.paint_scoped(painter, now, Scope::ChildrenOf(parent));
+        self.paint_scoped(painter, now, Scope::ChildrenOf(parent), &|_| 1.0);
     }
 
-    fn paint_scoped(&mut self, painter: &mut Painter, now: Instant, scope: Scope) {
+    /// [`Tree::paint_children`] with each direct child of `parent` painted
+    /// at `opacity(key of the child)` times its own opacity, subtree and all.
+    pub fn paint_children_with(
+        &mut self,
+        painter: &mut Painter,
+        now: Instant,
+        parent: NodeId,
+        opacity: &dyn Fn(Key) -> f32,
+    ) {
+        self.paint_scoped(painter, now, Scope::ChildrenOf(parent), opacity);
+    }
+
+    fn paint_scoped(
+        &mut self,
+        painter: &mut Painter,
+        now: Instant,
+        scope: Scope,
+        scale: &dyn Fn(Key) -> f32,
+    ) {
         self.prune(now);
         let dpr = self.dpr;
         for slot in self.slots.iter_mut().flatten() {
@@ -91,9 +110,27 @@ impl Tree {
             _ => (0.0, 0.0),
         };
         let mut shifts: Vec<(f32, f32)> = vec![base];
+        let owner = match scope {
+            Scope::ChildrenOf(parent) => Some(parent),
+            _ => None,
+        };
+        // The factor of a direct child of the scoped parent; 1 elsewhere.
+        let factor = |tree: &Tree, id: NodeId| {
+            let direct = tree.slot(id).is_some_and(|s| s.parent == owner);
+            if owner.is_some() && direct {
+                scale(tree.key_of(id)).clamp(0.0, 1.0)
+            } else {
+                1.0
+            }
+        };
         for v in self.walk(scope) {
             match v {
                 Visit::Enter(id) => {
+                    let f = factor(self, id);
+                    if f < 1.0 {
+                        painter.push_state();
+                        painter.opacity(f);
+                    }
                     let base = shifts.last().copied().unwrap_or((0.0, 0.0));
                     let own = self.offset(id, now);
                     let shift = (base.0 + own.0, base.1 + own.1);
@@ -103,6 +140,9 @@ impl Tree {
                 Visit::Leave(id) => {
                     let shift = shifts.pop().unwrap_or((0.0, 0.0));
                     self.paint_leave(id, painter, &theme, shift);
+                    if factor(self, id) < 1.0 {
+                        painter.pop_state();
+                    }
                 }
             }
         }

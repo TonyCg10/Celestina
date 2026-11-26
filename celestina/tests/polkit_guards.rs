@@ -1064,9 +1064,13 @@ fn n24_the_prompt_namespace_literal_appears_once_in_production_and_a_test_cites_
 /// selector, each caller refusing while `polkit_claims_keyboard()` is true,
 /// before it closes or replaces anything) and `App::open_overview_surface` (the
 /// overview and the shortcut sheet, which refuses before it creates its surface
-/// and whose verb refuses too). The prompt's host closes the overview when a
-/// prompt activates. A new exclusive surface, or a new caller, fails here until
-/// it is decided.
+/// and whose verb refuses too), plus the Island's own surface while it shows a
+/// page or a capsule sheet (`Island::keyboard_interactivity`, CEL-D-003): the
+/// app tells it every frame and input call whether a prompt holds the
+/// keyboard, it asks for none and opens nothing then, and the prompt's host
+/// closes what it shows when a prompt activates. The prompt's host closes the overview when a prompt
+/// activates. A new exclusive surface, or a new caller, fails here until it is
+/// decided.
 #[test]
 fn n25_every_exclusive_keyboard_opener_outside_the_prompt_checks_the_claim() {
     let mut exclusive = Vec::new();
@@ -1078,6 +1082,7 @@ fn n25_every_exclusive_keyboard_opener_outside_the_prompt_checks_the_claim() {
         if TEST_ONLY_FILES.iter().any(|(f, _, _)| *f == relative)
             || relative.ends_with("/tests.rs")
             || relative.ends_with("/testing.rs")
+            || relative.contains("/tests/")
             || relative.starts_with("src/polkit/")
             || relative.starts_with("src/providers/polkit/")
         {
@@ -1090,14 +1095,53 @@ fn n25_every_exclusive_keyboard_opener_outside_the_prompt_checks_the_claim() {
     }
     assert_eq!(
         exclusive.len(),
-        2,
-        "two exclusive keyboard surfaces outside the prompt, in App::overlay_surface and App::open_overview_surface: {exclusive:?}"
+        3,
+        "three exclusive keyboard surfaces outside the prompt, in App::overlay_surface, App::open_overview_surface and the Island's keyboard_interactivity: {exclusive:?}"
     );
+    assert_eq!(
+        exclusive
+            .iter()
+            .filter(|e| e.starts_with("src/island/sheets.rs:"))
+            .count(),
+        1,
+        "…one in src/island/sheets.rs (the Island while it shows something): {exclusive:?}"
+    );
+    assert_eq!(
+        exclusive
+            .iter()
+            .filter(|e| e.starts_with("src/app.rs:"))
+            .count(),
+        2,
+        "…and two in src/app.rs: {exclusive:?}"
+    );
+    // The Island's site is gated by the claim the app hands it, and the app
+    // hands it before every frame and input call and when a prompt activates.
+    let sheets = production(&read("src/island/sheets.rs"));
+    let at = sheets.find("KeyboardInteractivity::Exclusive").unwrap_or(0);
+    let start = sheets[..at].rfind("\n    pub(super) fn ").unwrap_or(0);
     assert!(
-        exclusive.iter().all(|e| e.starts_with("src/app.rs:")),
-        "…both in src/app.rs: {exclusive:?}"
+        sheets[start..at].contains("self.keyboard_claimed"),
+        "the Island asks for the exclusive keyboard without checking that a polkit prompt holds it"
+    );
+    for gate in ["fn open_sheet_at(", "fn open_request("] {
+        let from = sheets.find(gate).unwrap_or(0);
+        assert!(
+            sheets[from..from + 600].contains("self.keyboard_claimed"),
+            "`{gate}` opens a sheet while a polkit prompt holds the keyboard"
+        );
+    }
+    let island = production(&read("src/island/mod.rs"));
+    let from = island.find("fn open(&mut self, page: PageId").unwrap_or(0);
+    assert!(
+        island[from..from + 300].contains("self.keyboard_claimed"),
+        "`Island::open` opens a page while a polkit prompt holds the keyboard"
     );
     let app = production(&read("src/app.rs"));
+    assert!(
+        app.matches("set_keyboard_claimed(claimed)").count() >= 2
+            && app.contains("set_keyboard_claimed(true)"),
+        "the app hands every Island the claim before a frame and an input call, and on activation"
+    );
     // The text of the function containing byte offset `at`, up to `at`.
     let function_head = |at: usize| -> (String, String) {
         let start = app[..at].rfind("\n    fn ").unwrap_or(0);

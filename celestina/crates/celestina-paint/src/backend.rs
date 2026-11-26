@@ -125,8 +125,6 @@ pub(crate) struct Backend {
     row: Option<RowLayers>,
     /// The pixel size an image could not be made for; not retried.
     row_failed: Option<(u32, u32)>,
-    /// The cached spotlight image.
-    spot: Option<SpotImage>,
     /// Images freed after the next flush: commands recorded this frame may
     /// still read them.
     retired: Vec<ImageId>,
@@ -156,26 +154,6 @@ impl RowLayers {
     }
 }
 
-/// The cached spotlight: one premultiplied image and what it was made for.
-#[derive(Clone, Copy)]
-struct SpotImage {
-    key: SpotKey,
-    image: ImageId,
-}
-
-/// What a spotlight image depends on: the pill's width and the ratio.
-pub(crate) type SpotKey = (u32, u32);
-
-/// One filled, blurred polygon of the spotlight, in the image's logical px.
-pub(crate) struct SpotShape {
-    pub corners: [(f32, f32); 4],
-    /// The vertical gradient: the y it starts and ends at, and white alphas
-    /// at offsets 0..=1 along it.
-    pub gradient: (f32, f32),
-    pub stops: Vec<(f32, f32)>,
-    pub sigma: f32,
-}
-
 /// Why the backend could not be created.
 #[derive(Debug)]
 pub(crate) enum BackendInit {
@@ -194,7 +172,6 @@ impl Backend {
             canvas,
             row: None,
             row_failed: None,
-            spot: None,
             retired: Vec::new(),
         })
     }
@@ -382,88 +359,6 @@ impl Backend {
         self.canvas.fill_path(
             &path,
             &Paint::image(image, rect.x, rect.y, rect.w, rect.h, 0.0, 1.0).with_anti_alias(false),
-        );
-    }
-
-    /// The cached spotlight image for `key`, built by `shapes` into an
-    /// image of `size` px at `dpr` on first use or when the key changes.
-    pub(crate) fn spot_image(
-        &mut self,
-        key: SpotKey,
-        size: (u32, u32),
-        dpr: f32,
-        shapes: &[SpotShape; 2],
-    ) -> Option<ImageId> {
-        if let Some(spot) = self.spot {
-            if spot.key == key {
-                return Some(spot.image);
-            }
-            self.retired.push(spot.image);
-            self.spot = None;
-        }
-        let ids = self.target_images(4, size.0, size.1)?;
-        let (scratch, out) = (ids[0], ids[3]);
-        let clear = femtovg::Color::rgbaf(0.0, 0.0, 0.0, 0.0);
-        // Each shape: filled into the scratch image, blurred into its own.
-        let targets = [ids[1], ids[2]];
-        for (shape, target) in shapes.iter().zip(targets) {
-            self.begin_offscreen(scratch, size, (0.0, 0.0), dpr);
-            let mut path = Path::new();
-            let [first, rest @ ..] = shape.corners;
-            path.move_to(first.0, first.1);
-            for c in rest {
-                path.line_to(c.0, c.1);
-            }
-            path.close();
-            let colors = shape
-                .stops
-                .iter()
-                .map(|&(offset, alpha)| (offset, femtovg::Color::rgbaf(1.0, 1.0, 1.0, alpha)));
-            self.canvas.fill_path(
-                &path,
-                &Paint::linear_gradient_stops(0.0, shape.gradient.0, 0.0, shape.gradient.1, colors),
-            );
-            self.end_offscreen();
-            self.canvas.filter_image(
-                target,
-                ImageFilter::GaussianBlur {
-                    sigma: shape.sigma * dpr,
-                },
-                scratch,
-            );
-        }
-        // The two blurred shapes, added into the cached image.
-        self.canvas.set_render_target(RenderTarget::Image(out));
-        self.canvas.save();
-        self.canvas.reset_transform();
-        self.canvas.reset_scissor();
-        self.canvas.set_global_alpha(1.0);
-        self.canvas.clear_rect(0, 0, size.0, size.1, clear);
-        self.canvas
-            .global_composite_operation(CompositeOperation::Lighter);
-        let mut full = Path::new();
-        full.rect(0.0, 0.0, size.0 as f32, size.1 as f32);
-        for image in targets {
-            self.canvas.fill_path(
-                &full,
-                &Paint::image(image, 0.0, 0.0, size.0 as f32, size.1 as f32, 0.0, 1.0)
-                    .with_anti_alias(false),
-            );
-        }
-        self.canvas.restore();
-        self.canvas.set_render_target(RenderTarget::Screen);
-        self.retired.extend([scratch, ids[1], ids[2]]);
-        self.spot = Some(SpotImage { key, image: out });
-        Some(out)
-    }
-
-    /// Draws a spotlight image over `rect` (logical px) at `alpha`.
-    pub(crate) fn draw_spot(&mut self, image: ImageId, rect: Rect, alpha: f32) {
-        let mut path = Path::new();
-        path.rect(rect.x, rect.y, rect.w, rect.h);
-        self.canvas.fill_path(
-            &path,
-            &Paint::image(image, rect.x, rect.y, rect.w, rect.h, 0.0, alpha).with_anti_alias(false),
         );
     }
 

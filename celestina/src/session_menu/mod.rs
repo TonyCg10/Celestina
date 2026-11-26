@@ -1,39 +1,29 @@
-//! The session menu (CEL-I-006): an `xdg_popup` of the Island's surface,
-//! hung below the Session piece. The lock and suspend rows close it with their
-//! choice at once; the log-out, reboot and power-off rows swap their row for a
-//! danger card that asks first, and the menu grows with its top edge fixed.
+//! The session menu (CEL-I-006), a body of the Session capsule's sheet
+//! (CEL-D-003). The lock and suspend rows choose at once; the log-out, reboot
+//! and power-off rows swap their row for a danger card that asks first, and
+//! the body grows (the sheet grows down with it).
 //!
-//! Like the overflow menu it does not act: a choice is written into the slot
-//! the app handed it and the popup closes; the app makes the call once the
-//! Island's surface gets `PopupClosed`, so no popup grab is held while the
-//! lock maps. Escape on the card goes back to the list, Escape on the list
-//! and a press outside close with no choice. The placement is the level
-//! popups' ([`crate::osd::popup::placement`]): bottom edge, bottom gravity, so
-//! a resize leaves the top where it is.
+//! The body does not act: a choice comes out as [`Outcome::Close`] and the
+//! Island posts it as one action; no popup grab is held, so the lock maps
+//! over the closing sheet. Escape on the card goes back to the list, Escape
+//! on the list closes the sheet. Nothing here stores a measure: the wrapped
+//! question is measured with the caller's, in hand for the call.
 
 mod view;
 
-use std::{cell::Cell, rc::Rc, time::Instant};
+use std::time::Instant;
 
-use celestina_paint::{silhouette_slices, Rect, Role, Theme, Weight};
+use celestina_paint::Theme;
 use celestina_shell::session::PowerAction;
 use celestina_ui::{Interaction, Key, Tree, UiEvent};
-use celestina_wayland::{FrameCx, InputEvent, PopupAction, PopupShell, SurfaceCtl};
+use celestina_wayland::InputEvent;
 
 pub use view::{
     ask_key, cancel_key, confirm_key, confirm_size, divider_key, do_key, list_size, menu_key,
     question_width, view,
 };
 
-use crate::{
-    command::Verb,
-    copy,
-    island::{
-        menu::{menu_events, SharedPainter},
-        state::SILHOUETTE_STEP,
-        view::text_style,
-    },
-};
+use crate::{command::Verb, copy, island::menu::menu_events};
 
 /// The menu's width, logical px.
 pub const MENU_W: f32 = 240.0;
@@ -127,9 +117,6 @@ impl SessionAction {
     }
 }
 
-/// Where a chosen action is left for the app to act on.
-pub type SessionSlot = Rc<Cell<Option<SessionAction>>>;
-
 /// What the menu shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -147,8 +134,8 @@ pub enum Outcome {
     Close(Option<SessionAction>),
 }
 
-/// Height of `text` wrapped at `width` with font size `size`.
-type Fit = Box<dyn FnMut(&str, f32, f32) -> f32>;
+/// Measures a wrapped question: `(text, font size, width)` to its height.
+pub type Fit<'f> = dyn FnMut(&str, f32, f32) -> f32 + 'f;
 
 /// The menu without its painter.
 pub struct SessionCore {
@@ -156,8 +143,6 @@ pub struct SessionCore {
     mode: Mode,
     /// The wrapped question's height in the current mode.
     question_h: f32,
-    asked: (f32, f32),
-    fit: Fit,
     tree: Tree,
     input: Interaction,
 }
@@ -171,22 +156,15 @@ impl std::fmt::Debug for SessionCore {
 }
 
 impl SessionCore {
-    /// The list menu in `theme`; `fit` measures a wrapped question.
+    /// The list menu in `theme`.
     #[must_use]
-    pub fn new(
-        theme: &Theme,
-        reduced: bool,
-        now: Instant,
-        fit: impl FnMut(&str, f32, f32) -> f32 + 'static,
-    ) -> SessionCore {
+    pub fn new(theme: &Theme, reduced: bool, now: Instant) -> SessionCore {
         let mut tree = Tree::new(reduced, theme);
         tree.apply(view(theme, Mode::List, 0.0), now);
         SessionCore {
             theme: theme.clone(),
             mode: Mode::List,
             question_h: 0.0,
-            asked: list_size(theme),
-            fit: Box::new(fit),
             tree,
             input: Interaction::new(),
         }
@@ -201,36 +179,21 @@ impl SessionCore {
         }
     }
 
-    /// The size to ask the compositor for, once, when the menu is no longer
-    /// the size it was last asked for.
-    pub fn resize_wanted(&mut self) -> Option<(f32, f32)> {
-        let size = self.size();
-        (size != self.asked).then(|| {
-            self.asked = size;
-            size
-        })
-    }
-
-    fn show(&mut self, mode: Mode, now: Instant) {
+    fn show(&mut self, mode: Mode, now: Instant, fit: &mut Fit<'_>) {
         self.mode = mode;
         self.question_h = match mode.action().and_then(SessionAction::ask) {
-            Some(ask) => (self.fit)(ask, self.theme.type_scale.body, question_width(&self.theme)),
+            Some(ask) => fit(ask, self.theme.type_scale.body, question_width(&self.theme)),
             None => 0.0,
         };
         self.tree
             .apply(view(&self.theme, mode, self.question_h), now);
     }
 
-    /// Rebuilds the view when the painter's theme changed; `fit` measures
-    /// with the frame's own painter.
-    fn set_theme(
-        &mut self,
-        theme: &Theme,
-        now: Instant,
-        mut fit: impl FnMut(&str, f32, f32) -> f32,
-    ) {
+    /// Rebuilds the view when the theme changed; whether it did. `fit` is the
+    /// caller's measure.
+    pub fn set_theme(&mut self, theme: &Theme, now: Instant, fit: &mut Fit<'_>) -> bool {
         if *theme == self.theme {
-            return;
+            return false;
         }
         self.theme = theme.clone();
         self.tree.set_theme(theme);
@@ -239,10 +202,11 @@ impl SessionCore {
         }
         self.tree
             .apply(view(theme, self.mode, self.question_h), now);
+        true
     }
 
-    /// Handles one event.
-    pub fn input(&mut self, ev: &InputEvent, now: Instant) -> Outcome {
+    /// Handles one event; `fit` is the caller's measure.
+    pub fn input(&mut self, ev: &InputEvent, now: Instant, fit: &mut Fit<'_>) -> Outcome {
         let before = self.tree.highlight();
         let events = menu_events(&mut self.input, &mut self.tree, ev, now);
         let mut changed = !events.is_empty();
@@ -250,11 +214,11 @@ impl SessionCore {
             match event {
                 UiEvent::Escape => match self.mode {
                     Mode::List => return Outcome::Close(None),
-                    Mode::Confirm(action) => self.back(action, now),
+                    Mode::Confirm(action) => self.back(action, now, fit),
                 },
                 UiEvent::Click(key) | UiEvent::Activate(key) => {
                     let keyboard = matches!(event, UiEvent::Activate(_));
-                    if let Some(out) = self.chose(*key, keyboard, now) {
+                    if let Some(out) = self.chose(*key, keyboard, now, fit) {
                         return out;
                     }
                 }
@@ -269,15 +233,21 @@ impl SessionCore {
     }
 
     /// Back to the list; the keyboard returns to the row it left.
-    fn back(&mut self, action: SessionAction, now: Instant) {
-        self.show(Mode::List, now);
+    fn back(&mut self, action: SessionAction, now: Instant, fit: &mut Fit<'_>) {
+        self.show(Mode::List, now, fit);
         self.input.focus_key(&mut self.tree, action.key());
     }
 
-    fn chose(&mut self, key: Key, keyboard: bool, now: Instant) -> Option<Outcome> {
+    fn chose(
+        &mut self,
+        key: Key,
+        keyboard: bool,
+        now: Instant,
+        fit: &mut Fit<'_>,
+    ) -> Option<Outcome> {
         if let Some(action) = SessionAction::of_key(key) {
             if action.needs_confirm() {
-                self.show(Mode::Confirm(action), now);
+                self.show(Mode::Confirm(action), now, fit);
                 self.input.focus_key(&mut self.tree, cancel_key());
                 return None;
             }
@@ -289,7 +259,7 @@ impl SessionCore {
         if key == do_key() {
             Some(Outcome::Close(Some(action)))
         } else if key == cancel_key() {
-            self.show(Mode::List, now);
+            self.show(Mode::List, now, fit);
             if keyboard {
                 self.input.focus_key(&mut self.tree, action.key());
             }
@@ -297,6 +267,42 @@ impl SessionCore {
         } else {
             None
         }
+    }
+}
+
+impl SessionCore {
+    /// Whether the confirmation card is shown: Escape then goes back to the
+    /// list instead of closing.
+    #[must_use]
+    pub fn asking(&self) -> bool {
+        matches!(self.mode, Mode::Confirm(_))
+    }
+
+    /// Lays the body out in its own size with `lay`.
+    pub fn layout_in(&mut self, lay: &mut dyn FnMut(&mut Tree, (f32, f32))) {
+        let size = self.size();
+        lay(&mut self.tree, size);
+        if let Some(fault) = self.tree.take_fault() {
+            tracing::warn!(%fault, "session body: layout fault");
+        }
+    }
+
+    /// Paints the body at its own coordinates.
+    pub fn paint(&mut self, painter: &mut celestina_paint::Painter, now: Instant) {
+        self.tree.paint(painter, now);
+    }
+
+    /// Whether the body's own animations (hover, focus) still run.
+    #[must_use]
+    pub fn is_animating(&self, now: Instant) -> bool {
+        self.tree.is_animating(now)
+    }
+
+    /// The rect of the body's node `key` (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn node_rect(&self, key: Key) -> Option<celestina_paint::Rect> {
+        self.tree.node_by_key(key).map(|id| self.tree.rect(id))
     }
 }
 
@@ -309,121 +315,14 @@ impl Mode {
     }
 }
 
-/// The menu as a popup shell.
-pub struct SessionMenu {
-    core: SessionCore,
-    painter: SharedPainter,
-    choice: SessionSlot,
-}
-
-impl std::fmt::Debug for SessionMenu {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SessionMenu")
-            .field("core", &self.core)
-            .finish_non_exhaustive()
-    }
-}
-
-impl SessionMenu {
-    /// The menu in `theme`, drawn with `painter`; a chosen action is left in
-    /// `choice`.
-    #[must_use]
-    pub fn new(
-        painter: SharedPainter,
-        theme: &Theme,
-        reduced: bool,
-        choice: SessionSlot,
-    ) -> SessionMenu {
-        let measuring = Rc::clone(&painter);
-        let fit = move |text: &str, size: f32, width: f32| match measuring.try_borrow_mut() {
-            Ok(mut painter) => {
-                let style = text_style(size, Weight::Regular, false, Role::DangerFillInk);
-                painter.text().measure(text, &style, Some(width), 1.0).1
-            }
-            // Never reached in practice (inputs run between frames): one
-            // line is the honest lower bound.
-            Err(_) => size,
-        };
-        SessionMenu {
-            core: SessionCore::new(theme, reduced, Instant::now(), fit),
-            painter,
-            choice,
-        }
-    }
-
-    /// The size the menu opens at.
-    #[must_use]
-    pub fn size(&self) -> (f32, f32) {
-        self.core.size()
-    }
-}
-
-impl PopupShell for SessionMenu {
-    fn frame(&mut self, cx: &mut FrameCx<'_>) {
-        let Ok(mut painter) = self.painter.try_borrow_mut() else {
-            tracing::warn!("session menu: the painter is in use; frame skipped");
-            cx.ctl.request_redraw();
-            return;
-        };
-        let now = cx.now;
-        let theme = painter.theme().clone();
-        self.core.set_theme(&theme, now, |text, size, width| {
-            let style = text_style(size, Weight::Regular, false, Role::DangerFillInk);
-            painter.text().measure(text, &style, Some(width), 1.0).1
-        });
-        if let Some(size) = self.core.resize_wanted() {
-            cx.ctl.resize_popup(size);
-        }
-        let radius = theme.radius_md;
-        let dpr = cx.scale as f32;
-        let tree = &mut self.core.tree;
-        tree.layout(cx.size, painter.text(), dpr);
-        if let Some(fault) = tree.take_fault() {
-            tracing::warn!(%fault, "session menu: layout fault");
-        }
-        painter.begin(cx.size, dpr, cx.blur_available);
-        tree.paint(&mut painter, now);
-        painter.end();
-        let silhouette = silhouette_slices(Rect::whole(cx.size), radius, SILHOUETTE_STEP);
-        cx.ctl.set_blur_region(&silhouette);
-        cx.ctl.set_input_region(&silhouette);
-        if tree.is_animating(now) {
-            cx.ctl.request_redraw();
-        }
-    }
-
-    fn input(&mut self, ev: InputEvent, ctl: &mut SurfaceCtl<'_>) -> PopupAction {
-        match self.core.input(&ev, Instant::now()) {
-            Outcome::Close(choice) => {
-                tracing::info!(?choice, "session menu: closed from the menu");
-                self.choice.set(choice);
-                PopupAction::Close
-            }
-            Outcome::Keep { changed } => {
-                if let Some(size) = self.core.resize_wanted() {
-                    tracing::debug!(?size, "session menu: a confirmation card came or went");
-                    ctl.resize_popup(size);
-                }
-                if changed {
-                    ctl.request_redraw();
-                }
-                PopupAction::Keep
-            }
-        }
-    }
-
-    fn dismissed(&mut self) {
-        tracing::info!("session menu: dismissed by the compositor");
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use celestina_paint::TextStyle;
+    use celestina_paint::{Rect, Role, TextStyle, Weight};
     use celestina_ui::{ViewKind, BTN_LEFT};
-    use celestina_wayland::{AnchorEdge, Gravity, Modifiers};
+    use celestina_wayland::Modifiers;
 
     use super::*;
+    use crate::island::view::text_style;
 
     const DOWN: u32 = 0xff54;
     const UP: u32 = 0xff52;
@@ -448,7 +347,7 @@ mod tests {
 
     fn core() -> SessionCore {
         let theme = Theme::dark();
-        let mut core = SessionCore::new(&theme, false, Instant::now(), fit);
+        let mut core = SessionCore::new(&theme, false, Instant::now());
         core.tree.layout_measured(core.size(), fake_measure);
         core
     }
@@ -469,7 +368,7 @@ mod tests {
     }
 
     fn press(core: &mut SessionCore, keysym: u32) -> Outcome {
-        let out = core.input(&key(keysym), Instant::now());
+        let out = core.input(&key(keysym), Instant::now(), &mut fit);
         relayout(core);
         out
     }
@@ -501,8 +400,8 @@ mod tests {
             button: BTN_LEFT,
             serial: 3,
         };
-        core.input(&down, now);
-        let out = core.input(&up, now);
+        core.input(&down, now, &mut fit);
+        let out = core.input(&up, now, &mut fit);
         relayout(core);
         out
     }
@@ -526,7 +425,7 @@ mod tests {
             .collect();
         let divider = rect_of(&core, divider_key());
         assert_eq!(divider.h, 1.0 + 2.0 * theme.spacing.xs);
-        assert_eq!(ys[0], theme.spacing.sm);
+        assert_eq!(ys[0], theme.spacing.xs);
         assert!(ys[0] < ys[1] && ys[1] < divider.y && divider.y < ys[2]);
         assert!(ys[2] < ys[3] && ys[3] < ys[4]);
         assert_eq!(ys[2], divider.y + divider.h);
@@ -552,17 +451,14 @@ mod tests {
     }
 
     #[test]
-    fn a_dangerous_row_asks_first_and_grows_keeping_its_top() {
+    fn a_dangerous_row_asks_first_and_the_body_grows() {
         let theme = Theme::dark();
         let mut c = core();
         let list = c.size();
-        assert_eq!(c.resize_wanted(), None);
         let out = click(&mut c, SessionAction::Reboot.key());
         assert_eq!(out, Outcome::Keep { changed: true });
         let grown = c.size();
         assert!(grown.1 > list.1 && grown.0 == list.0);
-        assert_eq!(c.resize_wanted(), Some(grown));
-        assert_eq!(c.resize_wanted(), None, "asked once");
         // The card took the row's place.
         let card = rect_of(&c, confirm_key());
         assert_eq!(
@@ -570,24 +466,9 @@ mod tests {
             rect_of(&c, SessionAction::LogOut.key()).y + theme.row_height
         );
         assert_eq!(card.h, view::card_height(&theme, 16.0));
-        // The compositor keeps the top edge where it was.
-        let p = crate::osd::popup::placement(
-            &theme,
-            Rect {
-                x: 0.0,
-                y: 0.0,
-                w: 10.0,
-                h: 10.0,
-            },
-        );
-        assert_eq!(
-            (p.anchor_edge, p.gravity),
-            (AnchorEdge::Bottom, Gravity::Bottom)
-        );
-        assert_eq!(p.offset, (0, theme.spacing.sm as i32));
         // The way back shrinks it again.
         click(&mut c, cancel_key());
-        assert_eq!(c.resize_wanted(), Some(list));
+        assert_eq!(c.size(), list);
     }
 
     #[test]
@@ -638,7 +519,7 @@ mod tests {
     }
 
     #[test]
-    fn escape_in_the_confirm_card_cancels_and_escape_in_the_list_closes() {
+    fn escape_in_the_confirm_card_cancels_and_escape_in_the_list_closes_the_body() {
         let mut c = core();
         click(&mut c, SessionAction::PowerOff.key());
         assert_eq!(press(&mut c, ESCAPE), Outcome::Keep { changed: true });
