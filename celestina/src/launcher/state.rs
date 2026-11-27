@@ -3,32 +3,44 @@
 //!
 //! A query that starts with `/` lists the shell's switches
 //! ([`super::commands::commands_for`]); any other query ranks the desktop
-//! index with `celestina_shell::launcher` (the name exactly, its prefix, a
-//! word's start, then anything that mentions the letters in order), and
-//! within one of those tiers an application launched recently comes first,
-//! the most recent first; the rest keep the ranking's name order. At most
-//! [`MAX_ROWS`] rows are shown.
+//! index with `celestina_shell::launcher_search` (words in any order, one
+//! typo, aliases), and within equal scores the application used more comes
+//! first ([`super::usage`]). An empty query, or one of only separators,
+//! lists the whole index by use, then by name. At most [`MAX_ROWS`] rows are
+//! shown.
 //!
 //! The `Mod+K` selector is the same state over the bubbles [`Source`]: its
 //! rows are Melibea's minimised windows ([`super::selector`]), and no query
 //! is a command there.
 
-use celestina_core::desktop_entry::DesktopEntry;
-use celestina_shell::launcher::rank;
+use std::collections::HashMap;
+
+use celestina_core::desktop_entry::{DesktopEntry, Locale};
+use celestina_shell::launcher::fold;
+use celestina_shell::launcher_search::{search, Prepared};
 use celestina_ui::Field;
 
 use super::commands::{commands_for, Switch};
-use super::selector;
+use super::{groups, selector};
 use crate::bubbles::Bubbles;
 
 /// The most rows the launcher shows.
 pub const MAX_ROWS: usize = 8;
 
+/// An application row: the entry and the texts the row shows (the localized
+/// name and generic name when the locale has them).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AppRow {
+    pub entry: DesktopEntry,
+    pub name: String,
+    pub detail: String,
+}
+
 /// One row of the launcher.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Row {
     /// An application, boxed: the entry is large beside a switch.
-    App(Box<DesktopEntry>),
+    App(Box<AppRow>),
     Switch(Switch),
     /// A minimised window of the selector: Melibea's id, its title and
     /// application id (bounded, empty when it has none) and its icon name.
@@ -58,18 +70,23 @@ pub struct LauncherState {
     /// The selected row's index in `rows` (0 when there are none).
     pub selected: usize,
     pub rows: Vec<Row>,
-    /// The desktop-file ids launched last, most recent first.
-    pub recent: Vec<String>,
+    /// The use score of each launched desktop-file id.
+    scores: HashMap<String, u64>,
+    /// The locale the names are shown in.
+    locale: Option<Locale>,
+    /// The index, folded once; rebuilt when the index changes.
+    prepared: Vec<Prepared>,
     /// Where the rows come from.
     pub source: Source,
 }
 
 impl LauncherState {
-    /// An empty query over `recent` launches (most recent first).
+    /// An empty query over the use `scores` and the `locale` of the names.
     #[must_use]
-    pub fn new(recent: Vec<String>) -> LauncherState {
+    pub fn new(scores: HashMap<String, u64>, locale: Option<Locale>) -> LauncherState {
         LauncherState {
-            recent,
+            scores,
+            locale,
             ..LauncherState::default()
         }
     }
@@ -126,6 +143,9 @@ impl LauncherState {
     /// still names a row. The selector answers from its own windows and
     /// keeps the selected window ([`selector::relocate`]).
     pub fn update(&mut self, index: &[DesktopEntry]) {
+        // A new index may keep every id and change what an entry says (a
+        // rename, a translation added), so it is prepared again whole.
+        self.prepared.clear();
         let rows = self.answer(index);
         self.selected = match self.source {
             Source::Apps if self.selected < rows.len() => self.selected,
@@ -136,18 +156,64 @@ impl LauncherState {
     }
 
     /// The rows the current query names.
-    fn answer(&self, index: &[DesktopEntry]) -> Vec<Row> {
-        let query = self.query.text();
+    fn answer(&mut self, index: &[DesktopEntry]) -> Vec<Row> {
+        let query = self.query.text().to_owned();
+        let query = query.as_str();
         if let Source::Bubbles(bubbles) = &self.source {
             return selector::rows(bubbles, query);
         }
         match commands_for(query) {
             Some(switches) => switches.into_iter().map(Row::Switch).collect(),
-            None => ranked(index, query.trim(), &self.recent)
-                .into_iter()
-                .map(|entry| Row::App(Box::new(entry.clone())))
-                .collect(),
+            None => {
+                self.sync(index);
+                self.ranked(index, query)
+            }
         }
+    }
+
+    /// Prepares `index` again when its length or ids differ from the last
+    /// build.
+    fn sync(&mut self, index: &[DesktopEntry]) {
+        let same = self.prepared.len() == index.len()
+            && self.prepared.iter().zip(index).all(|(p, e)| p.id == e.id);
+        if same {
+            return;
+        }
+        self.prepared = index
+            .iter()
+            .map(|entry| {
+                let aliases = groups::aliases(&entry.categories);
+                Prepared::new(entry, self.locale.as_ref(), &aliases)
+            })
+            .collect();
+    }
+
+    /// The rows of `query` over the prepared `index`, at most [`MAX_ROWS`].
+    fn ranked(&self, index: &[DesktopEntry], query: &str) -> Vec<Row> {
+        let score = |id: &str| self.scores.get(id).copied().unwrap_or(0);
+        let hits: Vec<usize> = if query.chars().any(|c| c.is_alphanumeric() || c == '+') {
+            search(&self.prepared, query, &score)
+        } else {
+            // Nothing to match: every entry, the most used first.
+            let mut all: Vec<(std::cmp::Reverse<u64>, String, usize)> = self
+                .prepared
+                .iter()
+                .enumerate()
+                .map(|(i, p)| (std::cmp::Reverse(score(&p.id)), fold(&p.display), i))
+                .collect();
+            all.sort();
+            all.into_iter().map(|(_, _, i)| i).collect()
+        };
+        hits.into_iter()
+            .take(MAX_ROWS)
+            .map(|i| {
+                Row::App(Box::new(AppRow {
+                    entry: index[i].clone(),
+                    name: self.prepared[i].display.clone(),
+                    detail: self.prepared[i].detail.clone(),
+                }))
+            })
+            .collect()
     }
 
     /// Moves the selection `delta` rows, wrapping at both ends.
@@ -170,28 +236,8 @@ impl LauncherState {
     }
 }
 
-/// The entries of `index` that answer `query`, best first, recent launches
-/// first within each tier, at most [`MAX_ROWS`].
-fn ranked<'a>(index: &'a [DesktopEntry], query: &str, recent: &[String]) -> Vec<&'a DesktopEntry> {
-    let mut hits = rank(index, query);
-    let recency = |entry: &DesktopEntry| {
-        recent
-            .iter()
-            .position(|id| *id == entry.id)
-            .unwrap_or(usize::MAX)
-    };
-    // Stable: equal tiers and equal recency keep the ranking's name order.
-    hits.sort_by_key(|hit| (std::cmp::Reverse(hit.quality), recency(hit.entry)));
-    hits.into_iter()
-        .take(MAX_ROWS)
-        .map(|hit| hit.entry)
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
-    use celestina_shell::launcher::rank_bounded;
-
     use super::*;
 
     fn entry(id: &str, name: &str) -> DesktopEntry {
@@ -209,22 +255,36 @@ mod tests {
             .rows
             .iter()
             .map(|row| match row {
-                Row::App(e) => e.id.clone(),
+                Row::App(a) => a.entry.id.clone(),
                 Row::Switch(s) => s.command().to_owned(),
                 Row::Bubble { window_id, .. } => window_id.to_string(),
             })
             .collect()
     }
 
-    fn typed(text: &str, index: &[DesktopEntry], recent: &[&str]) -> LauncherState {
-        let mut state = LauncherState::new(recent.iter().map(|s| (*s).to_owned()).collect());
+    fn typed(text: &str, index: &[DesktopEntry], scores: &[(&str, u64)]) -> LauncherState {
+        let mut state = LauncherState::new(
+            scores
+                .iter()
+                .map(|(id, n)| ((*id).to_owned(), *n))
+                .collect(),
+            None,
+        );
         state.update(index);
         state.set_query(text, index);
         state
     }
 
+    fn app_row(entry: &DesktopEntry) -> Row {
+        Row::App(Box::new(AppRow {
+            entry: entry.clone(),
+            name: entry.name.clone(),
+            detail: entry.generic_name.clone(),
+        }))
+    }
+
     #[test]
-    fn ranking_orders_prefix_then_word_start_then_substring() {
+    fn ranking_orders_exact_prefix_word_then_subsequence() {
         let index = [
             entry("loose", "Text Remarks"),  // t..e..r..m: letters in order
             entry("word", "GNOME Terminal"), // a word starts with it
@@ -238,41 +298,91 @@ mod tests {
             "word.desktop",
             "loose.desktop",
         ];
-        let bounded = rank_bounded(&index, "term", MAX_ROWS);
-        assert_eq!(bounded.ids, want);
-        assert!(!bounded.truncated);
-        // The launcher shows the salvaged ranking as it is.
         assert_eq!(ids(&typed("term", &index, &[])), want);
         // And never more than eight rows.
         let many: Vec<_> = (0..20)
             .map(|i| entry(&format!("t{i:02}"), &format!("Tool {i:02}")))
             .collect();
-        assert_eq!(rank_bounded(&many, "t", MAX_ROWS).ids.len(), MAX_ROWS);
         assert_eq!(typed("t", &many, &[]).rows.len(), MAX_ROWS);
+        assert_eq!(typed("", &many, &[]).rows.len(), MAX_ROWS);
     }
 
     #[test]
-    fn recent_use_lifts_an_entry() {
+    fn use_score_lifts_an_entry_within_equal_scores_only() {
         let index = [entry("aa", "Aa"), entry("ab", "Ab"), entry("b", "Bab")];
         assert_eq!(
             ids(&typed("a", &index, &[])),
             ["aa.desktop", "ab.desktop", "b.desktop"]
         );
-        // Within the prefix tier, the recent one comes first...
+        // Between two prefix hits, the one used more comes first...
         assert_eq!(
-            ids(&typed("a", &index, &["ab.desktop"])),
+            ids(&typed("a", &index, &[("ab.desktop", 100)])),
             ["ab.desktop", "aa.desktop", "b.desktop"]
         );
-        // ...but recency never lifts a loose answer over a prefix one.
+        // ...but use never lifts a weaker match over a stronger one.
         assert_eq!(
-            ids(&typed("a", &index, &["b.desktop"])),
+            ids(&typed("a", &index, &[("b.desktop", 900)])),
             ["aa.desktop", "ab.desktop", "b.desktop"]
         );
-        // With nothing typed, the recent launches lead, most recent first.
+        // With nothing typed, the most used lead, then the name.
         assert_eq!(
-            ids(&typed("", &index, &["b.desktop", "ab.desktop"])),
+            ids(&typed(
+                "",
+                &index,
+                &[("b.desktop", 200), ("ab.desktop", 100)]
+            )),
             ["b.desktop", "ab.desktop", "aa.desktop"]
         );
+    }
+
+    #[test]
+    fn a_query_of_only_separators_lists_the_index_like_an_empty_one() {
+        let index = [entry("aa", "Aa"), entry("b", "Bb")];
+        let scores = [("b.desktop", 5)];
+        let empty = ids(&typed("", &index, &scores));
+        assert_eq!(empty, ["b.desktop", "aa.desktop"]);
+        assert_eq!(ids(&typed("  ", &index, &scores)), empty);
+        assert_eq!(ids(&typed(" - . ", &index, &scores)), empty);
+    }
+
+    #[test]
+    fn a_localized_name_is_shown_and_matched() {
+        let mut named = entry("files", "Files");
+        named.name_l10n = vec![("es".to_owned(), "Archivos".to_owned())];
+        let index = [named];
+        let locale = Locale::parse("es_ES.UTF-8");
+        let mut state = LauncherState::new(HashMap::new(), locale);
+        state.set_query("archi", &index);
+        let Some(Row::App(row)) = state.rows.first() else {
+            panic!("the localized name answers: {:?}", state.rows);
+        };
+        assert_eq!(
+            (row.name.as_str(), row.entry.name.as_str()),
+            ("Archivos", "Files")
+        );
+    }
+
+    #[test]
+    fn a_new_index_with_other_ids_is_prepared_again() {
+        let first = [entry("aa", "Aa")];
+        let second = [entry("bb", "Bb")];
+        let mut state = typed("", &first, &[]);
+        assert_eq!(ids(&state), ["aa.desktop"]);
+        state.update(&second);
+        assert_eq!(ids(&state), ["bb.desktop"]);
+    }
+
+    #[test]
+    fn a_new_index_with_the_same_ids_and_new_names_is_prepared_again() {
+        let first = [entry("aa", "Aa")];
+        let mut renamed = entry("aa", "Aa");
+        renamed.name_l10n = vec![("es".to_owned(), "Zz".to_owned())];
+        let mut state = LauncherState::new(HashMap::new(), Locale::parse("es"));
+        state.update(&first);
+        state.set_query("zz", &first);
+        assert!(state.rows.is_empty());
+        state.update(std::slice::from_ref(&renamed));
+        assert_eq!(ids(&state), ["aa.desktop"], "the new name answers");
     }
 
     #[test]
@@ -301,7 +411,7 @@ mod tests {
         assert_eq!(state.selected, 0, "down from the last is the first");
         state.move_selection(1);
         state.move_selection(1);
-        assert_eq!(state.chosen(), Some(&Row::App(Box::new(index[2].clone()))));
+        assert_eq!(state.chosen(), Some(&app_row(&index[2])));
         state.move_selection(7);
         assert_eq!(state.selected, 0);
         // Typing starts again from the first row; no rows, no selection.
@@ -397,7 +507,7 @@ mod tests {
         assert!(state.set_bubbles(&Bubbles::default()));
         assert!(state.rows.is_empty());
         // The launcher's own state takes no windows.
-        let mut apps = LauncherState::new(Vec::new());
+        let mut apps = LauncherState::new(HashMap::new(), None);
         assert!(!apps.set_bubbles(&live(&[1])));
         assert!(!apps.is_selector() && apps.rows.is_empty());
     }

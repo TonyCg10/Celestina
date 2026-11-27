@@ -5,7 +5,7 @@
 //! fully transparent: no dim, and the compositor blur covers the card only.
 //! [`state`] is the pure query and selection, [`view`] the pure view,
 //! [`commands`] the `/` switches, [`spawn`] the start of an application and
-//! [`recent`] the launches the ranking lifts; this file owns one open
+//! [`usage`] the use the ranking lifts ([`recent`] only seeds it); this file owns one open
 //! launcher: its tree, its frame and its input.
 //!
 //! The app creates the surface on `celestina launcher toggle` and destroys
@@ -34,21 +34,24 @@
 //! card and focus loss close it as they close the launcher.
 
 pub mod commands;
+pub mod groups;
 pub mod recent;
 pub mod selector;
 pub mod spawn;
 pub mod state;
+pub mod usage;
 pub mod view;
 
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use celestina_core::desktop_entry::DesktopEntry;
+use celestina_core::desktop_entry::{DesktopEntry, Locale};
 use celestina_paint::{silhouette_slices, Painter, Rect, Role, Theme};
 use celestina_ui::{focus_ring, Interaction, Tree, UiEvent, FOCUS_WIDTH};
 use celestina_wayland::{FrameCx, InputEvent, Modifiers, OutputId, SurfaceCtl, SurfaceId};
 
 pub use commands::{commands_for, Switch};
-pub use state::{LauncherState, Row, Source};
+pub use state::{AppRow, LauncherState, Row, Source};
 
 use crate::bubbles::Bubbles;
 use crate::island::state::SILHOUETTE_STEP;
@@ -143,7 +146,7 @@ pub struct Launcher {
 
 impl Launcher {
     /// The launcher on `surface` of `output`, in `theme` under `reduced`
-    /// motion, over `index` with the `recent` launches (most recent first),
+    /// motion, over `index` with the use `scores` and the names' `locale`,
     /// its field empty and focused.
     #[must_use]
     pub fn new(
@@ -151,10 +154,11 @@ impl Launcher {
         output: OutputId,
         theme: &Theme,
         reduced: bool,
-        recent: Vec<String>,
+        scores: HashMap<String, u64>,
+        locale: Option<Locale>,
         index: &[DesktopEntry],
     ) -> Launcher {
-        let mut state = LauncherState::new(recent);
+        let mut state = LauncherState::new(scores, locale);
         state.update(index);
         Self::with_state(surface, output, theme, reduced, state)
     }
@@ -682,7 +686,7 @@ impl Launcher {
     /// What choosing the selected row asks for.
     fn chosen(&self) -> Option<LauncherAction> {
         match self.state.chosen()? {
-            Row::App(entry) => Some(LauncherAction::Launch(entry.clone())),
+            Row::App(app) => Some(LauncherAction::Launch(Box::new(app.entry.clone()))),
             Row::Switch(switch) => Some(LauncherAction::Switch(*switch)),
             Row::Bubble { window_id, .. } => Some(LauncherAction::Restore(*window_id)),
         }
@@ -748,7 +752,8 @@ mod tests {
             OutputId(1),
             &Theme::dark(),
             false,
-            Vec::new(),
+            HashMap::new(),
+            None,
             index,
         )
     }
@@ -1162,7 +1167,14 @@ mod tests {
         assert!(l.state().rows.is_empty());
         let index = [entry("aa", "Aa")];
         assert!(l.set_index(&index));
-        assert_eq!(l.state().rows, [Row::App(Box::new(index[0].clone()))]);
+        assert_eq!(
+            l.state().rows,
+            [Row::App(Box::new(AppRow {
+                entry: index[0].clone(),
+                name: "Aa".to_owned(),
+                detail: String::new(),
+            }))]
+        );
     }
 
     /// Presses and releases the pointer on the node `key` names.

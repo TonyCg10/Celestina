@@ -37,7 +37,7 @@ use celestina::{
     error_chain,
     glance::GlanceHandle,
     island::clock,
-    launcher::recent::RecentLaunches,
+    launcher::usage::Usage,
     lock::LockHandle,
     media::control::MediaControl,
     message::Message,
@@ -179,7 +179,7 @@ fn shell(cfg: Config) -> ExitCode {
         Rc::clone(&fatal),
         cfg.metrics,
     )
-    .with_launcher(RecentLaunches::load(), Rc::clone(&own_sender))
+    .with_launcher(Usage::load(), Rc::clone(&own_sender))
     .with_tray(Rc::clone(&tray))
     .with_wallpaper(Rc::clone(&wallpaper), thumbnails.clone())
     .with_energy(Rc::clone(&energy))

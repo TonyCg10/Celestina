@@ -258,16 +258,16 @@ fn clear_button(shown: bool) -> View {
 fn row(theme: &Theme, index: usize, row: &Row, selected: bool) -> View {
     let i = index as u64;
     let (glyph, tint, name, detail) = match row {
-        Row::App(entry) => {
-            let (glyph, tint) = match IconKey::desktop_icon(&entry.icon) {
+        Row::App(app) => {
+            let (glyph, tint) = match IconKey::desktop_icon(&app.entry.icon) {
                 Some(key) => (key, None),
                 None => (IconKey::Semantic(FALLBACK_ICON), Some(Role::TextLo)),
             };
             (
                 glyph,
                 tint,
-                truncate_title(&entry.name),
-                truncate_title(&entry.generic_name),
+                truncate_title(&app.name),
+                truncate_title(&app.detail),
             )
         }
         Row::Switch(switch) => switch_parts(*switch),
@@ -357,7 +357,7 @@ mod tests {
     fn the_card_holds_the_field_and_one_row_per_answer_and_keeps_the_typed_text() {
         let theme = Theme::dark();
         let index = [entry("aa", "Aa"), entry("ab", "Ab"), entry("ac", "Ac")];
-        let mut state = LauncherState::new(Vec::new());
+        let mut state = LauncherState::new(std::collections::HashMap::new(), None);
         state.set_query("a", &index);
         let mut tree = Tree::new(false, &theme);
         let t0 = Instant::now();
@@ -414,7 +414,7 @@ mod tests {
     fn the_selected_row_has_the_control_fill_and_the_others_none() {
         let theme = Theme::dark();
         let index = [entry("aa", "Aa"), entry("ab", "Ab")];
-        let mut state = LauncherState::new(Vec::new());
+        let mut state = LauncherState::new(std::collections::HashMap::new(), None);
         state.set_query("a", &index);
         state.move_selection(1);
         let v = card(&theme, &state, None);
@@ -458,7 +458,7 @@ mod tests {
     #[test]
     fn an_unanswered_query_shows_one_line_and_no_row() {
         let theme = Theme::dark();
-        let mut state = LauncherState::new(Vec::new());
+        let mut state = LauncherState::new(std::collections::HashMap::new(), None);
         state.set_query("/zzz", &[]);
         let v = card(&theme, &state, None);
         let rows = &v.children[1].children;
@@ -571,7 +571,7 @@ mod tests {
     fn the_clear_button_fades_with_the_query_and_the_selector_has_none() {
         let theme = Theme::dark();
         let index = [entry("aa", "Aa")];
-        let mut state = LauncherState::new(Vec::new());
+        let mut state = LauncherState::new(std::collections::HashMap::new(), None);
         let pill = |state: &LauncherState| card(&theme, state, None).children.remove(0);
         let empty = pill(&state);
         let button = empty.children.last().expect("the pill has children");
@@ -616,7 +616,7 @@ mod tests {
     #[test]
     fn the_sweep_is_a_wash_that_grows_from_the_texts_end_inside_the_pill() {
         let theme = Theme::dark();
-        let state = LauncherState::new(Vec::new());
+        let state = LauncherState::new(std::collections::HashMap::new(), None);
         let sweep = Sweep {
             progress: 0.5,
             text_end: 120.0,

@@ -146,6 +146,42 @@ pub const LAUNCHER_PLACEHOLDER: &str = "Buscar aplicaciones o escribir /";
 /// The launcher's only line while nothing answers the query ("No results").
 pub const LAUNCHER_EMPTY: &str = "Sin resultados";
 
+/// The launcher's group names, in tab order: Internet, Multimedia, Games,
+/// Development, Office, System, Utilities. Each is also a word that finds
+/// the group's applications.
+pub const LAUNCHER_GROUP_INTERNET: &str = "Internet";
+pub const LAUNCHER_GROUP_MULTIMEDIA: &str = "Multimedia";
+pub const LAUNCHER_GROUP_GAMES: &str = "Juegos";
+pub const LAUNCHER_GROUP_DEVELOPMENT: &str = "Desarrollo";
+pub const LAUNCHER_GROUP_OFFICE: &str = "Oficina";
+pub const LAUNCHER_GROUP_SYSTEM: &str = "Sistema";
+pub const LAUNCHER_GROUP_UTILITIES: &str = "Utilidades";
+
+/// The words, in Spanish, that find an application by its desktop category
+/// (the search matches them like keywords).
+/// `WebBrowser`: "web browser".
+pub const LAUNCHER_ALIAS_WEB_BROWSER: &str = "navegador web";
+/// `TerminalEmulator`: "terminal console".
+pub const LAUNCHER_ALIAS_TERMINAL_EMULATOR: &str = "terminal consola";
+/// `TextEditor`: "text editor".
+pub const LAUNCHER_ALIAS_TEXT_EDITOR: &str = "editor de texto";
+/// `FileManager`: "files explorer".
+pub const LAUNCHER_ALIAS_FILE_MANAGER: &str = "archivos explorador";
+/// `Player`: "player".
+pub const LAUNCHER_ALIAS_PLAYER: &str = "reproductor";
+/// `IDE`: "program code".
+pub const LAUNCHER_ALIAS_IDE: &str = "programar código";
+/// `InstantMessaging`: "chat messages".
+pub const LAUNCHER_ALIAS_INSTANT_MESSAGING: &str = "chat mensajes";
+/// `Monitor`: "monitor".
+pub const LAUNCHER_ALIAS_MONITOR: &str = "monitor";
+/// `Emulator`: "emulator".
+pub const LAUNCHER_ALIAS_EMULATOR: &str = "emulador";
+/// `AudioVideoEditing`: "editor".
+pub const LAUNCHER_ALIAS_AUDIO_VIDEO_EDITING: &str = "editor";
+/// `RasterGraphics` and `2DGraphics`: "image drawing".
+pub const LAUNCHER_ALIAS_GRAPHICS: &str = "imagen dibujo";
+
 /// The launcher command that opens the Notifications page, as typed.
 pub const SWITCH_NOTIFICATIONS: &str = "/notificaciones";
 

@@ -17,7 +17,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use celestina_core::desktop_entry::DesktopEntry;
+use celestina_core::desktop_entry::{DesktopEntry, Locale};
 use celestina_paint::{Painter, Rect, TextSystem, Theme};
 use celestina_settings::Appearance;
 use celestina_shell::phone::PhoneState;
@@ -44,7 +44,7 @@ use crate::{
         pages::{tray::TrayList, NameOwner},
         Island, IslandAction, Shared,
     },
-    launcher::{self, recent::RecentLaunches, Launcher, LauncherAction, Switch},
+    launcher::{self, usage::Usage, Launcher, LauncherAction, Switch},
     lock::LockHandle,
     media::control::{route, MediaControl, Routed, Snapshot as MediaSnapshot},
     message::Message,
@@ -476,7 +476,7 @@ pub struct App {
     /// The session's applications, from the desktop index's worker.
     index: Vec<DesktopEntry>,
     /// The applications launched last, which the ranking lifts.
-    recent: RecentLaunches,
+    usage: Usage,
     /// The loop's own sender, set once the loop runs: the launcher's close
     /// is posted through it (see [`Message::LauncherClosed`]), and so is a
     /// banner's click asking for the page (see
@@ -599,7 +599,7 @@ impl App {
             niri,
             launcher: None,
             index: Vec::new(),
-            recent: RecentLaunches::default(),
+            usage: Usage::default(),
             sender: Rc::new(OnceCell::new()),
             notifications: NotificationsState::new(notifications),
             banners: None,
@@ -770,15 +770,11 @@ impl App {
         self
     }
 
-    /// The launcher's parts: the `recent` launches read at start and the
+    /// The launcher's parts: the `usage` record read at start and the
     /// slot the loop's own sender is put in once the loop runs.
     #[must_use]
-    pub fn with_launcher(
-        mut self,
-        recent: RecentLaunches,
-        sender: Rc<OnceCell<Sender<Message>>>,
-    ) -> App {
-        self.recent = recent;
+    pub fn with_launcher(mut self, usage: Usage, sender: Rc<OnceCell<Sender<Message>>>) -> App {
+        self.usage = usage;
         self.sender = sender;
         self
     }
@@ -1574,7 +1570,8 @@ impl App {
             output,
             &self.theme(),
             self.appearance.reduced_motion,
-            self.recent.ids().to_vec(),
+            self.usage.scores(launcher::usage::unix_now()),
+            Locale::from_env(),
             &self.index,
         );
         if let Some(mut s) = ctl.surface(surface) {
@@ -1696,7 +1693,7 @@ impl App {
                 match launcher::spawn::spawn(&entry) {
                     Ok(()) => {
                         tracing::info!(id = %entry.id, "launcher: launched");
-                        self.recent.record(&entry.id);
+                        self.usage.record(&entry.id, launcher::usage::unix_now());
                     }
                     Err(err) => tracing::warn!("launcher: {}", error_chain(&err)),
                 }

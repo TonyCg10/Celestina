@@ -1768,6 +1768,27 @@ None has been run and none is closed by an agent.
 - **Evidence:** none; the unit's automated evidence is
   [CEL-I-011](docs/evidence/2026-11-26-cel-i-011-tray-fixes.md)
 
+## VAL-CEL-I-015 — The launcher's search
+
+- **Status:** pending
+- **Related implementation:** CEL-I-015 (the launcher reads the Spanish
+  names and keywords of the desktop files, matches words in any order, one
+  typo and Spanish category words, and orders the list by how often and how
+  recently each application was opened)
+- **Requires:** the deployed shell after the landing of CEL-I-015, with the
+  author's Flatpak applications installed
+- **Procedure:** open the launcher; type the Spanish word for browser, then
+  a word of an application's name with two letters swapped, then two words
+  of an application's generic name in reverse order; open an application a
+  few times and reopen the launcher with an empty field
+- **Pass condition:** the browser word lists every installed browser (Zen,
+  Floorp, LibreWolf); the typo still finds the application; the reversed
+  words find it; the application opened most moves to the top of the empty
+  list
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-I-015](docs/evidence/2026-11-27-cel-i-015-search.md)
+
 ## VAL-CEL-I-014 — The launcher's quick clear
 
 - **Status:** pending

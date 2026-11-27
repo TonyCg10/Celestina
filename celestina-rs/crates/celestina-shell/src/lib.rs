@@ -67,6 +67,7 @@ pub mod glance;
 pub mod idle;
 pub mod keybinds;
 pub mod launcher;
+pub mod launcher_search;
 pub mod lock;
 pub mod media;
 pub mod melibea;

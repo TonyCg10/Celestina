@@ -1,0 +1,53 @@
+# CEL-I-015 exact change inventory
+
+Base revision	9080b736c0ea81be4f7b91e2e5fe073fe0fb1d50
+Pathspec	celestina-rs/crates/celestina-shell/src/launcher_search.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/lib.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-015-search.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-015-search/imagenes.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-015-search/juegos.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-015-search/krtia.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-015-search/navegador.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-015-search/texto_editor.png
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-015.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/launcher/groups.rs
+Pathspec	celestina/src/launcher/mod.rs
+Pathspec	celestina/src/launcher/recent.rs
+Pathspec	celestina/src/launcher/state.rs
+Pathspec	celestina/src/launcher/usage.rs
+Pathspec	celestina/src/launcher/view.rs
+Pathspec	celestina/src/main.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+427	0	5b18ab5cc55e1b863038d16a4de8b9c22b3698164de29992710c3bbe0e058abc	celestina-rs/crates/celestina-shell/src/launcher_search.rs
+1	0	5857dc247a900c969cfe25598c0a885623a760d07894850feb0c8137ebd80172	celestina-rs/crates/celestina-shell/src/lib.rs
+1	1	419aab2c1811580ca8463b63304f635439ec88d50a8581106c2616d147820531	celestina/Cargo.lock
+1	1	708b6121d966534ac78f47555cafdbc775f7275bed9520965dc8b5ef88be72a0	celestina/Cargo.toml
+21	0	f271719891289ca3c63ec6a8deb2ba50609c726bab1e3083a3259665031859ee	celestina/VALIDATION.md
+63	0	595564091b17851c409fe7677aa70a038151f4b1bec293355349238322acb3aa	celestina/docs/evidence/2026-11-27-cel-i-015-search.md
+-	-	9f1a07774fb4136b62e5ae394a4d7a4e8a8a901ea2024cce7ffcd8302b9d395a	celestina/docs/evidence/2026-11-27-cel-i-015-search/imagenes.png
+-	-	733aa13db2d50943f0eac4d2c4aa78776180c99ba7551b3875014c76166e39a9	celestina/docs/evidence/2026-11-27-cel-i-015-search/juegos.png
+-	-	85a589591d12aae4878d924f207256725cfe3b68888560819cf10a3d541524ee	celestina/docs/evidence/2026-11-27-cel-i-015-search/krtia.png
+-	-	6cbd51faddd6c58f13d40b446c0958d7c224123dc40f002c4e0611011c723ff9	celestina/docs/evidence/2026-11-27-cel-i-015-search/navegador.png
+-	-	fc9ced075e2e81183a4c32b6d58104ce022e53d46bf29535eadb485439e3a918	celestina/docs/evidence/2026-11-27-cel-i-015-search/texto_editor.png
+53	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-015.numstat.tsv
+1	0	de3a12e744af09108a8ccfd9e3a47facfcb95f7decad5757811a0d1a53176f7f	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+10	13	08089ccff925a5da8167bd82e22f36af14aeedd93d355be53c602c073adfb5c3	celestina/src/app.rs
+36	0	c659a64f304f343fcfffc3f4c076c7b88163fee88becef9c111918c2bb5afc66	celestina/src/copy.rs
+233	0	bf04525ec45bdb358d96ec3f3b95f0a377aa6f73383429f12b29e0ce7688efdc	celestina/src/launcher/groups.rs
+21	9	857a8adff55fbc62aa1c00f0ce171519c7466874ea7eabed04064b8a2c8adb92	celestina/src/launcher/mod.rs
+18	63	3cce71773442386b5ac1b4647a1bb11dc947b0d52790580d1295e11709551fc7	celestina/src/launcher/recent.rs
+168	58	722ac0b1d9a57b4d14717a7a5d3ac502064d205a1997b752d51ed0561a0f88b9	celestina/src/launcher/state.rs
+492	0	a390e16abbec6535f805c0e973a80e41a21532bca9783f3dcaa9671bc8474d21	celestina/src/launcher/usage.rs
+9	9	a1eb02a12c00e423e367e3531429c72a66c7ea8ca3212644f6b741e7511fa285	celestina/src/launcher/view.rs
+2	2	6d8438b9d37748f17f1049f32553c3a68652bc828bf7518f805350a8b60e7033	celestina/src/main.rs
+1	0	34a8a29663ed52f00fa7a3b16667e57881089cb2b6394067a60096d05bfab19c	docs/version-history.tsv

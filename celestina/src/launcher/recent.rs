@@ -1,13 +1,13 @@
-//! The applications launched last: `recent.json` under the shell's
-//! configuration directory (`$XDG_CONFIG_HOME/celestina/recent.json`), a
-//! JSON array of at most [`MAX_RECENT`] desktop-file ids, the most recent
-//! first. The ranking lifts them (see `super::state`).
+//! The applications launched last, as `recent.json` under the shell's
+//! configuration directory (`$XDG_CONFIG_HOME/celestina/recent.json`): a JSON
+//! array of at most [`MAX_RECENT`] desktop-file ids, the most recent first.
 //!
-//! The file is read once at start, bounded, and anything in it that is not a
-//! short id is dropped; an unreadable file is logged and treated as empty.
-//! After a launch the list is written whole and atomically
-//! (`celestina_core::atomic_file::replace_private`). The write is a few
-//! hundred bytes; a failure is logged and the launch stands.
+//! This is now the read-only seeder of the use record (`super::usage`): the
+//! record reads it once, when `usage.json` does not exist, and never writes
+//! it again; the file stays in place.
+//!
+//! The file is read bounded, and anything in it that is not a short id is
+//! dropped; an unreadable file is logged and treated as empty.
 
 use std::path::PathBuf;
 
@@ -60,42 +60,10 @@ impl RecentLaunches {
     pub fn ids(&self) -> &[String] {
         &self.ids
     }
-
-    /// Puts `id` first (once), keeps at most [`MAX_RECENT`], and writes the
-    /// file. Returns whether the write succeeded (always true without a file).
-    pub fn record(&mut self, id: &str) -> bool {
-        if !acceptable(id) {
-            return false;
-        }
-        self.ids.retain(|known| known != id);
-        self.ids.insert(0, id.to_owned());
-        self.ids.truncate(MAX_RECENT);
-        let Some(path) = self.path.as_deref() else {
-            return true;
-        };
-        let bytes = match serde_json::to_vec(&self.ids) {
-            Ok(bytes) => bytes,
-            Err(err) => {
-                tracing::warn!(%err, "the recent launches could not be encoded");
-                return false;
-            }
-        };
-        match atomic_file::replace_private(path, &bytes) {
-            Ok(_) => true,
-            Err(err) => {
-                tracing::warn!(
-                    "{} not written: {}",
-                    path.display(),
-                    crate::error_chain(&err)
-                );
-                false
-            }
-        }
-    }
 }
 
 /// Whether `id` can be kept: a non-empty, short, single-line file name.
-fn acceptable(id: &str) -> bool {
+pub(super) fn acceptable(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= MAX_ID_BYTES
         && !id.contains('/')
@@ -153,27 +121,14 @@ mod tests {
     }
 
     #[test]
-    fn a_launch_goes_first_once_and_survives_a_restart() {
-        let scratch = Scratch::new("round-trip");
-        let mut recent = RecentLaunches::load_from(Some(scratch.file()));
-        assert!(recent.ids().is_empty());
-        assert!(recent.record("a.desktop"));
-        assert!(recent.record("b.desktop"));
-        assert!(recent.record("a.desktop"));
-        assert_eq!(recent.ids(), ["a.desktop", "b.desktop"]);
-        let again = RecentLaunches::load_from(Some(scratch.file()));
-        assert_eq!(again.ids(), ["a.desktop", "b.desktop"]);
-    }
-
-    #[test]
-    fn the_list_keeps_the_last_fifty() {
-        let mut recent = RecentLaunches::load_from(None);
-        for i in 0..60 {
-            recent.record(&format!("{i}.desktop"));
-        }
-        assert_eq!(recent.ids().len(), MAX_RECENT);
-        assert_eq!(recent.ids()[0], "59.desktop");
-        assert_eq!(recent.ids()[MAX_RECENT - 1], "10.desktop");
+    fn the_list_is_read_from_the_file_most_recent_first() {
+        let scratch = Scratch::new("read");
+        std::fs::create_dir_all(scratch.file().parent().expect("a parent")).expect("the directory");
+        std::fs::write(scratch.file(), br#"["b.desktop","a.desktop","b.desktop"]"#)
+            .expect("the file");
+        let recent = RecentLaunches::load_from(Some(scratch.file()));
+        assert_eq!(recent.ids(), ["b.desktop", "a.desktop"]);
+        assert!(RecentLaunches::load_from(None).ids().is_empty());
     }
 
     #[test]
