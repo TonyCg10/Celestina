@@ -11,7 +11,7 @@ use celestina_ui::{Animated, Easing, Key, Motion, Reduced, LINEAR, ONE_UI};
 
 use super::banners::{self, BannerAction};
 use crate::providers::notifications::NotificationsCommand;
-use crate::{island::piece_fade, sheet::motion::lerp};
+use crate::sheet::motion::lerp;
 
 /// The notice's width.
 const NOTICE_W: f32 = 420.0;
@@ -32,13 +32,14 @@ const FAN_GAP: f32 = 8.0;
 const SHEET_GLASS: f32 = 0.92;
 /// How far above its place a sheet enters from.
 const SHEET_RISE: f32 = 10.0;
-/// The face blur's peak, the offset's reach and the fade times: the
-/// crossfade of the open piece (CEL-D-010), which the design reuses.
-const FACE_BLUR: f32 = piece_fade::BLUR_PX;
-const FACE_DY: f32 = piece_fade::DROP_PX;
+/// The face blur's peak, the offset's reach and the fade times: the values
+/// of the crossfade the open piece had (CEL-D-010), which the CEL-D-011
+/// design reuses for the notice's face.
+const FACE_BLUR: f32 = 4.0;
+const FACE_DY: f32 = 10.0;
 /// Durations, in ms.
-const FACE_OUT_MS: u64 = piece_fade::FADE_OUT.as_millis() as u64;
-const FACE_IN_MS: u64 = piece_fade::FADE_IN.as_millis() as u64;
+const FACE_OUT_MS: u64 = 160;
+const FACE_IN_MS: u64 = 200;
 const FACE_DELAY_MS: u64 = 120;
 const CLOCK_DELAY_MS: u64 = 140;
 const REDUCED_FADE_MS: u64 = 150;

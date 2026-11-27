@@ -1,9 +1,12 @@
 //! The Island's side of the capsule menus (CEL-D-002, CEL-D-009): the
 //! open-window owner [`Sheets`] wired to the bar, the page and the input. At
 //! most one of three things is shown: nothing, the Island's page, or one
-//! capsule window (and, for 260 ms of a switch, the one it closes towards its piece); a
-//! closing one still counts as shown, so a request that comes while another
-//! thing is shown closes it and waits for it to go (`Sheets::queue`).
+//! capsule window (and, for 260 ms of a switch, the one it closes towards its
+//! piece); a closing one still counts as shown, so a request that comes while
+//! another thing is shown closes it and waits for it to go (`Sheets::queue`).
+//! The piece a window is open on stays in its slot in the bar (CEL-D-014):
+//! its gestures are its own, through the bar's input, and the window's header
+//! row is only a title.
 
 use std::time::Instant;
 
@@ -19,9 +22,7 @@ use super::{
 };
 use crate::{
     osd::popup::{Kind, LevelCore},
-    pieces::{
-        tray as tray_piece, workspaces as workspaces_piece, Gesture, PageId, PieceAction, SheetKind,
-    },
+    pieces::{tray as tray_piece, Gesture, PageId, PieceAction, SheetKind},
     session_menu::SessionCore,
     sheet::{
         geometry::{self, Edge, Hit},
@@ -206,8 +207,8 @@ impl Island {
 
     /// The anchor the bar gives at `now` for `piece` in `zone`: the capsule
     /// as it is painted (the pieces beside the open one may be sliding), the
-    /// edge of it its zone lines up with and the piece's pill. `None` when
-    /// either is gone.
+    /// edge of it its zone lines up with and the pill, which is the piece's
+    /// rect. `None` when either is gone.
     pub(super) fn live_anchor(&self, zone: usize, piece: Key, now: Instant) -> Option<Anchor> {
         let bar = self.bar.as_ref()?;
         let pill = bar.pill_of(piece, now)?;
@@ -709,24 +710,6 @@ impl Island {
                     let outcome = self.sheets.input(ev, &anchor, now, measure);
                     return Some(self.apply_outcome(outcome, now));
                 }
-                let gesture = matches!(
-                    ev,
-                    InputEvent::Axis { .. }
-                        | InputEvent::PointerPress { .. }
-                        | InputEvent::PointerRelease { .. }
-                );
-                // Whatever it lands on, a release ends a press on the
-                // subtitle.
-                let pressed = match ev {
-                    InputEvent::PointerRelease { .. } => self.subtitle_press.take(),
-                    _ => None,
-                };
-                if gesture && self.sheets.on_subtitle(&anchor, now, x, y) {
-                    if let Some(out) = self.subtitle_gesture(ev, pressed, now, measure) {
-                        self.pointer_is_the_sheets(now);
-                        return Some(out);
-                    }
-                }
                 match geometry::hit(rect, x, y) {
                     Hit::Body => {
                         self.pointer_is_the_sheets(now);
@@ -758,53 +741,6 @@ impl Island {
             }
             _ => None,
         }
-    }
-
-    /// A press, release or wheel turn on the subtitle of the open sheet: it
-    /// answers as the piece the sheet is open on, through the very gestures
-    /// and actions the bar's input uses (the wheel steps the workspaces or the
-    /// level, a right click mutes, a plain click closes the sheet). A press
-    /// is only the start of a click: a release makes one only when the press
-    /// (`pressed`, its button) began on the subtitle. A gesture the piece has
-    /// no action for does nothing and closes nothing. The subtitle shows no
-    /// hover or press plate of its own. `None` hands the event on to the
-    /// body: a wheel over the subtitle of a piece without a wheel action
-    /// scrolls the body, and a release whose press began elsewhere is the
-    /// body's.
-    fn subtitle_gesture(
-        &mut self,
-        ev: &InputEvent,
-        pressed: Option<u32>,
-        now: Instant,
-        measure: &mut Measure<'_>,
-    ) -> Option<Vec<IslandAction>> {
-        let piece = self.sheets.piece()?;
-        match *ev {
-            InputEvent::PointerPress { button, .. } => {
-                self.subtitle_press = Some(button);
-                return Some(Vec::new());
-            }
-            InputEvent::PointerRelease { button, .. } if pressed != Some(button) => return None,
-            InputEvent::Axis { .. } => {
-                let wheel = piece == workspaces_piece::key()
-                    || self
-                        .with_bar(|bar, cx| bar.takes_wheel(piece, cx))
-                        .unwrap_or(false);
-                if !wheel {
-                    return None;
-                }
-            }
-            _ => {}
-        }
-        let asked = self
-            .with_bar(|bar, cx| bar.ask_for(piece, ev, cx))
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|(_, gesture, action)| {
-                matches!(gesture, Gesture::Scroll(..)) || *action != PieceAction::None
-            })
-            .collect();
-        Some(self.apply_asked(asked, false, now, measure))
     }
 
     /// The pointer is the window's: the bar and the Island's capsule end

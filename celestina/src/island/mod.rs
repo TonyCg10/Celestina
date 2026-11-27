@@ -19,9 +19,9 @@ pub mod bar_tree;
 pub mod cadence;
 pub mod clock;
 pub mod menu;
+pub(crate) mod open_piece;
 mod page_sheets;
 pub mod pages;
-pub(crate) mod piece_fade;
 mod sheets;
 pub mod state;
 pub mod view;
@@ -343,7 +343,7 @@ pub struct Island {
     tray_menu: Option<PopupId>,
     /// The tray's items as the page shows them.
     tray_rows: Vec<TrayRow>,
-    /// The tray's overflow window is open: the chevron is lit and turned.
+    /// The tray's overflow window is open: the chevron is turned.
     overflow_shown: bool,
     /// The generation of the tray list `tray_rows` was made from.
     tray_generation: u64,
@@ -403,9 +403,6 @@ pub struct Island {
     /// The surface is anchored to the output's whole top edge, so these are
     /// the output's coordinates too.
     pointer: (f32, f32),
-    /// The button pressed on the open sheet's subtitle, until its release:
-    /// only a press that began there makes a click there.
-    subtitle_press: Option<u32>,
     /// The workspace the wheel over the workspaces piece last asked for and
     /// when: a notch within [`WORKSPACE_WHEEL_BURST`] steps from it, not from
     /// the model's active workspace, which may not have caught up.
@@ -510,7 +507,6 @@ impl Island {
             overflow_menu_asked: None,
             tray_menu_from_window: None,
             pointer: (0.0, 0.0),
-            subtitle_press: None,
             bar_sysmon: Cadence::new(SYSMON_BAR_PERIOD),
             page_sysmon: None,
             weather: None,
@@ -1367,12 +1363,7 @@ impl Island {
             }
         }
         let (surface_w, island_w) = (self.size.0, self.state.rect(now, self.size.0).w);
-        // The piece a sheet is open on is out of its capsule while it is,
-        // except the tray's chevron: it stays in the bar, lit, and turns.
-        let lifted = self
-            .sheets
-            .piece()
-            .filter(|&k| k != pieces::tray::chevron_key());
+        let open = self.sheets.held_piece(now);
         let overflow = self.sheets.kind() == Some(SheetKind::TrayOverflow)
             && self.sheets.piece() == Some(pieces::tray::chevron_key());
         if overflow != self.overflow_shown {
@@ -1380,7 +1371,7 @@ impl Island {
             self.invalidate_bar();
         }
         let fault = self.with_bar(|bar, cx| {
-            bar.set_lifted(lifted, now);
+            bar.set_open(open, now);
             bar.update(cx, surface_w, island_w, now, lay);
             bar.take_fault()
         });
@@ -1829,8 +1820,7 @@ impl Island {
 
     /// What the pieces answered to the gestures asked of them: the Island's
     /// actions, a sheet or page opened, and what a plain gesture closes. The
-    /// bar's own input and the open sheet's subtitle (which answers as its
-    /// piece) both end here.
+    /// bar's own input ends here.
     fn apply_asked(
         &mut self,
         asked: Vec<(Key, Gesture, PieceAction)>,
@@ -3000,7 +2990,7 @@ mod tests {
             Some(crate::pieces::SheetKind::Workspaces)
         );
         island.close_sheet(t0);
-        // The dots land (the slot reopens) and the row settles.
+        // The row settles.
         step(&mut island, t0 + ms(400));
         step(&mut island, t0 + ms(800));
         let t0 = t0 + ms(800);
@@ -3260,8 +3250,8 @@ mod tests {
 
     #[test]
     fn the_wheel_steps_with_the_sheet_open_and_keeps_it_open() {
-        // The workspaces sheet is open: its piece is out of the row, and its
-        // subtitle answers the wheel as the piece did.
+        // The workspaces sheet is open: its piece is still in the row and
+        // answers the wheel itself.
         let (mut island, t0) = bar_island(1920.0);
         assert_eq!(
             island.sheet_request(
@@ -3279,7 +3269,7 @@ mod tests {
             island.sheets.kind(),
             Some(crate::pieces::SheetKind::Workspaces)
         );
-        let at = subtitle_gestures::subtitle_point(&island, t);
+        let at = centre(bar_rect(&island, workspaces_piece::key()));
         let wheel = |vertical: f32| InputEvent::Axis {
             x: at.0,
             y: at.1,
@@ -5726,7 +5716,7 @@ mod tests {
             Some(crate::pieces::SheetKind::Brightness)
         );
         assert!(island.level_sheet_open());
-        // The piece asking again closes it (it is out of the row meanwhile).
+        // The piece asking again closes it (it stays in its row, under the pill).
         let later = t0 + ms(400);
         assert_eq!(
             island.sheet_request(
@@ -5847,13 +5837,9 @@ mod tests {
         assert!(open_on(&mut island, bell, t0));
         let settle = t0 + ms(400);
         run_frames(&mut island, t0, settle);
-        // The bell left its capsule: the capsule is narrower by its slot.
+        // The bell stays in its capsule: the capsule keeps its extent.
         let start = start_zone(&island);
-        assert!(
-            start.w < before.w,
-            "the capsule closed over the bell's slot"
-        );
-        assert_eq!(start.x, before.x);
+        assert_eq!(start, before, "the bell keeps its slot");
         assert!(
             start.w > SHEET_W,
             "premise: the capsule is wider than the body"
@@ -5893,10 +5879,11 @@ mod tests {
     }
 
     #[test]
-    fn the_window_keeps_its_capsules_edge_while_the_capsule_shrinks() {
+    fn the_window_keeps_its_capsules_edge_while_the_capsule_keeps_its_extent() {
         // A start window lines up with its capsule's left edge, and the bar
         // paints every capsule whatever the window does: at every frame the
-        // capsule's extent is one shape and the window another.
+        // capsule's extent is one shape and the window another, and the
+        // extent does not change with the open.
         let (mut island, t0) = wide_start_island();
         assert!(open_on(&mut island, Key::named("bell"), t0));
         let mut widths = Vec::new();
@@ -5923,8 +5910,8 @@ mod tests {
             widths.push(extent.w);
         }
         assert!(
-            widths[0] > widths[widths.len() - 1],
-            "the capsule shrank: {widths:?}"
+            widths.iter().all(|w| (*w - widths[0]).abs() < 0.01),
+            "the capsule kept its width: {widths:?}"
         );
         // An end window lines up with the right edge at rest, whatever the
         // capsule does meanwhile.
@@ -5948,7 +5935,7 @@ mod tests {
     }
 
     #[test]
-    fn a_lifted_only_piece_leaves_an_empty_capsule_and_a_window() {
+    fn an_only_piece_keeps_its_capsule_and_a_window() {
         let (mut island, t0) = bar_island(1920.0);
         island.set_bar(&BarLayout {
             start: vec!["notifications".to_owned()],
@@ -5959,6 +5946,7 @@ mod tests {
         island.apply_views(t0);
         lay_fake(&mut island, t0);
         let bell = Key::named("bell");
+        let start_before = island.bar.as_ref().and_then(|b| b.capsule_extent(0, t0));
         assert_eq!(
             island.sheet_request(
                 bell,
@@ -5982,19 +5970,18 @@ mod tests {
                 .all(|s| [s.0.x, s.0.y, s.0.w, s.0.h].iter().all(|v| v.is_finite())));
         }
         let now = t0 + ms(400);
-        // The capsule is padding only; the window hangs from it.
-        let pad = crate::island::view::CAPSULE_PADDING;
+        // The capsule keeps its width: the piece stays in it.
         let extent = zone(island.bar.as_ref().and_then(|b| b.capsule_extent(0, now)));
-        assert_eq!(extent.w, 2.0 * pad);
+        assert_eq!(Some(extent), start_before);
         let sheet = shown_rect(&island, now);
         assert_eq!(sheet.y, geometry::WINDOW_TOP);
         assert_eq!(
             geometry::hit(sheet, sheet.x + 2.0, sheet.y + 20.0),
             geometry::Hit::Body
         );
-        // The bar's slot is a point in the empty row; the window is under it.
-        let slot = island.bar.as_ref().and_then(|b| b.slot_rect(bell, now));
-        assert!(slot.is_some_and(|s| s.w == 0.0 && s.x >= extent.x && s.x <= extent.x + extent.w));
+        // The pill is the bell's own rect; the window hangs from it.
+        let pill = island.bar.as_ref().and_then(|b| b.pill_of(bell, now));
+        assert_eq!(pill, Some(bar_rect(&island, bell)));
         assert!(island.sheets.body_size().is_some());
     }
 
@@ -6367,7 +6354,7 @@ mod tests {
         let gone = t + ms(260);
         step(&mut island, gone);
         assert!(!island.anything_shown(gone));
-        // The piece lands and the capsule widens back with its slot.
+        // The piece gives back its pill and the capsule keeps its extent.
         let later = gone + ms(400);
         step(&mut island, later);
         assert_eq!(island.shapes(later), rest);
@@ -6823,11 +6810,10 @@ mod tests {
         assert!(island.sheets.is_open() && !island.state.is_open());
     }
 
-    mod crossfade;
     mod lent;
     mod notice_card;
+    mod open_piece;
     mod page_sheets;
-    mod subtitle_gestures;
     mod tray_overflow;
     mod window;
 }

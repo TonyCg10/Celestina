@@ -1,8 +1,9 @@
 //! The subtitle row at the top of every sheet body (CEL-D-008): the open
 //! piece's icon and text, which show with the body and leave with the
-//! window (the piece itself crossfades in the bar, CEL-D-010). The row is
-//! built from the piece's [`Face`], so the text is the string the piece's bar
-//! view shows; a piece without text gives the menu's name instead.
+//! window. The header row is the window's title and takes no gestures
+//! (CEL-D-014): the piece stays in the bar and answers them itself. The row
+//! is built from the piece's [`Face`], so the text is the string the piece's
+//! bar view shows; a piece without text gives the menu's name instead.
 
 use celestina_paint::{Role, Theme, Weight};
 use celestina_ui::{view, Key, View};

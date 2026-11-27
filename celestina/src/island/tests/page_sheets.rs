@@ -509,7 +509,7 @@ fn a_piece_asking_for_its_page_again_closes_the_sheet_and_another_switches_it() 
     assert!(click_at(&mut island, at, BTN_LEFT, t).is_empty());
     assert_eq!(island.sheets.page(), Some(PageId::BLUETOOTH));
     assert!(island.sheets.is_leaving(), "one morph, the old body fading");
-    // The same piece asking again closes it (it is out of the row while its
+    // The same piece asking again closes it (it stays in its row while its
     // sheet is open).
     let t = t + ms(400);
     step(&mut island, t);
@@ -818,19 +818,6 @@ fn a_polkit_prompt_holds_the_keyboard_from_the_island() {
     );
 }
 
-/// The bar's node under the pointer, and the pieces out of the row.
-fn hovered_and_hidden(island: &Island) -> (Option<Key>, Vec<Key>) {
-    (
-        island.bar.as_ref().and_then(|b| b.hovered_key()),
-        island
-            .bar
-            .as_ref()
-            .and_then(|b| b.lifted())
-            .into_iter()
-            .collect(),
-    )
-}
-
 /// An Island with a page sheet open under the network piece, the pointer
 /// over it, and the bluetooth piece beside it ready to be clicked.
 fn network_open() -> (Island, Instant, Key, Key) {
@@ -850,29 +837,46 @@ fn network_open() -> (Island, Instant, Key, Key) {
 }
 
 #[test]
-fn the_open_piece_is_out_of_the_row_and_the_others_keep_their_hover() {
-    let (mut island, t, network, bluetooth) = network_open();
+fn the_open_piece_stays_in_its_row_and_the_others_keep_their_hover() {
+    let (mut island, t0) = new_island();
+    let network = Key::named("network");
+    let bluetooth = Key::named("bluetooth");
+    let t0 = t0 + Duration::from_secs(2);
+    island.apply_views(t0);
+    lay_fake(&mut island, t0);
+    let t0 = t0 + Duration::from_secs(2);
+    lay_fake(&mut island, t0);
+    let before = bar_rect(&island, network);
+    let at = centre(before);
+    assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
+    let t = t0 + ms(400);
+    step(&mut island, t);
     assert_eq!(island.sheets.piece(), Some(network));
+    let bar = island.bar.as_ref();
     assert_eq!(
-        island.bar.as_ref().and_then(|b| b.lifted()),
+        bar.and_then(|b| b.open_piece()),
         Some(network),
-        "the bar lifted it out of its capsule"
+        "the bar holds it open in its slot"
     );
-    // Another piece keeps its hover, at full opacity: it is not the hidden
-    // one.
+    assert_eq!(bar_rect(&island, network), before, "it did not move");
+    // Another piece keeps its hover, at full opacity.
     let at = centre(bar_rect(&island, bluetooth));
     feed(
         &mut island,
         InputEvent::PointerMotion { x: at.0, y: at.1 },
         t,
     );
-    let (hovered, hidden) = hovered_and_hidden(&island);
-    assert_eq!(hovered, Some(bluetooth));
-    assert!(hovered.is_some_and(|h| !hidden.contains(&h)));
+    let bar = island.bar.as_ref();
+    assert_eq!(bar.and_then(|b| b.hovered_key()), Some(bluetooth));
+    assert_eq!(bar.map(|b| b.content_opacity(bluetooth, t)), Some(1.0));
+    assert_eq!(
+        bar.map(|b| b.box_roles(bluetooth).0),
+        Some(Some(celestina_paint::Role::ControlHover))
+    );
 }
 
 #[test]
-fn switching_lands_the_old_piece_and_lifts_the_new_one() {
+fn switching_moves_the_pill_to_the_new_piece() {
     let (mut island, t, network, bluetooth) = network_open();
     let at = centre(bar_rect(&island, bluetooth));
     feed(
@@ -885,39 +889,59 @@ fn switching_lands_the_old_piece_and_lifts_the_new_one() {
     assert_eq!(island.sheets.page(), Some(PageId::BLUETOOTH));
     // At once the new piece is the one the sheet is open on.
     assert_eq!(island.sheets.piece(), Some(bluetooth));
-    let later = t + ms(400);
+    step(&mut island, t);
+    let later = t + ms(200);
     step(&mut island, later);
     let bar = island.bar.as_ref();
-    assert_eq!(bar.and_then(|b| b.lifted()), Some(bluetooth));
-    // The old piece is back in its row, with a slot of its own.
-    let slot = bar.and_then(|b| b.slot_rect(network, later));
-    assert!(slot.is_some_and(|s| s.w == 0.0));
+    assert_eq!(bar.and_then(|b| b.open_piece()), Some(bluetooth));
+    // The old piece is back at full content in 200 ms, still in its row.
+    assert_eq!(bar.map(|b| b.content_opacity(network, later)), Some(1.0));
     assert!(bar.is_some_and(|b| b.piece_rect(network).is_some_and(|r| r.w > 0.0)));
+    // The pill has slid to the new piece by +350 ms.
+    let end = t + ms(350);
+    step(&mut island, end);
+    let bar = island.bar.as_ref();
+    let pills = bar.map(|b| b.pill(end)).unwrap_or_default();
+    assert_eq!(pills.len(), 1, "{pills:?}");
+    assert_eq!(pills[0].piece, bluetooth);
+    assert_eq!(
+        bar.and_then(|b| b.pill_of(bluetooth, end)),
+        Some(pills[0].rect)
+    );
 }
 
 #[test]
-fn after_close_the_piece_lands_and_shows_its_hover_again() {
+fn after_close_the_piece_lets_go_of_its_pill_and_shows_its_hover_again() {
     let (mut island, t, network, _bluetooth) = network_open();
     island.close_sheet(t);
     assert!(!island.sheets.is_open());
-    // On its way out the piece is already coming back, and its slot opens.
+    // The restore moment is the first frame of the close: the pill fades
+    // out and the content comes back.
     step(&mut island, t + ms(10));
-    let back = island
-        .bar
-        .as_ref()
-        .and_then(|b| b.fade_of(network, t + ms(10)));
-    assert!(back.is_some_and(|(k, ..)| k < 1.0));
+    let bar = island.bar.as_ref();
+    assert_eq!(bar.and_then(|b| b.open_piece()), None);
+    assert!(bar.is_some_and(|b| b.content_opacity(network, t + ms(10)) < 1.0));
+    // The pill's 150 ms run from that first frame.
+    let gone = t + ms(160);
+    step(&mut island, gone);
+    assert!(island.bar.as_ref().is_some_and(|b| b.pill(gone).is_empty()));
     let t = t + ms(400);
     step(&mut island, t);
-    assert_eq!(island.bar.as_ref().and_then(|b| b.lifted()), None);
+    let bar = island.bar.as_ref();
+    assert_eq!(bar.map(|b| b.content_opacity(network, t)), Some(1.0));
     let at = centre(bar_rect(&island, network));
     feed(
         &mut island,
         InputEvent::PointerMotion { x: at.0, y: at.1 },
         t,
     );
-    // Gone: nothing is hidden and the pointer's hover paints as ever.
-    assert_eq!(hovered_and_hidden(&island), (Some(network), Vec::new()));
+    // The pointer's hover lifts it again.
+    let bar = island.bar.as_ref();
+    assert_eq!(bar.and_then(|b| b.hovered_key()), Some(network));
+    assert_eq!(
+        bar.map(|b| b.box_roles(network).0),
+        Some(Some(celestina_paint::Role::ControlHover))
+    );
 }
 
 /// The sheet's content box, as the body shows it.

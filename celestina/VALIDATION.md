@@ -1689,6 +1689,8 @@ None has been run and none is closed by an agent.
 - **Requires:** the deployed shell after the landing of CEL-D-008 and a bar
   capsule with at least three pieces, two of which open a sheet (the volume
   and the session pieces)
+- **Note:** since CEL-D-014 the piece stays in its slot; the slot, subtitle-gesture
+  and crossfade parts of this procedure no longer apply
 - **Procedure:** press the volume piece and watch it. Read the row and the
   top of the sheet. Press the session piece in the same capsule, then press
   outside the sheet. Press the volume piece again, move the volume with the
@@ -1910,6 +1912,8 @@ None has been run and none is closed by an agent.
   never hidden)
 - **Requires:** the deployed shell after the landing of CEL-D-010 and a layout
   whose end capsule holds the energy (power profile) and system load pieces
+- **Note:** since CEL-D-014 the piece stays in its slot; the slot, subtitle-gesture
+  and crossfade parts of this procedure no longer apply
 - **Procedure:** open the energy menu and close it by pressing outside it;
   open the system load menu and close it with Escape; with one of them open,
   press another piece of the same capsule (a switch); open and close a menu
@@ -2016,3 +2020,25 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-012](docs/evidence/2026-11-27-cel-d-012-tabs-grid.md)
+
+## VAL-CEL-D-014 — The open piece stays in its slot
+
+- **Status:** pending
+- **Related implementation:** CEL-D-014 (the open piece stays in its slot with
+  the grey pill and its content at 80 %; the pill slides on a switch and fades
+  on the close; no hover fill on the open piece; its gestures are its own; the
+  window's header row is a title)
+- **Requires:** the deployed shell after the landing of CEL-D-014 and a layout
+  whose end capsule holds volume, brightness and the tray
+- **Procedure:** (1) open the volume menu, hover and press the open piece, and
+  turn the wheel on it; (2) switch to brightness; (3) right-click the volume
+  piece; (4) open the chevron's window; (5) close with Escape and by pressing
+  outside; (6) repeat once with reduced motion
+- **Pass condition:** the bar never shows a gap; the pill sits behind the open
+  piece and slides to the new one; no darker plate appears on hover; a click
+  on the open piece closes the menu; the pill fades and the piece is at full
+  opacity once the window has gone; with reduced motion everything changes at
+  once; at rest nothing moves
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-014](docs/evidence/2026-11-27-cel-d-014-piece-in-slot.md)

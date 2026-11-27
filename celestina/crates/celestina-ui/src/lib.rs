@@ -47,5 +47,5 @@ pub use secret::{
     Secret, SecretField, SecretFieldState, SecretKey, SecretRefused, MAX_SECRET_BYTES,
 };
 pub use slider::Slider;
-pub use tree::{NodeId, Tree, TreeError};
+pub use tree::{Held, NodeId, Plate, Tree, TreeError};
 pub use view::{View, ViewKind};

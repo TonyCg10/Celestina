@@ -19,8 +19,11 @@ enum Kind {
 const CLOSE_MS: u64 = 260;
 /// The blur a close reaches, in logical px.
 const CLOSE_BLUR_PX: f32 = 12.0;
-/// How much of the way to the slot's pill the rect and radius go.
+/// How much of the way to the piece's pill the rect and radius go.
 const CLOSE_SHRINK: f32 = 0.7;
+/// The fraction of a close at which the piece the window was open on gives
+/// back its pill and its opacity: 0 is the close's first frame.
+pub const PIECE_RESTORE_AT: f32 = 0.0;
 /// A closing window's glass below this opacity leaves the compositor's blur
 /// region (the backdrop blur cannot fade).
 pub const BLUR_REGION_MIN_GLASS: f32 = 0.35;
@@ -57,7 +60,7 @@ pub(crate) fn lerp(a: f32, b: f32, k: f32) -> f32 {
     a + (b - a) * k
 }
 
-pub(super) fn lerp_rect(a: Rect, b: Rect, k: f32) -> Rect {
+pub(crate) fn lerp_rect(a: Rect, b: Rect, k: f32) -> Rect {
     Rect {
         x: lerp(a.x, b.x, k),
         y: lerp(a.y, b.y, k),
@@ -137,7 +140,7 @@ impl SheetMotion {
         self.resize = Some((shown, now));
     }
 
-    /// The window closes towards `pill` (its piece's live slot; only its
+    /// The window closes towards `pill` (its piece's live rect; only its
     /// height counts here, for the end radius), from `shown`.
     pub fn close(&mut self, shown: Rect, pill: Rect, now: Instant) {
         if self.kind == Kind::Close {
@@ -224,7 +227,7 @@ impl SheetMotion {
         r.clamp(from.min(to), from.max(to))
     }
 
-    /// The close's way towards the slot's pill, 0..=0.7: the rect and the
+    /// The close's way towards the piece's pill, 0..=0.7: the rect and the
     /// radius go this far.
     fn close_factor(&self, now: Instant) -> f32 {
         let t = self.fraction(now);
@@ -299,6 +302,13 @@ impl SheetMotion {
         self.reduced
     }
 
+    /// How far the close has run, 0..=1 of its time; `None` while the window
+    /// is not closing.
+    #[must_use]
+    pub fn close_fraction(&self, now: Instant) -> Option<f32> {
+        (self.kind == Kind::Close).then(|| self.fraction(now))
+    }
+
     pub fn is_closing(&self) -> bool {
         self.kind == Kind::Close
     }
@@ -358,6 +368,19 @@ mod tests {
     fn lerp_out_back(from: Rect, to: Rect, t: f32) -> Rect {
         let k = Easing::OutBack(Theme::dark().overshoot).eval(t);
         lerp_rect(from, to, k)
+    }
+
+    #[test]
+    fn the_close_fraction_runs_over_the_close_only() {
+        let t0 = Instant::now();
+        let m = opened(t0);
+        assert_eq!(m.close_fraction(t0), None);
+        assert_eq!(m.close_fraction(ms(t0, 900.0)), None);
+        let (m, _, done) = closing(t0);
+        assert_eq!(m.close_fraction(done), Some(0.0));
+        assert!(near(m.close_fraction(ms(done, 130.0)).unwrap_or(-1.0), 0.5));
+        assert_eq!(m.close_fraction(ms(done, 260.0)), Some(1.0));
+        assert_eq!(m.close_fraction(ms(done, 900.0)), Some(1.0));
     }
 
     #[test]

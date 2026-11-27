@@ -178,7 +178,7 @@ pub struct BarCx<'a> {
     /// The item `Id`s the bar's Tray piece leaves out (`bar.tray_hidden`);
     /// the Tray page still lists them.
     pub tray_hidden: &'a [String],
-    /// The tray's overflow window is open: the chevron is lit and turned.
+    /// The tray's overflow window is open: the chevron is turned.
     pub tray_open: bool,
     /// The system monitor's reading as the bar shows it (held back to the
     /// bar's cadence, never the page's newest); `None` while there is none.

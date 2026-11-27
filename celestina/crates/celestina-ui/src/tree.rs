@@ -10,7 +10,7 @@
 
 use std::time::{Duration, Instant};
 
-use celestina_paint::{MotionMs, Rect, TextRun, Theme};
+use celestina_paint::{MotionMs, Rect, Role, TextRun, Theme};
 use taffy::{Display, TaffyTree};
 
 use crate::{
@@ -25,6 +25,31 @@ use crate::{
 
 /// A node's index in the tree's slab.
 pub type NodeId = usize;
+
+/// A rounded plate painted inside a box, under its children
+/// ([`Tree::set_plate`]): the grey pill behind the open piece of a bar
+/// capsule.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Plate {
+    /// Where it is drawn, in painted surface coordinates; no slide is added.
+    pub rect: Rect,
+    pub radius: f32,
+    pub role: Role,
+    /// Multiplies the role colour's own alpha; at 0 or less nothing is drawn.
+    pub alpha: f32,
+}
+
+/// How a node is held open ([`Tree::set_held`]): the piece a menu is open
+/// on.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Held {
+    /// Its own box takes no pointer lift: it is painted as if neither
+    /// hovered nor pressed.
+    pub quiet: bool,
+    /// The opacity of what is painted after its own box: its children and
+    /// its focus ring.
+    pub inside: f32,
+}
 
 /// The layout engine refused an operation on its own node ids: the tree's
 /// bookkeeping and taffy's disagree. The tree records the first such fault
@@ -113,10 +138,13 @@ pub(crate) enum Visit {
 pub(crate) enum Scope {
     /// Every visible node.
     All,
-    /// Every visible node but this one and its subtree.
+    /// Every visible node but this one and its subtree. No caller yet
+    /// (CEL-D-016 paints a row's card with it).
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "CEL-D-016 paints a row's card with it")
+    )]
     Except(NodeId),
-    /// The subtrees of this node's children, not the node itself.
-    ChildrenOf(NodeId),
     /// The subtrees of this node's children, even when the node itself is
     /// hidden (their rects are then the ones they had when last laid out).
     Inside(NodeId),
@@ -151,6 +179,10 @@ pub struct Tree {
     /// Boxes painted, clipped and reported at a rect of their own instead
     /// of their layout rect ([`Tree::set_extent`]).
     pub(crate) extents: Vec<(Key, Rect)>,
+    /// Plates painted inside boxes ([`Tree::set_plate`]).
+    pub(crate) plates: Vec<(Key, Plate)>,
+    /// Nodes held open ([`Tree::set_held`]).
+    pub(crate) helds: Vec<(Key, Held)>,
     /// The slide the next layout starts, when it is not the usual one.
     pub(crate) slide_next: Option<NextSlide>,
     /// Hit-testing follows the painted rects (slides included).
@@ -200,6 +232,8 @@ impl Tree {
             slider_metrics: SliderMetrics::of(theme),
             fault: None,
             extents: Vec::new(),
+            plates: Vec::new(),
+            helds: Vec::new(),
             slide_next: None,
             hit_painted: false,
         }
@@ -214,6 +248,36 @@ impl Tree {
         if let Some(rect) = rect {
             self.extents.push((key, rect));
         }
+    }
+
+    /// A plate is painted inside the box keyed `key`: after its own fill and
+    /// haze and after its clip is pushed, before its children, at `plate.rect`
+    /// as given. `None` takes it away.
+    pub fn set_plate(&mut self, key: Key, plate: Option<Plate>) {
+        self.plates.retain(|(k, _)| *k != key);
+        if let Some(plate) = plate {
+            self.plates.push((key, plate));
+        }
+    }
+
+    /// The plate set for the box `key`, if one is.
+    #[must_use]
+    pub fn plate_of(&self, key: Key) -> Option<Plate> {
+        self.plates.iter().find(|(k, _)| *k == key).map(|(_, p)| *p)
+    }
+
+    /// The node keyed `key` is held open (see [`Held`]); `None` lets it go.
+    pub fn set_held(&mut self, key: Key, held: Option<Held>) {
+        self.helds.retain(|(k, _)| *k != key);
+        if let Some(held) = held {
+            self.helds.push((key, held));
+        }
+    }
+
+    /// How the node keyed `key` is held, if it is.
+    #[must_use]
+    pub fn held_of(&self, key: Key) -> Option<Held> {
+        self.helds.iter().find(|(k, _)| *k == key).map(|(_, h)| *h)
     }
 
     /// Whether a pointer hit lands on what is painted (the node's slide and
@@ -316,17 +380,6 @@ impl Tree {
                 self.roots.iter().rev().map(|&r| Visit::Enter(r)).collect(),
                 Some(skip),
             ),
-            Scope::ChildrenOf(parent) => match self.slot(parent) {
-                Some(slot) if !slot.hidden() => (
-                    slot.children
-                        .iter()
-                        .rev()
-                        .map(|&c| Visit::Enter(c))
-                        .collect(),
-                    None,
-                ),
-                _ => (Vec::new(), None),
-            },
             Scope::Inside(parent) => match self.slot(parent) {
                 Some(slot) => (
                     slot.children
@@ -651,7 +704,7 @@ mod tests {
     }
 
     #[test]
-    fn a_scoped_walk_skips_one_subtree_or_keeps_only_its_children() {
+    fn a_scoped_walk_skips_one_subtree() {
         let mut tree = Tree::new(false, &Theme::dark());
         let rows = (0..3).map(|i| {
             if i == 1 {
@@ -662,7 +715,6 @@ mod tests {
         });
         tree.apply(card(rows), Instant::now());
         let card = id(&tree, Key::named("card"));
-        let inner = id(&tree, Key::named("inner"));
         let rows = [0, 1, 2].map(|i| id(&tree, row_key(i)));
         let enters = |scope| {
             tree.walk(scope)
@@ -676,17 +728,6 @@ mod tests {
         assert_eq!(enters(Scope::All), tree.paint_order());
         assert_eq!(enters(Scope::Except(rows[1])), vec![card, rows[0], rows[2]]);
         assert_eq!(enters(Scope::Except(card)), Vec::<NodeId>::new());
-        assert_eq!(
-            enters(Scope::ChildrenOf(card)),
-            vec![rows[0], rows[1], inner, rows[2]]
-        );
-        assert_eq!(enters(Scope::ChildrenOf(rows[1])), vec![inner]);
-        assert_eq!(enters(Scope::ChildrenOf(rows[0])), Vec::<NodeId>::new());
-        // Every entered node is left, in order.
-        let walk = tree.walk(Scope::ChildrenOf(card));
-        assert_eq!(walk.len(), 8);
-        assert_eq!(walk[7], Visit::Leave(rows[2]));
-        assert!(tree.walk(Scope::ChildrenOf(usize::MAX)).is_empty());
     }
 
     #[test]

@@ -43,35 +43,6 @@ impl ZoneViews {
     pub fn owner(&self, key: Key) -> Option<&str> {
         self.owners.get(&key).map(String::as_str)
     }
-
-    /// Takes the node `key` out of the layout (a piece lifted out of its
-    /// capsule): the pieces beside it close over its slot. Whether a node
-    /// with that key was found.
-    pub fn hide(&mut self, key: Key) -> bool {
-        [
-            &mut self.start,
-            &mut self.centre_left,
-            &mut self.centre_right,
-            &mut self.end,
-        ]
-        .into_iter()
-        .flatten()
-        .any(|zone| hide_in(zone, key))
-    }
-}
-
-/// Hides the node `key` under `view`, if there is one.
-fn hide_in(view: &mut View, key: Key) -> bool {
-    for child in &mut view.children {
-        if child.key == key {
-            *child = child.clone().hidden(true);
-            return true;
-        }
-        if hide_in(child, key) {
-            return true;
-        }
-    }
-    false
 }
 
 /// Records `view` and every node under it as `id`'s; a key already owned

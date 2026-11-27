@@ -1,0 +1,95 @@
+# CEL-D-014 exact change inventory
+
+Base revision	a99257a8eb7af7738ce68a637f17745ab722e014
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-paint/src/theme.rs
+Pathspec	celestina/crates/celestina-ui/src/lib.rs
+Pathspec	celestina/crates/celestina-ui/src/paint.rs
+Pathspec	celestina/crates/celestina-ui/src/tree.rs
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/close-a-plus75.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/close-b-plus150.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/close-c-after.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/hover-over-open-piece.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/open-a-plus0.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/open-b-plus75.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/open-c-plus150.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/open-d-plus350.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/open-settled.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/reduced-close.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/reduced-open-a.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/reduced-open-b.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/rest.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/switch-a-plus175.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/switch-b-plus350.png
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-014.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/bar/view.rs
+Pathspec	celestina/src/island/bar_tree.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/open_piece.rs
+Pathspec	celestina/src/island/piece_fade.rs
+Pathspec	celestina/src/island/sheets.rs
+Pathspec	celestina/src/island/tests/crossfade.rs
+Pathspec	celestina/src/island/tests/open_piece.rs
+Pathspec	celestina/src/island/tests/page_sheets.rs
+Pathspec	celestina/src/island/tests/subtitle_gestures.rs
+Pathspec	celestina/src/island/tests/tray_overflow.rs
+Pathspec	celestina/src/island/tests/window.rs
+Pathspec	celestina/src/notifications/island_notice.rs
+Pathspec	celestina/src/pieces/mod.rs
+Pathspec	celestina/src/pieces/tray.rs
+Pathspec	celestina/src/sheet/mod.rs
+Pathspec	celestina/src/sheet/motion.rs
+Pathspec	celestina/src/sheet/subtitle.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	e94705df9a5465083d480ec4edacf649c7cb10a39719e2cc6c54bad493a339c8	celestina/Cargo.lock
+1	1	64772140d1860a6daea4a29bef7a7b1f5cf819d1f4cd60a6445687932177983f	celestina/Cargo.toml
+26	0	372835b5c102082223c82c7c525837241dfb0ad92385f159c748bf3d2ffc70fd	celestina/VALIDATION.md
+7	2	33a3bff502c65c7aa78ac7bfe8031676652eb83e9e5735de5b87970ac72e14b8	celestina/crates/celestina-paint/src/theme.rs
+1	1	604c51dd9cf8eab2b3229e4d16922556c35327320304cebddadcae92aa46d5f7	celestina/crates/celestina-ui/src/lib.rs
+145	35	eed2f73d44a8a8bedd691d25efdf91e26181355c37f359ed7d57c2d2d7746789	celestina/crates/celestina-ui/src/paint.rs
+69	28	92f71101f0c7b87547e4020735b7200d2a09bdb2121ec14cc048ab66eb1f5d83	celestina/crates/celestina-ui/src/tree.rs
+63	0	b1abaa842427bd8246a14250e23639ee34948e2a799025bc3a48c2176f6abe2a	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot.md
+-	-	5fa64940b5a4ebee068fdf64d8e65feab71fb86aafcee9176c3cb605e248f8e3	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/close-a-plus75.png
+-	-	b5ed13b5371f052b55550afcbbc479236ce62ad4eee6ccc906f1c67ff4396e71	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/close-b-plus150.png
+-	-	b5b7b33776a46a941a3d6ab6d4a30dda0da640d641e752cb16001355fc0f3095	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/close-c-after.png
+-	-	b57aeb61120b42e33d85748d28fc68085e635d955d1106e716a51296fc8d9859	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/hover-over-open-piece.png
+-	-	ab45ac2e63e658dfebf0f4584c0d7aef5094f5dee4f500b12a8a331ba487eb5c	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/open-a-plus0.png
+-	-	3ecd8f348e296588592ed0690377b539c08e3a11e16ab3e6fe4cabd3d049ac81	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/open-b-plus75.png
+-	-	2b3ebdb2e55684eee4da6a2f120a80ed01a9b03066fe2285f19c0c8cc76aeec4	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/open-c-plus150.png
+-	-	5313a421495c184b96ddd7f07850755a4596e73e49d5ffeadee20b4f11580251	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/open-d-plus350.png
+-	-	b57aeb61120b42e33d85748d28fc68085e635d955d1106e716a51296fc8d9859	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/open-settled.png
+-	-	0ce6379b9dd73b5500225368f488481fdf25f16862b4f04e443ea00632bc2dd8	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/reduced-close.png
+-	-	c5a0fdea92ac60f751d15b6f3a44f7ff05fb8f622ac731a2aacfac58398d6744	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/reduced-open-a.png
+-	-	0924ff290c8460703b51c68dcd70edda3561b644fedc7c4fc873ca29be61a6e4	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/reduced-open-b.png
+-	-	b5b7b33776a46a941a3d6ab6d4a30dda0da640d641e752cb16001355fc0f3095	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/rest.png
+-	-	2e5d479e4388d30c43793e9f69b139d5431516200b27155ade8f465676700c8c	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/switch-a-plus175.png
+-	-	b798a5ac7eb16382e6663fde0436e840462a41ef7d7633204737d5ed404d4bdd	celestina/docs/evidence/2026-11-27-cel-d-014-piece-in-slot/switch-b-plus350.png
+95	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-014.numstat.tsv
+1	0	d2de438e2827ebe70fc06d70146c3b0e6c086fad1d892d6241272e9eef2be446	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+0	29	9efb54180e4fd32dcd41bdbf6d4fb56725928a85e287c25f7441e985ef28a355	celestina/src/bar/view.rs
+280	711	299d96893ed7c29d6f931e2f6ac56ac36c22b75b544011df83d4d0f009ff7f06	celestina/src/island/bar_tree.rs
+26	40	0a5e3677ba1a2c9aed487218a68556943ce4564af628d672a504a50cc63a8133	celestina/src/island/mod.rs
+580	0	cb23bca2f21494ba7f0e64814e51ea86abecdcdf0ab10f5a423e2577f1bbb04a	celestina/src/island/open_piece.rs
+0	185	deleted	celestina/src/island/piece_fade.rs
+9	73	8fa58a4ee13bff12b1d3ac03fe2d47ab5db7f8f0a9fac1116a22bc93d378d93e	celestina/src/island/sheets.rs
+0	315	deleted	celestina/src/island/tests/crossfade.rs
+526	0	d6977594dcfca7fa578e871e5d82544a9e09a85036c512e8d3da7fc8b7d5306b	celestina/src/island/tests/open_piece.rs
+63	39	5e722f0162479ccb2d11f6edc19ca95c91212c59d567bb0d88d89301ad436df4	celestina/src/island/tests/page_sheets.rs
+0	197	deleted	celestina/src/island/tests/subtitle_gestures.rs
+13	8	082cdd511e2521e8860c8c0916329cb1c9fe5176f7155589ba277f98fab7aa59	celestina/src/island/tests/tray_overflow.rs
+14	16	6c41168eab36c1fda0cec61e57252900b1f63cd2caf4e90f9fecc7710c01c59b	celestina/src/island/tests/window.rs
+8	7	34d76af81f353095d10a5a99f1eec63728730ce7a0da7324e0f5990b0cca6e9a	celestina/src/notifications/island_notice.rs
+1	1	037c5b37805266c28a368654d1541709346917bb59e84b267bc7762a3d4c9f47	celestina/src/pieces/mod.rs
+9	20	ac7c3bb9e8452ef7f8976e69173d19182dc83746a0b91fe9c9dc4356ecbbed1c	celestina/src/pieces/tray.rs
+77	36	5b78af0153a4856e2e61e4c60a2464e2033f4f288085c765c50bdea33f8a6990	celestina/src/sheet/mod.rs
+27	4	5df57bdf0d53bfd0030dde2ddc96a0414aa110001e1d6946385792729279634e	celestina/src/sheet/motion.rs
+4	3	e28ec3ff3644b70e20e30d9f048752ce1d8cddd67a81136e66b9b638f202afe9	celestina/src/sheet/subtitle.rs
+1	0	c160c36f9afde9a443bcfffa1b37e21eb1f0b667da44bb9d997fd86cfa6036d4	docs/version-history.tsv

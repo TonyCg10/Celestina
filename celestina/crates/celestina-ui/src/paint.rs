@@ -46,36 +46,11 @@ impl Tree {
     }
 
     /// [`Tree::paint`] with the subtrees of the nodes keyed in `hidden` painted
-    /// by nobody (pieces that fly elsewhere): the rest of the walk is
-    /// unchanged and the node keeps its place in the layout.
+    /// by nobody: the rest of the walk is unchanged and the node keeps its
+    /// place in the layout. No caller in `src/` yet: CEL-D-016 paints a row's
+    /// card with it.
     pub fn paint_hiding(&mut self, painter: &mut Painter, now: Instant, hidden: &[Key]) {
         self.paint_scoped(painter, now, Scope::All, hidden);
-    }
-
-    /// [`Tree::paint_hiding`] without the node `skip` and its subtree (a
-    /// sheet draws that one itself): the rest of the walk is unchanged.
-    pub fn paint_except_hiding(
-        &mut self,
-        painter: &mut Painter,
-        now: Instant,
-        skip: NodeId,
-        hidden: &[Key],
-    ) {
-        self.paint_scoped(painter, now, Scope::Except(skip), hidden);
-    }
-
-    /// [`Tree::paint_hiding`] for the subtrees of `parent`'s children only:
-    /// not the node's own box, haze or ring. The slides of `parent` and its
-    /// ancestors still shift them; their recoil scale and opacity do not
-    /// apply.
-    pub fn paint_children_hiding(
-        &mut self,
-        painter: &mut Painter,
-        now: Instant,
-        parent: NodeId,
-        hidden: &[Key],
-    ) {
-        self.paint_scoped(painter, now, Scope::ChildrenOf(parent), hidden);
     }
 
     /// Paints what is inside the node `id` alone (its children's subtrees,
@@ -85,6 +60,30 @@ impl Tree {
     /// ancestors still shift it.
     pub fn paint_inside(&mut self, painter: &mut Painter, now: Instant, id: NodeId) {
         self.paint_scoped(painter, now, Scope::Inside(id), &[]);
+    }
+
+    /// The fill and the wash the walk draws for the box `id` now: the pointer
+    /// lift of the highlight, none while the box is held quiet
+    /// ([`Tree::set_held`]). `(None, None)` for a stale id or a node that is
+    /// not a box.
+    #[must_use]
+    pub fn box_roles(&self, id: NodeId) -> (Option<Role>, Option<Role>) {
+        let Some(slot) = self.slot(id) else {
+            return (None, None);
+        };
+        let ViewKind::Box { fill, .. } = &slot.kind else {
+            return (None, None);
+        };
+        let h = self.highlight;
+        let quiet = self.held_of(slot.key).is_some_and(|held| held.quiet);
+        let (hovered, pressed) = (
+            !quiet && h.hovered == Some(id),
+            !quiet && h.pressed == Some(id),
+        );
+        (
+            box_fill(*fill, slot.interactive, hovered, pressed),
+            box_wash(*fill, slot.interactive, hovered, pressed),
+        )
     }
 
     /// The node `id`'s rect as it is painted at `now`: its layout rect moved
@@ -165,7 +164,6 @@ impl Tree {
         }
         let theme = painter.theme().clone();
         let base = match scope {
-            Scope::ChildrenOf(parent) => self.slide_of(parent, now),
             Scope::Inside(root) => self.slide_of(root, now),
             _ => (0.0, 0.0),
         };
@@ -264,21 +262,19 @@ impl Tree {
         }
         match &slot.kind {
             ViewKind::Box {
-                fill,
                 stroke,
                 haze,
                 radius,
+                ..
             } => {
                 if *haze {
                     painter.haze(rect, *radius);
                 }
-                let h = self.highlight;
-                let (hovered, pressed) = (h.hovered == Some(id), h.pressed == Some(id));
-                let shown = box_fill(*fill, slot.interactive, hovered, pressed);
+                let (shown, wash) = self.box_roles(id);
                 if let Some(role) = shown {
                     painter.fill_rounded(rect, *radius, theme.color(role));
                 }
-                if let Some(role) = box_wash(*fill, slot.interactive, hovered, pressed) {
+                if let Some(role) = wash {
                     painter.fill_rounded(rect, *radius, theme.color(role));
                 }
                 if let Some(role) = stroke {
@@ -318,6 +314,17 @@ impl Tree {
         }
         if let Some((clip, radius)) = clip_of(&slot.kind, slot.clip, rect) {
             painter.push_clip(clip, radius);
+        }
+        if let Some(plate) = self.plate_of(slot.key).filter(|p| p.alpha > 0.0) {
+            let colour = theme.color(plate.role);
+            painter.fill_rounded(
+                plate.rect,
+                plate.radius,
+                colour.with_alpha(colour.3 * plate.alpha),
+            );
+        }
+        if let Some(held) = self.held_of(slot.key) {
+            painter.opacity(held.inside.max(0.0));
         }
     }
 
@@ -567,7 +574,7 @@ mod tests {
     #[test]
     fn a_hidden_key_takes_its_subtree_out_of_the_walk_only() {
         let (tree, card, rows) = crate::testing::card_with_rows();
-        let all = tree.walk(Scope::ChildrenOf(card));
+        let all = tree.walk(Scope::Inside(card));
         let kept = tree.without(all.clone(), &[crate::testing::row_key(1)]);
         assert_eq!(kept.len(), all.len() - 2);
         assert!(!kept.contains(&Visit::Enter(rows[1])));
@@ -582,6 +589,109 @@ mod tests {
         );
         assert_eq!(two.len(), all.len() - 4);
         assert!(two.contains(&Visit::Enter(rows[1])));
+    }
+
+    #[test]
+    fn a_plate_is_kept_per_key_until_cleared() {
+        let (mut tree, _, rows) = crate::testing::card_with_rows();
+        let _ = rows;
+        let plate = crate::Plate {
+            rect: R,
+            radius: 12.0,
+            role: Role::ControlHover,
+            alpha: 0.5,
+        };
+        let (a, b) = (crate::testing::row_key(0), crate::testing::row_key(1));
+        assert_eq!(tree.plate_of(a), None);
+        tree.set_plate(a, Some(plate));
+        tree.set_plate(
+            b,
+            Some(crate::Plate {
+                alpha: 1.0,
+                ..plate
+            }),
+        );
+        assert_eq!(tree.plate_of(a), Some(plate));
+        // Setting again replaces; clearing one leaves the other.
+        tree.set_plate(
+            a,
+            Some(crate::Plate {
+                alpha: 0.25,
+                ..plate
+            }),
+        );
+        assert_eq!(tree.plate_of(a).map(|p| p.alpha), Some(0.25));
+        tree.set_plate(a, None);
+        assert_eq!(tree.plate_of(a), None);
+        assert_eq!(tree.plate_of(b).map(|p| p.alpha), Some(1.0));
+    }
+
+    #[test]
+    fn a_held_box_takes_no_pointer_lift() {
+        let (mut tree, _, rows) = crate::testing::card_with_rows();
+        tree.highlight.hovered = Some(rows[0]);
+        tree.highlight.pressed = Some(rows[0]);
+        let key = crate::testing::row_key(0);
+        assert_eq!(tree.box_roles(rows[0]), (Some(Role::ControlPressed), None));
+        tree.set_held(
+            key,
+            Some(crate::Held {
+                quiet: true,
+                inside: 0.8,
+            }),
+        );
+        assert_eq!(tree.held_of(key).map(|h| h.inside), Some(0.8));
+        assert_eq!(tree.box_roles(rows[0]), (None, None));
+        // Held but not quiet keeps the lift; letting go gives it back.
+        tree.set_held(
+            key,
+            Some(crate::Held {
+                quiet: false,
+                inside: 1.0,
+            }),
+        );
+        assert_eq!(tree.box_roles(rows[0]), (Some(Role::ControlPressed), None));
+        tree.set_held(
+            key,
+            Some(crate::Held {
+                quiet: true,
+                inside: 1.0,
+            }),
+        );
+        tree.set_held(key, None);
+        assert_eq!(tree.held_of(key), None);
+        assert_eq!(tree.box_roles(rows[0]), (Some(Role::ControlPressed), None));
+        // A stale id draws nothing.
+        assert_eq!(tree.box_roles(usize::MAX), (None, None));
+    }
+
+    #[test]
+    fn a_held_box_with_its_own_fill_keeps_it_and_gets_no_wash() {
+        let t0 = Instant::now();
+        let mut tree = Tree::new(false, &Theme::dark());
+        let key = Key::named("go");
+        tree.apply(
+            crate::view::row(key)
+                .size(60.0, 30.0)
+                .fill(Role::Accent)
+                .interactive(),
+            t0,
+        );
+        tree.layout_measured(crate::testing::AVAILABLE, crate::testing::fake_measure);
+        let go = crate::testing::id(&tree, key);
+        tree.highlight.hovered = Some(go);
+        assert_eq!(
+            tree.box_roles(go),
+            (Some(Role::Accent), Some(Role::ControlHover))
+        );
+        tree.set_held(
+            key,
+            Some(crate::Held {
+                quiet: true,
+                inside: 0.8,
+            }),
+        );
+        assert_eq!(tree.box_roles(go), (Some(Role::Accent), None));
     }
 
     #[test]

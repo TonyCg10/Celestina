@@ -102,8 +102,8 @@ fn hidden_attention(cx: &BarCx<'_>) -> bool {
 }
 
 /// The chevron: the box and states of a tray icon, the Lucide `chevron-up`
-/// glyph (turned while the window is open, and the box lit), and the accent
-/// dot while a hidden app needs attention.
+/// glyph (turned while the window is open; the bar's open pill lights the
+/// box, CEL-D-014), and the accent dot while a hidden app needs attention.
 fn chevron(cx: &BarCx<'_>) -> View {
     let glyph = view::icon(Key::named("tray-hidden-icon"), "chevron-up", CHEVRON_GLYPH)
         .tint(Role::TextHi)
@@ -114,18 +114,12 @@ fn chevron(cx: &BarCx<'_>) -> View {
     // the box, as a tray icon sits in its plate.
     let mut row = centred(view::row(chevron_key()));
     row.style.justify_content = taffy::JustifyContent::CENTER;
-    let node = row
-        .size(CHEVRON_BOX, CHEVRON_BOX)
+    row.size(CHEVRON_BOX, CHEVRON_BOX)
         .radius(cx.theme.radius_md)
         .interactive()
         .focusable()
         .child(glyph)
-        .children(dot);
-    if cx.tray_open {
-        node.fill(Role::ControlHover)
-    } else {
-        node
-    }
+        .children(dot)
 }
 
 /// The items the bar shows with their place in `cx.items`, which is what
@@ -675,21 +669,16 @@ mod tests {
     }
 
     #[test]
-    fn the_chevron_is_lit_and_turned_while_its_window_is_open() {
+    fn the_chevron_turns_while_its_window_is_open() {
         let rows = items();
         let at_rest = with(&rows, &["nm-applet"], |cx| Tray.bar(cx)).expect("icons");
         let open = with_open(&rows, &["nm-applet"], true, |cx| Tray.bar(cx)).expect("icons");
-        let (rest, lit) = (&at_rest.children[0], &open.children[0]);
+        let (rest, turned) = (&at_rest.children[0], &open.children[0]);
         assert_eq!(rest.children[0].rotation, 0.0);
-        assert_eq!(lit.children[0].rotation, 180.0, "the glyph turns");
+        assert_eq!(turned.children[0].rotation, 180.0, "the glyph turns");
+        // The bar's open pill is its fill: no fill of its own either way.
         assert!(matches!(rest.kind, ViewKind::Box { fill: None, .. }));
-        assert!(matches!(
-            lit.kind,
-            ViewKind::Box {
-                fill: Some(Role::ControlHover),
-                ..
-            }
-        ));
+        assert!(matches!(turned.kind, ViewKind::Box { fill: None, .. }));
     }
 
     #[test]

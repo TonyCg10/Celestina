@@ -95,14 +95,19 @@ fn chevron_opens_the_overflow_window() {
     assert!(island.sheets.is_open());
     assert_eq!(island.sheets.kind(), Some(SheetKind::TrayOverflow));
     assert_eq!(island.sheets.piece(), Some(chevron_key()));
-    // The window grows out of the chevron, which does not leave the bar.
-    step(&mut island, t + ms(100));
-    assert_eq!(island.bar.as_ref().and_then(|b| b.lifted()), None);
-    assert!(island
-        .bar
-        .as_ref()
-        .and_then(|b| b.fade_of(chevron_key(), t + ms(100)))
-        .is_none());
+    // The window grows out of the chevron, which stays in the bar under the
+    // open pill.
+    let soon = t + ms(100);
+    step(&mut island, soon);
+    let bar = island.bar.as_ref();
+    assert_eq!(bar.and_then(|b| b.open_piece()), Some(chevron_key()));
+    let pills = bar.map(|b| b.pill(soon)).unwrap_or_default();
+    assert_eq!(pills.len(), 1, "{pills:?}");
+    assert_eq!(pills[0].piece, chevron_key());
+    assert_eq!(
+        bar.and_then(|b| b.pill_of(chevron_key(), soon)),
+        Some(pills[0].rect)
+    );
     // Pressing the chevron again closes it.
     let later = t + ms(600);
     step(&mut island, later);

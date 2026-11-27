@@ -1,10 +1,11 @@
 //! Capsule menus: a piece of a bar capsule opens a window of its own under
-//! the bar (CEL-D-002, CEL-D-009). The pure rules ([`geometry`]) and clocks
-//! ([`motion`]) hold no painter and no GL; [`Sheets`] owns what is open on one
-//! output: the window's rect, its body, the window being left in a switch
-//! (it closes towards its piece on its own clock), the open that waits for
-//! another thing to close and the scroll. The Island wires it to the bar
-//! (`island::sheets`).
+//! the bar (CEL-D-002, CEL-D-009). The piece stays in its slot in the bar,
+//! under the grey open pill (CEL-D-014), and the window hangs from it. The
+//! pure rules ([`geometry`]) and clocks ([`motion`]) hold no painter and no
+//! GL; [`Sheets`] owns what is open on one output: the window's rect, its
+//! body, the window being left in a switch (it closes towards its piece on
+//! its own clock), the open that waits for another thing to close and the
+//! scroll. The Island wires it to the bar (`island::sheets`).
 //!
 //! Nothing here stores a measure: whatever cuts or measures text takes the
 //! caller's `Measure` for the length of the call, because the painter is
@@ -46,10 +47,9 @@ fn slide_follows(until: Option<Instant>, now: Instant) -> bool {
 /// A change of a rect under this is no change.
 const EPS: f32 = 0.01;
 
-/// What a window hangs from: its capsule as it is painted now (without the
-/// open piece) and the edge of it the window lines up with, the pill of the
-/// open piece (its rect in the bar while it is in its row, the pill of its
-/// slot while it is out of it) and the surface.
+/// What a window hangs from: its capsule as it is painted now and the edge of
+/// it the window lines up with, the pill of the open piece (its rect in the
+/// bar: the piece stays in its slot, CEL-D-014) and the surface.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Anchor {
     pub capsule: Rect,
@@ -219,25 +219,15 @@ impl Sheets {
             .map(|o| o.piece)
     }
 
-    /// Whether (`x`, `y`) is on the open sheet's subtitle row but not on its
-    /// trailing overflow button: that row answers the gestures of the piece
-    /// the sheet is open on.
+    /// The piece the bar holds open at `now`: the open sheet's, and a
+    /// closing sheet's until the close reaches [`motion::PIECE_RESTORE_AT`].
     #[must_use]
-    pub fn on_subtitle(&self, anchor: &Anchor, now: Instant, x: f32, y: f32) -> bool {
-        let Some(rect) = self.rect(anchor, now) else {
-            return false;
-        };
-        let Some(o) = self.open.as_ref().filter(|o| !o.motion.is_closing()) else {
-            return false;
-        };
-        let at = Sheets::target_of(anchor, o.body.size());
-        let (lx, ly) = (x - at.x, y - at.y + self.scroll.offset());
-        let tree = o.body.tree();
-        let rect_of = |key| tree.node_by_key(key).map(|id| tree.rect(id));
-        rect_of(subtitle::row_key()).is_some_and(|row| row.contains(lx, ly))
-            && !rect_of(crate::island::view::sheet_more_key()).is_some_and(|m| m.contains(lx, ly))
-            // The window clips its body, and the bar's band is not its own.
-            && geometry::hit(rect, x, y) == geometry::Hit::Body
+    pub fn held_piece(&self, now: Instant) -> Option<Key> {
+        let o = self.open.as_ref()?;
+        o.motion
+            .close_fraction(now)
+            .is_none_or(|at| at < motion::PIECE_RESTORE_AT)
+            .then_some(o.piece)
     }
 
     /// The open sheet's kind, else the queued one's.
@@ -521,10 +511,10 @@ impl Sheets {
         self.bump();
     }
 
-    /// Starts the close: the window goes towards the pill of its piece's slot.
-    /// What its body holds goes out first. Does nothing without an open
-    /// window. The piece's slot reopens at once and the piece fades back in
-    /// (the bar's clock).
+    /// Starts the close: the window goes towards the pill of its piece. What
+    /// its body holds goes out first. Does nothing without an open window.
+    /// The piece gives back its pill and opacity at the restore moment
+    /// ([`motion::PIECE_RESTORE_AT`], the bar's clock).
     pub fn close(&mut self, anchor: &Anchor, now: Instant) {
         let Some(shown) = self.rect(anchor, now) else {
             return;
@@ -599,10 +589,10 @@ impl Sheets {
     }
 
     /// The bar moved or changed under the sheet: it follows its capsule and
-    /// slot. A capsule that jumps (a new placement, a text that changed its
-    /// width) is followed on the resize morph; one that slides (`sliding`: the
-    /// open piece's slot closing or reopening) is followed exactly, frame by
-    /// frame, with no morph of its own.
+    /// piece. A capsule that jumps (a new placement, a text that changed its
+    /// width) is followed on the resize morph; one that slides (`sliding`: a
+    /// tray app hidden or shown beside the piece) is followed exactly, frame
+    /// by frame, with no morph of its own.
     pub fn follow(&mut self, anchor: &Anchor, sliding: bool, now: Instant) {
         let Some(o) = self.open.as_mut() else {
             return;
@@ -1014,6 +1004,57 @@ mod tests {
 
     fn r(x: f32, y: f32, w: f32, h: f32) -> Rect {
         Rect { x, y, w, h }
+    }
+
+    fn bare_open(piece: Key, now: Instant) -> (Sheets, Anchor) {
+        let pill = r(1040.0, 14.0, 60.0, 28.0);
+        let anchor = Anchor {
+            capsule: r(1000.0, 8.0, 200.0, 40.0),
+            edge: Edge::Start,
+            pill,
+            surface: (1920.0, 560.0),
+        };
+        let body = WorkspacesBody::new(
+            &Theme::dark(),
+            false,
+            celestina_ui::view::row(Key::named("body")).size(100.0, 40.0),
+            vec![1],
+            now,
+        );
+        let mut sheets = Sheets::default();
+        sheets.open(
+            Request {
+                zone: 3,
+                piece,
+                kind: SheetKind::Workspaces,
+                body: SheetBody::Workspaces(Box::new(body)),
+            },
+            &anchor,
+            &Theme::dark(),
+            now,
+            false,
+        );
+        (sheets, anchor)
+    }
+
+    #[test]
+    fn the_piece_is_held_until_its_restore_moment() {
+        let t0 = Instant::now();
+        let piece = Key::named("volume");
+        let (mut sheets, anchor) = bare_open(piece, t0);
+        assert_eq!(sheets.held_piece(t0), Some(piece));
+        assert_eq!(Sheets::default().held_piece(t0), None);
+        let at = t0 + Duration::from_millis(500);
+        sheets.close(&anchor, at);
+        // 260 ms close: held while its fraction is under the restore moment.
+        let close = Duration::from_millis(260);
+        if motion::PIECE_RESTORE_AT > 0.0 {
+            let before = at + close.mul_f32(motion::PIECE_RESTORE_AT * 0.5);
+            assert_eq!(sheets.held_piece(before), Some(piece));
+        }
+        let from = at + close.mul_f32(motion::PIECE_RESTORE_AT);
+        assert_eq!(sheets.held_piece(from), None);
+        assert_eq!(sheets.held_piece(at + close), None);
     }
 
     fn closing(reduced: bool, t0: Instant) -> SheetMotion {

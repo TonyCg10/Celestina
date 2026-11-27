@@ -1,7 +1,7 @@
 //! A capsule menu is a window of its own under the bar (CEL-D-009): the bar
 //! paints every capsule, the window is a shape apart, a press on the bar goes
 //! to the bar, a switch shows two windows while the old one closes and a piece that
-//! vanishes takes its window into its last slot.
+//! vanishes takes its window into its last pill.
 
 use celestina_shell::settings::BarLayout;
 
@@ -21,6 +21,7 @@ fn the_bar_paints_every_capsule_while_a_window_is_open() {
     let (mut island, t0) = level_island();
     let rest = capsules(&island, t0);
     assert!(rest.len() >= 2, "premise: more than one capsule");
+    let rest_extent = island.bar.as_ref().and_then(|b| b.capsule_extent(3, t0));
     assert!(open_on(&mut island, volume(), t0));
     for t in [0, 60, 175, 349, 400, 900] {
         let now = t0 + ms(t);
@@ -30,9 +31,11 @@ fn the_bar_paints_every_capsule_while_a_window_is_open() {
         for capsule in capsules(&island, now) {
             assert!(shapes.contains(&capsule), "+{t} ms: {capsule:?}");
         }
-        // The only piece out of its capsule is the open one.
-        let lifted = island.bar.as_ref().and_then(|b| b.lifted());
-        assert_eq!(lifted, Some(volume()), "+{t} ms");
+        // The open piece stays in its slot: the capsule keeps its extent.
+        let bar = island.bar.as_ref();
+        assert_eq!(bar.and_then(|b| b.open_piece()), Some(volume()), "+{t} ms");
+        let extent = bar.and_then(|b| b.capsule_extent(3, now));
+        assert_eq!(extent, rest_extent, "+{t} ms");
     }
 }
 
@@ -82,8 +85,8 @@ fn a_press_on_another_piece_of_the_capsule_switches() {
 fn a_press_on_the_glass_of_its_own_capsule_closes() {
     let (mut island, t) = settled();
     let end = zone(island.bar.as_ref().and_then(|b| b.capsule_extent(3, t)));
-    // The lifted piece's slot is a gap in the row: a press on the capsule's
-    // padding is on no piece.
+    // The capsule's padding is empty glass, not a slot: a press there is on
+    // no piece.
     let at = (end.x + 1.0, end.y + end.h / 2.0);
     assert!(click_at(&mut island, at, BTN_LEFT, t).is_empty());
     assert!(!island.sheets.is_open());
@@ -247,7 +250,7 @@ fn a_narrow_output_keeps_a_start_window_inside() {
 }
 
 #[test]
-fn a_vanished_piece_closes_towards_its_last_slot() {
+fn a_vanished_piece_closes_towards_its_last_pill() {
     let (mut island, t) = settled();
     let last = island.sheet_anchor(t).map(|a| a.pill);
     // The layout drops the volume piece while its window is open.
@@ -261,7 +264,7 @@ fn a_vanished_piece_closes_towards_its_last_slot() {
     step(&mut island, t + ms(1));
     assert!(!island.sheets.is_open(), "it closes");
     assert!(island.sheets.is_shown(t + ms(2)), "on its exit motion");
-    // It closes toward the last slot the piece had.
+    // It closes toward the last pill the piece had.
     let mid = shown_rect(&island, t + ms(75));
     let from = shown_rect(&island, t + ms(1));
     assert!(mid.h < from.h);
@@ -270,7 +273,7 @@ fn a_vanished_piece_closes_towards_its_last_slot() {
         t + ms(259),
     );
     if let (Some(end), Some(pill)) = (at_end, last) {
-        // A close goes 70 % of the way to the slot's pill, never past it:
+        // A close goes 70 % of the way to the piece's pill, never past it:
         // the rect has left the window and is nearer the pill than it was.
         let from = shown_rect(&island, t + ms(1));
         assert!((end.w - pill.w).abs() < (from.w - pill.w).abs());
@@ -279,11 +282,6 @@ fn a_vanished_piece_closes_towards_its_last_slot() {
     let later = t + ms(300);
     step(&mut island, later);
     assert!(!island.sheets.is_shown(later));
-    assert!(island
-        .bar
-        .as_ref()
-        .and_then(|b| b.fade_of(volume(), later))
-        .is_none());
     assert!(island.sheet_rect(later).is_none());
     assert_eq!(
         island.shapes(later).len(),
@@ -292,7 +290,7 @@ fn a_vanished_piece_closes_towards_its_last_slot() {
 }
 
 #[test]
-fn closing_a_scrolled_window_closes_towards_the_slot() {
+fn closing_a_scrolled_window_closes_towards_the_pill() {
     let (mut island, t0) = level_island();
     let sent = Rc::new(RefCell::new(Vec::new()));
     let core = sent_core_with(&island.theme, &sent, busy_graph(), true);
@@ -324,7 +322,7 @@ fn closing_a_scrolled_window_closes_towards_the_slot() {
     let scroll = island.sheets.scroll().offset();
     assert!(scroll > 0.0, "premise: it scrolled");
     island.close_sheet(t);
-    // The close ends on the live slot.
+    // The close ends on the live pill.
     let end = t + ms(260);
     step(&mut island, end);
     assert!(island.sheet_rect(end).is_none());

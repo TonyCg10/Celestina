@@ -191,6 +191,9 @@ pub struct Theme {
     pub slider_handle_size: f32,
     /// The alpha a disabled control is drawn at.
     pub disabled_opacity: f32,
+    /// The alpha of a control's content while it is held open, as the open
+    /// piece in the bar.
+    pub muted_content_opacity: f32,
     /// The type ladder at text scale 1, so `scaled` never compounds.
     type_base: TypeScale,
 }
@@ -271,6 +274,7 @@ impl From<&Scheme> for Theme {
             linear_track_height: control::LINEAR_TRACK_HEIGHT,
             slider_handle_size: control::SLIDER_HANDLE_SIZE,
             disabled_opacity: opacity::DISABLED,
+            muted_content_opacity: opacity::MUTED_CONTENT,
             type_base,
         }
     }
@@ -377,9 +381,10 @@ mod tests {
             (
                 t.linear_track_height,
                 t.slider_handle_size,
-                t.disabled_opacity
+                t.disabled_opacity,
+                t.muted_content_opacity
             ),
-            (4.0, 15.0, 0.5)
+            (4.0, 15.0, 0.5, 0.8)
         );
     }
 
