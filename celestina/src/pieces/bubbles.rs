@@ -217,6 +217,7 @@ mod tests {
             history: &[],
             items: &[],
             tray_hidden: &[],
+            tray_open: false,
             phone: &celestina_shell::phone::PhoneState::Absent,
             bubbles,
             sysmon: None,

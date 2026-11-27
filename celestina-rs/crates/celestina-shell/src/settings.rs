@@ -418,6 +418,33 @@ impl Default for BarLayout {
     }
 }
 
+impl BarLayout {
+    /// Whether hiding `id` would change the list: the id can be listed and is
+    /// not listed yet while the list has room.
+    #[must_use]
+    pub fn can_hide(&self, id: &str) -> bool {
+        is_hidden_id(id)
+            && !self.tray_hidden.iter().any(|have| have == id)
+            && self.tray_hidden.len() < MAX_HIDDEN_IDS
+    }
+
+    /// The hidden list with `id` hidden or shown: hiding appends it once
+    /// (at the end), showing removes it. An id that cannot be listed (empty,
+    /// too long, control characters) leaves the list as it is.
+    #[must_use]
+    pub fn tray_hidden_with(&self, id: &str, hide: bool) -> Vec<String> {
+        let mut ids = self.tray_hidden.clone();
+        if hide {
+            if is_hidden_id(id) && !ids.iter().any(|have| have == id) {
+                ids.push(id.to_owned());
+            }
+        } else {
+            ids.retain(|have| have != id);
+        }
+        kept_hidden(ids)
+    }
+}
+
 /// The ids of `zone` that are well formed and not in `seen`, in order, at
 /// most `MAX_ZONE_IDS`; each kept id joins `seen`.
 fn kept_pieces(zone: Vec<String>, seen: &mut Vec<String>) -> Vec<String> {
@@ -487,6 +514,12 @@ impl BarChoice {
     #[must_use]
     pub fn is_unset(&self) -> bool {
         *self == Self::default()
+    }
+
+    /// Chooses the tray items the bar hides, kept well formed, once each and
+    /// bounded.
+    pub fn set_tray_hidden(&mut self, ids: Vec<String>) {
+        self.tray_hidden = Some(kept_hidden(ids));
     }
 
     /// Each chosen list inside its bounds; a piece listed twice keeps its
@@ -1920,6 +1953,30 @@ mod tests {
         );
         assert_eq!(layout, BarLayout::default());
         assert!(settings.bar.is_unset());
+    }
+
+    #[test]
+    fn hiding_appends_an_id_once_and_showing_removes_it() {
+        let layout = BarLayout {
+            tray_hidden: ids(&["a", "b"]),
+            ..BarLayout::default()
+        };
+        assert_eq!(layout.tray_hidden_with("c", true), ids(&["a", "b", "c"]));
+        assert_eq!(layout.tray_hidden_with("a", true), ids(&["a", "b"]));
+        assert_eq!(layout.tray_hidden_with("a", false), ids(&["b"]));
+        assert_eq!(layout.tray_hidden_with("z", false), ids(&["a", "b"]));
+        assert_eq!(layout.tray_hidden_with("", true), ids(&["a", "b"]));
+        assert!(layout.can_hide("c"));
+        assert!(!layout.can_hide("a"), "already hidden");
+        assert!(!layout.can_hide(""));
+        assert!(!layout.can_hide(&"h".repeat(MAX_HIDDEN_ID_BYTES + 1)));
+        assert!(!layout.can_hide("x\ty"));
+        let full = BarLayout {
+            tray_hidden: (0..MAX_HIDDEN_IDS).map(|i| format!("id{i}")).collect(),
+            ..BarLayout::default()
+        };
+        assert!(!full.can_hide("one-more"), "no room");
+        assert_eq!(layout.tray_hidden_with("x\ty", true), ids(&["a", "b"]));
     }
 
     #[test]

@@ -159,8 +159,8 @@ const CLEAR_STEP: Duration = Duration::from_millis(30);
 const BTN_RIGHT: u32 = 0x111;
 const BTN_MIDDLE: u32 = 0x112;
 /// The Menu key and F10 (with Shift): the keyboard's context menu.
-const XKB_KEY_MENU: u32 = 0xff67;
-const XKB_KEY_F10: u32 = 0xffc9;
+pub(super) const XKB_KEY_MENU: u32 = 0xff67;
+pub(super) const XKB_KEY_F10: u32 = 0xffc9;
 /// The Delete key and the keypad's: they remove the focused clipboard entry.
 const XKB_KEY_DELETE: u32 = 0xffff;
 const XKB_KEY_KP_DELETE: u32 = 0xff9f;
@@ -323,6 +323,8 @@ pub struct Island {
     tray_menu: Option<PopupId>,
     /// The tray's items as the page shows them.
     tray_rows: Vec<TrayRow>,
+    /// The tray's overflow window is open: the chevron is lit and turned.
+    overflow_shown: bool,
     /// The generation of the tray list `tray_rows` was made from.
     tray_generation: u64,
     /// The output scale the tray rows' icons were resolved at.
@@ -371,6 +373,12 @@ pub struct Island {
     tray_menu_on_bar: bool,
     /// The last tray menu asked for was a bar icon's.
     bar_menu_asked: bool,
+    /// The item whose menu was asked for from a row of the tray's overflow
+    /// window.
+    overflow_menu_asked: Option<ItemId>,
+    /// The item whose open tray card hangs from its row in the overflow
+    /// window: the card goes when the window closes or loses that row.
+    tray_menu_from_window: Option<ItemId>,
     /// The last pointer position seen, in the surface's logical coordinates.
     /// The surface is anchored to the output's whole top edge, so these are
     /// the output's coordinates too.
@@ -450,6 +458,7 @@ impl Island {
             tray_menu: None,
             tray_rows: Vec::new(),
             tray_generation: 0,
+            overflow_shown: false,
             tray_dpr: 1.0,
             clipboard: ClipboardState::default(),
             clipboard_on: false,
@@ -472,6 +481,8 @@ impl Island {
             levels: Levels::default(),
             tray_menu_on_bar: false,
             bar_menu_asked: false,
+            overflow_menu_asked: None,
+            tray_menu_from_window: None,
             pointer: (0.0, 0.0),
             subtitle_press: None,
             bar_sysmon: Cadence::new(SYSMON_BAR_PERIOD),
@@ -584,6 +595,7 @@ impl Island {
             history: &self.history,
             items: &self.tray_rows,
             tray_hidden: &[],
+            tray_open: self.overflow_shown,
             sysmon: self.bar_sysmon.shown(),
             weather: self.weather.as_ref(),
             today: self.today,
@@ -873,13 +885,19 @@ impl Island {
             }
         }
         if seen {
-            self.stale |=
-                self.page_shown().is_some() || self.sheets.kind() == Some(SheetKind::Workspaces);
+            self.stale |= self.page_shown().is_some()
+                || matches!(
+                    self.sheets.kind(),
+                    Some(SheetKind::Workspaces | SheetKind::TrayOverflow)
+                );
             self.invalidate_bar();
         }
         if self.menu.is_some() && self.page_shown().is_none() {
             // The sheet went by another way than a press: its menu goes too.
             self.close_page_menus(&mut cx.ctl);
+        }
+        if self.tray_card_orphaned() {
+            self.close_menu(&mut cx.ctl);
         }
         self.hold_sysmon(sysmon, now, &mut cx.ctl);
         self.tick_clock(now, &mut cx.ctl);
@@ -1106,6 +1124,7 @@ impl Island {
         }
         self.apply_page_sheet();
         self.apply_workspaces_sheet(now);
+        self.apply_tray_overflow_sheet(now);
         // A page sheet takes the focus once it is built again
         // ([`Island::refit_page_sheet`]).
         if self.state.is_open() || self.sheets.page().is_none() {
@@ -1143,8 +1162,18 @@ impl Island {
             }
         }
         let (surface_w, island_w) = (self.size.0, self.state.rect(now, self.size.0).w);
-        // The piece a sheet is open on is out of its capsule while it is.
-        let lifted = self.sheets.piece();
+        // The piece a sheet is open on is out of its capsule while it is,
+        // except the tray's chevron: it stays in the bar, lit, and turns.
+        let lifted = self
+            .sheets
+            .piece()
+            .filter(|&k| k != pieces::tray::chevron_key());
+        let overflow = self.sheets.kind() == Some(SheetKind::TrayOverflow)
+            && self.sheets.piece() == Some(pieces::tray::chevron_key());
+        if overflow != self.overflow_shown {
+            self.overflow_shown = overflow;
+            self.invalidate_bar();
+        }
         let fault = self.with_bar(|bar, cx| {
             bar.set_lifted(lifted, now);
             bar.update(cx, surface_w, island_w, now, lay);
@@ -1359,6 +1388,9 @@ impl Island {
         if self.page_shown().is_none() {
             self.close_page_menus(ctl);
         }
+        if self.tray_card_orphaned() {
+            self.close_menu(ctl);
+        }
         let after = (
             self.capsule.highlight(),
             self.page.highlight(),
@@ -1567,6 +1599,7 @@ impl Island {
                 PieceAction::TrayMenu(item) => {
                     if let Some(row) = self.bar.as_ref().and_then(|bar| bar.node_rect(key)) {
                         self.bar_menu_asked = true;
+                        self.overflow_menu_asked = None;
                         out.push(IslandAction::OpenTrayMenu {
                             item,
                             row,
@@ -1663,8 +1696,23 @@ impl Island {
         tracing::debug!(output = %self.output, popup = id.0, on_bar, "island: tray menu opened");
         self.tray_menu = Some(id);
         self.tray_menu_on_bar = on_bar;
+        let asked = self.overflow_menu_asked.take();
+        self.tray_menu_from_window = asked.filter(|_| on_bar);
         self.bar_menu_asked = false;
         Some(id)
+    }
+
+    /// Whether the tray card hangs from an overflow window that is no longer
+    /// open, or that no longer lists the card's app (it was shown, or it
+    /// went): the card goes with it.
+    pub(crate) fn tray_card_orphaned(&self) -> bool {
+        let Some(item) = self.tray_menu_from_window.as_ref() else {
+            return false;
+        };
+        let listed = self.sheets.is_open()
+            && self.sheets.kind() == Some(SheetKind::TrayOverflow)
+            && self.overflow_rows().iter().any(|(_, row)| row.id == *item);
+        self.tray_menu.is_some() && !listed
     }
 
     /// Whether a tray item's menu hangs from this Island right now.
@@ -1756,7 +1804,9 @@ impl Island {
         } else {
             pointer
         });
-        if row.has_menu {
+        // An item with an `Id` also gets the shell's own card (hide or show);
+        // the host asks the app for its own menu when it has no dbusmenu.
+        if row.has_menu || !row.sni_id.is_empty() {
             return self.open_menu_action(row.id.clone(), index, keyboard, at);
         }
         Some(IslandAction::Tray(TrayCommand::ContextMenu(
@@ -1778,6 +1828,18 @@ impl Island {
             return Vec::new();
         };
         let id = row.id.clone();
+        self.scroll_item(key, id, horizontal, vertical)
+    }
+
+    /// [`Island::scroll_actions`] for the item `id` whose row is `key`, on
+    /// the page or in the overflow window.
+    fn scroll_item(
+        &mut self,
+        key: Key,
+        id: ItemId,
+        horizontal: f32,
+        vertical: f32,
+    ) -> Vec<IslandAction> {
         if self.scroll.row != Some(key) {
             self.scroll = ScrollRemainder {
                 row: Some(key),
@@ -1993,6 +2055,7 @@ impl Island {
     /// could otherwise keep the keyboard from the card (N-25).
     pub(crate) fn close_menu(&mut self, ctl: &mut SurfaceCtl<'_>) {
         self.tray_menu_on_bar = false;
+        self.tray_menu_from_window = None;
         for id in [self.menu.take(), self.tray_menu.take()]
             .into_iter()
             .flatten()
@@ -2028,14 +2091,18 @@ impl Island {
         } else if self.tray_menu == Some(id) {
             self.tray_menu = None;
             self.tray_menu_on_bar = false;
+            self.tray_menu_from_window = None;
         } else {
             return false;
         }
         if reason == CloseReason::Dismissed {
             if self.state.is_open() {
                 self.close(now);
-            } else if self.sheets.page().is_some() {
-                // A page sheet closes as the page does.
+            } else if self.sheets.page().is_some()
+                || self.sheets.kind() == Some(SheetKind::TrayOverflow)
+            {
+                // A page sheet closes as the page does, and so does the
+                // tray's window a card hangs from.
                 self.sheets.drop_queue();
                 self.close_sheet(now);
             }
@@ -6446,5 +6513,6 @@ mod tests {
     mod crossfade;
     mod page_sheets;
     mod subtitle_gestures;
+    mod tray_overflow;
     mod window;
 }

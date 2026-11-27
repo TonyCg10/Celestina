@@ -13,13 +13,24 @@ use crate::{
 /// The bell's icon size, logical px.
 const BELL: f32 = 18.0;
 /// The unread mark's diameter, logical px.
-const MARK: f32 = 7.0;
+pub(super) const MARK: f32 = 7.0;
 /// The space around the bell that still counts as the bell.
 const HIT_PAD: f32 = 5.0;
 
 /// The Notifications piece.
 #[derive(Clone, Copy, Debug)]
 pub struct Notifications;
+
+/// The accent dot of a piece that wants a look (the bell's unread mark, the
+/// tray chevron's attention dot): `MARK` px, `key`, at (`x`, `y`) of its
+/// piece's box.
+pub(super) fn attention_dot(key: Key, x: f32, y: f32) -> View {
+    view::row(key)
+        .fill(Role::Accent)
+        .radius(MARK / 2.0)
+        .size(MARK, MARK)
+        .absolute(x, y)
+}
 
 fn bell_key() -> Key {
     Key::named("bell")
@@ -62,11 +73,11 @@ impl Piece for Notifications {
         let name = bell_icon(cx);
         let icon = view::icon(Key::named("bell-icon"), name, BELL).tint(Role::TextHi);
         let mark = unread(cx).then(|| {
-            view::row(Key::named("bell-unread"))
-                .fill(Role::Accent)
-                .radius(MARK / 2.0)
-                .size(MARK, MARK)
-                .absolute(HIT_PAD + BELL - MARK, HIT_PAD / 2.0)
+            attention_dot(
+                Key::named("bell-unread"),
+                HIT_PAD + BELL - MARK,
+                HIT_PAD / 2.0,
+            )
         });
         Some(
             centred(view::row(bell_key()))
@@ -134,6 +145,7 @@ mod tests {
             history,
             items: &[],
             tray_hidden: &[],
+            tray_open: false,
             sysmon: None,
             weather: None,
             today: None,

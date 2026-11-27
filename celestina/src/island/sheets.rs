@@ -11,15 +11,22 @@ use celestina_paint::{Painter, Rect};
 use celestina_ui::Key;
 use celestina_wayland::{InputEvent, KeyboardInteractivity, SurfaceCtl};
 
-use super::{workspaces::rows_for, Island, IslandAction, Measure};
+use super::{
+    output_point,
+    pages::tray::{index_of, row_key, TrayRow},
+    workspaces::rows_for,
+    Island, IslandAction, Measure, XKB_KEY_F10, XKB_KEY_MENU,
+};
 use crate::{
     osd::popup::{Kind, LevelCore},
-    pieces::{workspaces as workspaces_piece, Gesture, PageId, PieceAction, SheetKind},
+    pieces::{
+        tray as tray_piece, workspaces as workspaces_piece, Gesture, PageId, PieceAction, SheetKind,
+    },
     session_menu::SessionCore,
     sheet::{
         geometry::{self, Edge, Hit},
         workspaces::workspaces_view,
-        Anchor, BodyOutcome, Next, Request, SheetBody, WorkspacesBody,
+        Anchor, BodyOutcome, Next, Request, SheetBody, TrayOverflowBody, WorkspacesBody,
     },
 };
 
@@ -268,6 +275,10 @@ impl Island {
                 self.open_workspaces_sheet(key, now);
                 return None;
             }
+            SheetKind::TrayOverflow => {
+                self.open_tray_overflow_sheet(key, now);
+                return None;
+            }
             SheetKind::Session => {
                 let core = SessionCore::new(&self.theme, self.reduced, now);
                 self.open_sheet_at(
@@ -327,6 +338,187 @@ impl Island {
         }
     }
 
+    /// The apps the bar hides, with their place in the tray's list: what
+    /// the overflow window lists.
+    pub(super) fn overflow_rows(&self) -> Vec<(usize, &TrayRow)> {
+        let hidden = self
+            .bar
+            .as_ref()
+            .map_or(&[][..], |bar| bar.layout().tray_hidden.as_slice());
+        tray_piece::hidden_rows(&self.tray_rows, hidden).collect()
+    }
+
+    /// The hidden apps the overflow list shows, with their place in the
+    /// tray's list. `None` while none is hidden.
+    fn overflow_list(&self) -> Option<Vec<(usize, TrayRow)>> {
+        let rows: Vec<(usize, TrayRow)> = self
+            .overflow_rows()
+            .into_iter()
+            .map(|(index, row)| (index, row.clone()))
+            .collect();
+        (!rows.is_empty()).then_some(rows)
+    }
+
+    /// Opens the hidden apps' list as the sheet of `piece` (the chevron),
+    /// through the same gates as any sheet. `false` when no app is hidden or
+    /// the bar has no such piece.
+    fn open_tray_overflow_sheet(&mut self, piece: Key, now: Instant) -> bool {
+        let Some(rows) = self.overflow_list() else {
+            return false;
+        };
+        let body = TrayOverflowBody::new(&self.theme, self.reduced, rows, now);
+        self.open_sheet_at(
+            piece,
+            SheetKind::TrayOverflow,
+            SheetBody::TrayOverflow(Box::new(body)),
+            now,
+        )
+    }
+
+    /// Builds the open overflow list again (the hidden list or the
+    /// registered apps changed): the focus and hover stay and the sheet
+    /// follows a new height; with no hidden app left it closes.
+    pub(super) fn apply_tray_overflow_sheet(&mut self, now: Instant) {
+        if self.sheets.tray_overflow_body_mut().is_none() {
+            return;
+        }
+        let Some(rows) = self.overflow_list() else {
+            // The last hidden app left (shown again, or it unregistered): the
+            // chevron goes with it.
+            self.sheets.drop_queue();
+            self.close_sheet(now);
+            return;
+        };
+        if let Some(body) = self.sheets.tray_overflow_body_mut() {
+            body.apply(rows, now);
+        }
+    }
+
+    /// The index in the tray's list of the hidden app whose window row is
+    /// `key`.
+    fn overflow_index(&self, key: Key) -> Option<usize> {
+        let index = index_of(key, self.tray_rows.len())?;
+        self.overflow_rows()
+            .iter()
+            .any(|&(i, _)| i == index)
+            .then_some(index)
+    }
+
+    /// What `gesture` on the window row `key` asks, as on the app's bar
+    /// icon: a click or Enter activates (the window closes on the choice), a
+    /// middle click activates secondarily, the app's menu hangs from the row
+    /// (the window stays under it) and `keyboard` places it at the row.
+    fn overflow_row_gesture(
+        &mut self,
+        key: Key,
+        gesture: Gesture,
+        keyboard: bool,
+        now: Instant,
+    ) -> Vec<IslandAction> {
+        let Some(index) = self.overflow_index(key) else {
+            return Vec::new();
+        };
+        let Some(row) = self.tray_rows.get(index).cloned() else {
+            return Vec::new();
+        };
+        let rect = self
+            .sheet_anchor(now)
+            .and_then(|anchor| self.sheets.body_rect(row_key(index), &anchor));
+        let at = |rect: Option<Rect>, pointer: (f32, f32)| {
+            output_point(match (keyboard, rect) {
+                (true, Some(r)) => (r.x + r.w / 2.0, r.y + r.h / 2.0),
+                _ => pointer,
+            })
+        };
+        match tray_piece::row_action(&row, gesture) {
+            PieceAction::Tray(command) => {
+                self.sheets.drop_queue();
+                self.close_sheet(now);
+                vec![IslandAction::Tray(command)]
+            }
+            PieceAction::TrayMenu(item) => {
+                let Some(row) = rect else {
+                    return Vec::new();
+                };
+                self.bar_menu_asked = true;
+                self.overflow_menu_asked = Some(item.clone());
+                vec![IslandAction::OpenTrayMenu {
+                    item,
+                    row,
+                    keyboard,
+                    at: at(rect, self.pointer),
+                }]
+            }
+            PieceAction::TrayContext(item) => {
+                let (x, y) = at(rect, self.pointer);
+                vec![IslandAction::Tray(crate::tray::TrayCommand::ContextMenu(
+                    item, x, y,
+                ))]
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// The hidden app whose window row holds (`x`, `y`).
+    fn overflow_row_at(&self, anchor: &Anchor, x: f32, y: f32) -> Option<Key> {
+        self.overflow_rows().into_iter().find_map(|(index, _)| {
+            let key = row_key(index);
+            self.sheets
+                .body_rect(key, anchor)
+                .filter(|r| r.contains(x, y))
+                .map(|_| key)
+        })
+    }
+
+    /// What the tray window's rows do with the buttons and the wheel the body
+    /// does not know: a middle click activates secondarily, a right click
+    /// asks for the menu, the wheel scrolls the app (unless the list is taller
+    /// than its window, which then scrolls). `None` for everything else,
+    /// which is the body's.
+    fn overflow_pointer(
+        &mut self,
+        ev: &InputEvent,
+        anchor: &Anchor,
+        now: Instant,
+    ) -> Option<Vec<IslandAction>> {
+        if self.sheets.kind() != Some(SheetKind::TrayOverflow) {
+            return None;
+        }
+        match *ev {
+            InputEvent::PointerRelease { x, y, button, .. }
+                if button == super::BTN_MIDDLE || button == super::BTN_RIGHT =>
+            {
+                let key = self.overflow_row_at(anchor, x, y)?;
+                let gesture = if button == super::BTN_MIDDLE {
+                    Gesture::Middle
+                } else {
+                    Gesture::Context
+                };
+                Some(self.overflow_row_gesture(key, gesture, false, now))
+            }
+            InputEvent::Axis {
+                x,
+                y,
+                horizontal,
+                vertical,
+            } if !self.sheets.body_overflows(anchor) => {
+                let key = self.overflow_row_at(anchor, x, y)?;
+                let id = self.tray_rows.get(self.overflow_index(key)?)?.id.clone();
+                Some(self.scroll_item(key, id, horizontal, vertical))
+            }
+            _ => None,
+        }
+    }
+
+    /// The Menu key (or Shift+F10) on the focused row of the tray window:
+    /// the app's menu, placed at the row.
+    fn overflow_menu_key(&mut self, now: Instant) -> Vec<IslandAction> {
+        match self.sheets.body_focused_key() {
+            Some(key) => self.overflow_row_gesture(key, Gesture::Context, true, now),
+            None => Vec::new(),
+        }
+    }
+
     /// The frame's first part for the sheets: opens what was waiting for the
     /// close to end, and syncs the body (readings, a new theme, a resize) with
     /// the frame's own `measure`.
@@ -360,7 +552,10 @@ impl Island {
         };
         // What the page read while the request waited was not watched, and a
         // workspaces list built at the click may be out of date.
-        if matches!(request.kind, SheetKind::Page(_) | SheetKind::Workspaces) {
+        if matches!(
+            request.kind,
+            SheetKind::Page(_) | SheetKind::Workspaces | SheetKind::TrayOverflow
+        ) {
             self.stale = true;
         }
         self.sheets
@@ -454,6 +649,16 @@ impl Island {
                 Some(Vec::new())
             }
             InputEvent::Key {
+                keysym,
+                modifiers,
+                pressed: true,
+                ..
+            } if self.sheets.kind() == Some(SheetKind::TrayOverflow)
+                && (keysym == XKB_KEY_MENU || (keysym == XKB_KEY_F10 && modifiers.shift)) =>
+            {
+                Some(self.overflow_menu_key(now))
+            }
+            InputEvent::Key {
                 keysym, pressed, ..
             } => {
                 if Island::is_delete(keysym) {
@@ -509,6 +714,9 @@ impl Island {
                 match geometry::hit(rect, x, y) {
                     Hit::Body => {
                         self.pointer_is_the_sheets(now);
+                        if let Some(actions) = self.overflow_pointer(ev, &anchor, now) {
+                            return Some(actions);
+                        }
                         let outcome = self.sheets.input(ev, &anchor, now, measure);
                         Some(self.apply_outcome(outcome, now))
                     }
@@ -614,6 +822,11 @@ impl Island {
                 self.sheets.drop_queue();
                 self.close_sheet(now);
                 vec![IslandAction::FocusWorkspace(id)]
+            }
+            BodyOutcome::Activate { key, keyboard }
+                if self.sheets.kind() == Some(SheetKind::TrayOverflow) =>
+            {
+                self.overflow_row_gesture(key, Gesture::Primary, keyboard, now)
             }
             BodyOutcome::Activate { key, keyboard: _ } => {
                 let Some(page) = self.sheets.page() else {

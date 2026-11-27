@@ -1768,6 +1768,46 @@ None has been run and none is closed by an agent.
 - **Evidence:** none; the unit's automated evidence is
   [CEL-I-011](docs/evidence/2026-11-26-cel-i-011-tray-fixes.md)
 
+## VAL-CEL-I-012 — The collapsible tray
+
+- **Status:** pending
+- **Related implementation:** CEL-I-012 (a chevron at the tray's left end opens
+  a 240 px window of the hidden apps, lined up with the right capsule's right
+  edge; every app's menu ends with an entry that hides it from the bar or shows
+  it again; the 7 px attention dot on the chevron)
+- **Requires:** the deployed shell after the landing of CEL-I-012, with Steam,
+  Discord, nm-applet, blueman and solaar running, a bar whose end zone keeps
+  the `tray` piece, and two outputs for step (7)
+- **Procedure:** (1) with the default layout, look at the bar: nm-applet and
+  blueman are hidden, so the chevron shows. (2) Press the chevron: the window
+  grows under it, the glyph turns and the chevron stays lit; press it again or
+  press Escape. (3) Right click a bar icon (Steam): its menu ends with a line
+  and "Ocultar de la barra"; choose it. (4) Open the window: Steam is there.
+  Right click its row: the menu ends with "Mostrar en la barra"; choose it.
+  (5) Make an app that is hidden ask for attention (a Discord message, or
+  nm-applet with a pending connection): the 7 px dot shows on the chevron and
+  the row carries the attention label. (6) Open the menu of a row and press
+  Escape: the menu closes first, the window stays; press Escape again. (7) On
+  two outputs press the chevron of one: the window opens on that output only;
+  hide an app there and look at the other bar. (8) Show every hidden app: the
+  window and the chevron go. (9) Repeat steps (2) and (3) with reduced motion
+  on
+- **Pass condition:** (1) the chevron shows while an app is hidden and goes
+  when none is. (2) the window's right edge matches the capsule's
+  right edge, its top sits 8 px under the bar, the glyph turns on a spring and
+  the box stays lit while it is open. (3) the icon leaves its slot on the
+  slot spring and the neighbours close up; the menu of an app with no dbusmenu
+  is a card holding only that entry. (4) the row leaves the window and the
+  icon enters the bar. (5) the dot shows only while a hidden app asks for
+  attention, and the row's attention label shows whole (a long title ends
+  in an ellipsis). (6) Escape closes the menu level
+  first. (7) the window lives on the pressed output, and the other bar follows
+  the new list. (8) the last show closes the window and folds the chevron out.
+  (9) with reduced motion the glyph flips and nothing springs
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-I-012](docs/evidence/2026-11-26-cel-i-012-collapsible-tray.md)
+
 ## VAL-CEL-D-010 — A menu window blurs out towards its piece and the piece crossfades
 
 - **Status:** pending

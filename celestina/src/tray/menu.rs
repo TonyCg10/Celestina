@@ -32,6 +32,7 @@ use celestina_wayland::{
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::{ItemId, MenuTree, TrayCommand};
+use crate::copy;
 use crate::island::{
     menu::SharedPainter,
     state::SILHOUETTE_STEP,
@@ -40,6 +41,84 @@ use crate::island::{
 
 /// Where a chosen entry is left for the app: the item and the `dbusmenu` id.
 pub type ChoiceSlot = Rc<RefCell<Option<(ItemId, i32)>>>;
+
+/// The one entry the shell adds to the end of a tray app's menu; it is not
+/// the app's and the app never hears of it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShellEntry {
+    /// Hide the app from the bar (it is in the bar now).
+    Hide,
+    /// Show the app in the bar again (it is hidden now).
+    Show,
+}
+
+impl ShellEntry {
+    /// The entry's label.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            ShellEntry::Hide => copy::TRAY_HIDE,
+            ShellEntry::Show => copy::TRAY_SHOW,
+        }
+    }
+
+    /// The Lucide glyph in the check column.
+    #[must_use]
+    pub fn glyph(self) -> &'static str {
+        match self {
+            ShellEntry::Hide => "eye-off",
+            ShellEntry::Show => "eye",
+        }
+    }
+}
+
+/// Where a chosen shell entry is left for the app: the item and the entry.
+pub type ShellChoiceSlot = Rc<RefCell<Option<(ItemId, ShellEntry)>>>;
+
+/// One row of a level: an entry of the app's menu, a separator line or the
+/// shell's own entry.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MenuRow<'a> {
+    /// An entry of the app's menu.
+    Entry(&'a super::MenuEntry),
+    /// A separator line, the app's or the one before the shell's entry.
+    Separator,
+    /// The shell's entry.
+    Shell(ShellEntry),
+}
+
+/// The row at `index` of `level` followed, when `shell` is `Some`, by a
+/// separator (unless the level is empty or already ends in one) and the
+/// shell's entry.
+fn row_at(level: &MenuTree, shell: Option<ShellEntry>, index: usize) -> Option<MenuRow<'_>> {
+    let own = level.entries.len();
+    if let Some(entry) = level.entries.get(index) {
+        return Some(if entry.separator {
+            MenuRow::Separator
+        } else {
+            MenuRow::Entry(entry)
+        });
+    }
+    let line = own > 0 && level.entries.last().is_some_and(|e| !e.separator);
+    let entry = shell?;
+    if line && index == own {
+        Some(MenuRow::Separator)
+    } else if index == own + usize::from(line) {
+        Some(MenuRow::Shell(entry))
+    } else {
+        None
+    }
+}
+
+/// Every row of `level`, the shell's entry included.
+fn rows(level: &MenuTree, shell: Option<ShellEntry>) -> impl Iterator<Item = MenuRow<'_>> {
+    (0..).map_while(move |index| row_at(level, shell, index))
+}
+
+/// How many rows `level` has, the shell's entry included.
+fn row_count(level: &MenuTree, shell: Option<ShellEntry>) -> usize {
+    rows(level, shell).count()
+}
 
 /// The menu tree an open chain shows, and a count that changes whenever
 /// the app replaces it.
@@ -88,6 +167,11 @@ pub struct MenuContext {
     pub chain: Chain,
     /// Reduced motion.
     pub reduced: bool,
+    /// The shell's entry at the end of the root level; `None` when the app
+    /// cannot be listed (it has no `Id`).
+    pub shell: Option<ShellEntry>,
+    /// Where a chosen shell entry is left.
+    pub shell_choice: ShellChoiceSlot,
 }
 
 impl std::fmt::Debug for MenuContext {
@@ -148,34 +232,71 @@ fn separator_h(theme: &Theme) -> f32 {
 }
 
 /// The height of the entry row `index` of `level`.
-fn entry_h(theme: &Theme, level: &MenuTree, index: usize) -> f32 {
-    if level.entries.get(index).is_some_and(|e| e.separator) {
+fn entry_h(theme: &Theme, level: &MenuTree, shell: Option<ShellEntry>, index: usize) -> f32 {
+    if row_at(level, shell, index) == Some(MenuRow::Separator) {
         separator_h(theme)
     } else {
         theme.row_height
     }
 }
 
-/// How many entries of `level` are built in a card `height` tall: the
-/// ones that fit under the padding, never more than [`MAX_MENU_H`] holds.
+/// The rows of `level` built in a card `height` tall, by index: the ones
+/// that fit under the padding, never more than [`MAX_MENU_H`] holds. The
+/// shell's entry and the separator before it are reserved first, so a long
+/// menu cuts the app's own entries and never the shell's.
 #[must_use]
-pub fn drawn_len(theme: &Theme, level: &MenuTree, height: f32) -> usize {
+pub fn drawn_rows(
+    theme: &Theme,
+    level: &MenuTree,
+    shell: Option<ShellEntry>,
+    height: f32,
+) -> Vec<usize> {
     let room = height.min(MAX_MENU_H);
-    let mut used = 2.0 * theme.spacing.sm;
-    for index in 0..level.entries.len() {
-        used += entry_h(theme, level, index);
-        if used > room {
-            return index;
-        }
+    let count = row_count(level, shell);
+    let is_line = |i: usize| row_at(level, shell, i) == Some(MenuRow::Separator);
+    let mut own = level.entries.len().min(count);
+    let mut tail: Vec<usize> = (own..count).collect();
+    // A menu that ends in a separator of its own lends it as the line
+    // before the shell's entry, which then never goes with the cut.
+    if shell.is_some() && own > 0 && is_line(own - 1) && !tail.first().is_some_and(|&i| is_line(i))
+    {
+        own -= 1;
+        tail.insert(0, own);
     }
-    level.entries.len()
+    let reserved: f32 = tail.iter().map(|&i| entry_h(theme, level, shell, i)).sum();
+    let mut used = 2.0 * theme.spacing.sm + reserved;
+    let mut rows = Vec::with_capacity(count);
+    for index in 0..own {
+        used += entry_h(theme, level, shell, index);
+        if used > room {
+            break;
+        }
+        rows.push(index);
+    }
+    // No line at either end of the app's part: the cut may stop after one,
+    // and the line before the shell's entry is in the tail.
+    while rows.last().is_some_and(|&i| is_line(i)) {
+        rows.pop();
+    }
+    if rows.is_empty() && tail.first().is_some_and(|&i| is_line(i)) {
+        tail.remove(0);
+    }
+    rows.extend(tail);
+    rows
+}
+
+/// How many rows of `level` are built in a card `height` tall.
+#[must_use]
+pub fn drawn_len(theme: &Theme, level: &MenuTree, shell: Option<ShellEntry>, height: f32) -> usize {
+    drawn_rows(theme, level, shell, height).len()
 }
 
 /// The popup's logical size for `level`: every entry up to [`MAX_MENU_H`].
 #[must_use]
-pub fn level_size(theme: &Theme, level: &MenuTree) -> (f32, f32) {
-    let rows: f32 = (0..drawn_len(theme, level, MAX_MENU_H))
-        .map(|i| entry_h(theme, level, i))
+pub fn level_size(theme: &Theme, level: &MenuTree, shell: Option<ShellEntry>) -> (f32, f32) {
+    let rows: f32 = drawn_rows(theme, level, shell, MAX_MENU_H)
+        .into_iter()
+        .map(|i| entry_h(theme, level, shell, i))
         .sum();
     (MENU_W, 2.0 * theme.spacing.sm + rows.max(theme.row_height))
 }
@@ -235,23 +356,19 @@ fn short(label: &str) -> String {
 /// with its check column, label and, for a submenu, a chevron. A disabled
 /// entry is dimmed and takes neither pointer nor keyboard.
 #[must_use]
-pub fn level_view(theme: &Theme, level: &MenuTree, height: f32) -> View {
+pub fn level_view(theme: &Theme, level: &MenuTree, shell: Option<ShellEntry>, height: f32) -> View {
     view::col(card_key())
         .haze(theme.radius_md)
         .size(MENU_W, height)
         .padding(theme.spacing.sm)
         .children(
-            level
-                .entries
-                .iter()
-                .take(drawn_len(theme, level, height))
-                .enumerate()
-                .map(|(i, entry)| {
-                    if entry.separator {
-                        separator(theme, i)
-                    } else {
-                        entry_row(theme, i, entry)
-                    }
+            drawn_rows(theme, level, shell, height)
+                .into_iter()
+                .filter_map(|i| row_at(level, shell, i).map(|row| (i, row)))
+                .map(|(i, row)| match row {
+                    MenuRow::Separator => separator(theme, i),
+                    MenuRow::Entry(entry) => entry_row(theme, i, entry),
+                    MenuRow::Shell(entry) => shell_row(theme, i, entry),
                 }),
         )
 }
@@ -305,10 +422,33 @@ fn entry_row(theme: &Theme, index: usize, entry: &super::MenuEntry) -> View {
     row
 }
 
-/// The index of the entry whose row is `key` in `level`.
+/// The shell's own entry: its glyph in the check column, then its label.
+fn shell_row(theme: &Theme, index: usize, entry: ShellEntry) -> View {
+    let at = index as u64;
+    centred(view::row(entry_key(index)))
+        .height(theme.row_height)
+        .padding_xy(theme.spacing.md, 0.0)
+        .gap(theme.spacing.md)
+        .radius(theme.radius_sm)
+        .child(
+            view::icon(Key::indexed("tray-menu-check", at), entry.glyph(), MARK).tint(Role::TextHi),
+        )
+        .child(
+            view::text(
+                Key::indexed("tray-menu-label", at),
+                entry.label(),
+                text_style(theme.type_scale.body, Weight::Regular, false, Role::TextHi),
+            )
+            .grow(),
+        )
+        .interactive()
+        .focusable()
+}
+
+/// The index of the row whose key is `key` among the `count` rows of a level.
 #[must_use]
-pub fn index_of(level: &MenuTree, key: Key) -> Option<usize> {
-    (0..level.entries.len()).find(|&i| entry_key(i) == key)
+pub fn index_of(count: usize, key: Key) -> Option<usize> {
+    (0..count).find(|&i| entry_key(i) == key)
 }
 
 /// What a level does with an input event.
@@ -320,6 +460,8 @@ pub enum Outcome {
     Close,
     /// The entry with this `dbusmenu` id was chosen.
     Choose(i32),
+    /// The shell's own entry was chosen.
+    Shell(ShellEntry),
     /// The submenu of entry `index`, whose row is at `row` in this level.
     Open { index: usize, row: Rect },
 }
@@ -329,6 +471,8 @@ pub enum Outcome {
 #[derive(Debug)]
 pub struct LevelCore {
     level: MenuTree,
+    /// The shell's entry shown after the level's own rows.
+    shell: Option<ShellEntry>,
     theme: Theme,
     tree: Tree,
     input: Interaction,
@@ -342,12 +486,19 @@ impl LevelCore {
     /// The level `level` in `theme`, under `reduced` motion, built for the
     /// popup size the level wants.
     #[must_use]
-    pub fn new(theme: &Theme, level: MenuTree, reduced: bool, now: Instant) -> LevelCore {
-        let fit = level_size(theme, &level).1;
+    pub fn new(
+        theme: &Theme,
+        level: MenuTree,
+        shell: Option<ShellEntry>,
+        reduced: bool,
+        now: Instant,
+    ) -> LevelCore {
+        let fit = level_size(theme, &level, shell).1;
         let mut tree = Tree::new(reduced, theme);
-        tree.apply(level_view(theme, &level, fit), now);
+        tree.apply(level_view(theme, &level, shell, fit), now);
         LevelCore {
             level,
+            shell,
             theme: theme.clone(),
             tree,
             input: Interaction::new(),
@@ -359,7 +510,7 @@ impl LevelCore {
     /// The popup size the level wants: every entry up to [`MAX_MENU_H`].
     #[must_use]
     pub fn size(&self) -> (f32, f32) {
-        level_size(&self.theme, &self.level)
+        level_size(&self.theme, &self.level, self.shell)
     }
 
     /// The size to ask the runtime for when the popup is `size` and the
@@ -386,8 +537,10 @@ impl LevelCore {
             return;
         }
         self.fit = height;
-        self.tree
-            .apply(level_view(&self.theme, &self.level, height), now);
+        self.tree.apply(
+            level_view(&self.theme, &self.level, self.shell, height),
+            now,
+        );
     }
 
     /// Focuses the first enabled entry: a menu opened from the keyboard
@@ -418,7 +571,7 @@ impl LevelCore {
             self.theme = theme.clone();
             self.tree.set_theme(theme);
             self.tree
-                .apply(level_view(theme, &self.level, self.fit), now);
+                .apply(level_view(theme, &self.level, self.shell, self.fit), now);
         }
     }
 
@@ -431,8 +584,10 @@ impl LevelCore {
             return;
         }
         self.level = level;
-        self.tree
-            .apply(level_view(&self.theme, &self.level, self.fit), now);
+        self.tree.apply(
+            level_view(&self.theme, &self.level, self.shell, self.fit),
+            now,
+        );
     }
 
     /// The level shown.
@@ -451,15 +606,17 @@ impl LevelCore {
     /// The focused entry, if the keyboard has one.
     fn focused_index(&self) -> Option<usize> {
         let id = self.tree.highlight().focused?;
-        index_of(&self.level, self.tree.key_of(id))
+        index_of(row_count(&self.level, self.shell), self.tree.key_of(id))
     }
 
     /// What activating the entry at `index` means.
     fn activate(&self, index: usize) -> Outcome {
-        let Some(entry) = self.level.entries.get(index) else {
-            return Outcome::Keep { changed: false };
+        let entry = match row_at(&self.level, self.shell, index) {
+            Some(MenuRow::Entry(entry)) => entry,
+            Some(MenuRow::Shell(entry)) => return Outcome::Shell(entry),
+            Some(MenuRow::Separator) | None => return Outcome::Keep { changed: false },
         };
-        if !entry.enabled || entry.separator {
+        if !entry.enabled {
             return Outcome::Keep { changed: false };
         }
         if entry.submenu.is_some() {
@@ -489,7 +646,13 @@ impl LevelCore {
                 ..
             } => {
                 return match self.focused_index() {
-                    Some(index) if self.level.entries[index].submenu.is_some() => {
+                    Some(index)
+                        if self
+                            .level
+                            .entries
+                            .get(index)
+                            .is_some_and(|e| e.submenu.is_some()) =>
+                    {
                         self.activate(index)
                     }
                     _ => Outcome::Keep { changed: false },
@@ -522,7 +685,7 @@ impl LevelCore {
             match event {
                 UiEvent::Escape => return Outcome::Close,
                 UiEvent::Click(key) | UiEvent::Activate(key) => {
-                    if let Some(index) = index_of(&self.level, *key) {
+                    if let Some(index) = index_of(row_count(&self.level, self.shell), *key) {
                         let outcome = self.activate(index);
                         if outcome != (Outcome::Keep { changed: false }) {
                             return outcome;
@@ -601,7 +764,8 @@ impl TrayMenu {
                 model.generation,
             )
         };
-        let mut core = LevelCore::new(theme, level, cx.reduced, Instant::now());
+        let shell = if path.is_empty() { cx.shell } else { None };
+        let mut core = LevelCore::new(theme, level, shell, cx.reduced, Instant::now());
         if keyboard {
             core.focus_first();
         }
@@ -639,7 +803,7 @@ impl TrayMenu {
         }
         self.awaiting = None;
         let theme = self.core.theme.clone();
-        let size = level_size(&theme, &sub);
+        let size = level_size(&theme, &sub, None);
         let mut path = self.path.clone();
         path.push(id);
         let child = TrayMenu::new(&self.cx, &theme, path, keyboard);
@@ -701,7 +865,7 @@ impl TrayMenu {
             return;
         };
         let theme = self.core.theme.clone();
-        let size = level_size(&theme, sub);
+        let size = level_size(&theme, sub, None);
         let mut path = self.path.clone();
         path.push(entry.id);
         let child = TrayMenu::new(&self.cx, &theme, path, keyboard);
@@ -772,6 +936,11 @@ impl PopupShell for TrayMenu {
             Outcome::Choose(entry) => {
                 tracing::info!(entry, "tray menu: entry chosen");
                 *self.cx.choice.borrow_mut() = Some((self.cx.item.clone(), entry));
+                PopupAction::Close
+            }
+            Outcome::Shell(entry) => {
+                tracing::info!(?entry, "tray menu: shell entry chosen");
+                *self.cx.shell_choice.borrow_mut() = Some((self.cx.item.clone(), entry));
                 PopupAction::Close
             }
             Outcome::Open { index, row } => {
@@ -860,7 +1029,7 @@ mod tests {
 
     fn core_of(level: MenuTree) -> LevelCore {
         let theme = Theme::dark();
-        let mut core = LevelCore::new(&theme, level, false, Instant::now());
+        let mut core = LevelCore::new(&theme, level, None, false, Instant::now());
         let size = core.size();
         core.tree.layout_measured(size, fake_measure);
         core
@@ -895,7 +1064,7 @@ mod tests {
     fn menu_rows_map_dbusmenu_entries_with_separators_toggles_and_disabled_state() {
         let theme = Theme::dark();
         let level = level();
-        let v = level_view(&theme, &level, level_size(&theme, &level).1);
+        let v = level_view(&theme, &level, None, level_size(&theme, &level, None).1);
         assert!(
             matches!(v.kind, ViewKind::Box { haze: true, radius, .. } if radius == theme.radius_md),
             "a Haze card with the medium radius"
@@ -953,23 +1122,92 @@ mod tests {
             id: 0,
             entries: (0..64).map(|i| entry(i, "row")).collect(),
         };
-        let shown = drawn_len(&theme, &tall, MAX_MENU_H);
+        let shown = drawn_len(&theme, &tall, None, MAX_MENU_H);
         assert!(shown > 0 && shown < 64);
-        let (w, h) = level_size(&theme, &tall);
+        let (w, h) = level_size(&theme, &tall, None);
         assert_eq!(w, MENU_W);
         assert!(h <= MAX_MENU_H);
-        assert_eq!(level_view(&theme, &tall, h).children.len(), shown);
+        assert_eq!(level_view(&theme, &tall, None, h).children.len(), shown);
         assert_eq!(
-            drawn_len(&theme, &tall, 2.0 * MAX_MENU_H),
+            drawn_len(&theme, &tall, None, 2.0 * MAX_MENU_H),
             shown,
             "no popup taller than the limit"
         );
         // A short menu is as tall as its rows plus the padding.
-        let (_, h) = level_size(&theme, &level());
+        let (_, h) = level_size(&theme, &level(), None);
         assert_eq!(
             h,
             2.0 * theme.spacing.sm + 5.0 * theme.row_height + separator_h(&theme)
         );
+    }
+
+    #[test]
+    fn a_long_menu_cuts_the_apps_entries_and_never_the_shell_entry() {
+        let theme = Theme::dark();
+        let tall = MenuTree {
+            id: 0,
+            entries: (0..64).map(|i| entry(i, "row")).collect(),
+        };
+        for shell in [ShellEntry::Hide, ShellEntry::Show] {
+            let (_, h) = level_size(&theme, &tall, Some(shell));
+            assert!(h <= MAX_MENU_H);
+            let drawn = drawn_rows(&theme, &tall, Some(shell), h);
+            assert!(drawn.len() > 15, "{}", drawn.len());
+            let last: Vec<_> = drawn
+                .iter()
+                .rev()
+                .take(2)
+                .filter_map(|&i| row_at(&tall, Some(shell), i))
+                .collect();
+            assert_eq!(last, [MenuRow::Shell(shell), MenuRow::Separator]);
+            // A smaller popup than asked for keeps it too.
+            let small = drawn_rows(&theme, &tall, Some(shell), 300.0);
+            assert_eq!(
+                small.last().and_then(|&i| row_at(&tall, Some(shell), i)),
+                Some(MenuRow::Shell(shell))
+            );
+            let view = level_view(&theme, &tall, Some(shell), h);
+            assert_eq!(view.children.len(), drawn.len());
+        }
+    }
+
+    #[test]
+    fn a_cut_menu_draws_one_line_before_the_shell_entry() {
+        let theme = Theme::dark();
+        // Entries and separators in turn: the cut can fall after either. The
+        // second menu ends in a separator of its own.
+        let turns: Vec<MenuEntry> = (0..40)
+            .map(|i| {
+                if i % 2 == 0 {
+                    entry(i, "row")
+                } else {
+                    separator_entry()
+                }
+            })
+            .collect();
+        let mut ending = turns.clone();
+        ending.push(separator_entry());
+        for entries in [turns, ending] {
+            let tall = MenuTree { id: 0, entries };
+            let shell = Some(ShellEntry::Hide);
+            for h in (60..=640).step_by(3) {
+                let drawn: Vec<_> = drawn_rows(&theme, &tall, shell, h as f32)
+                    .into_iter()
+                    .filter_map(|i| row_at(&tall, shell, i))
+                    .collect();
+                assert_eq!(drawn.last(), Some(&MenuRow::Shell(ShellEntry::Hide)));
+                assert!(
+                    drawn
+                        .windows(2)
+                        .all(|w| !(w[0] == MenuRow::Separator && w[1] == MenuRow::Separator)),
+                    "two lines in a row at {h}: {drawn:?}"
+                );
+                assert_ne!(drawn.first(), Some(&MenuRow::Separator), "at {h}");
+                if drawn.len() > 1 {
+                    assert_eq!(drawn[drawn.len() - 2], MenuRow::Separator, "at {h}");
+                }
+            }
+        }
     }
 
     #[test]
@@ -1177,7 +1415,7 @@ mod tests {
             id: 0,
             entries: (0..8).map(|i| entry(i, "row")).collect(),
         };
-        let wanted = level_size(&theme, &tall);
+        let wanted = level_size(&theme, &tall, None);
         let mut core = core_of(level());
         let small = core.size();
         assert_eq!(core.resize_wanted(small), None, "the popup fits");
@@ -1205,7 +1443,7 @@ mod tests {
                 assert!(count <= 8, "no wrap");
             }
         };
-        let shown = drawn_len(&theme, &tall, small.1);
+        let shown = drawn_len(&theme, &tall, None, small.1);
         assert!(shown > 0 && shown < 8, "{shown}");
         assert_eq!(
             walked(&mut core),
@@ -1230,8 +1468,93 @@ mod tests {
     #[test]
     fn index_of_finds_only_this_levels_rows() {
         let level = level();
-        assert_eq!(index_of(&level, entry_key(3)), Some(3));
-        assert_eq!(index_of(&level, entry_key(6)), None);
-        assert_eq!(index_of(&level, Key::named("other")), None);
+        assert_eq!(index_of(level.entries.len(), entry_key(3)), Some(3));
+        assert_eq!(index_of(level.entries.len(), entry_key(6)), None);
+        assert_eq!(index_of(level.entries.len(), Key::named("other")), None);
+    }
+
+    fn shell_core(level: MenuTree, shell: ShellEntry) -> LevelCore {
+        let theme = Theme::dark();
+        let mut core = LevelCore::new(&theme, level, Some(shell), false, Instant::now());
+        let size = core.size();
+        core.tree.layout_measured(size, fake_measure);
+        core
+    }
+
+    /// Tab to the last row and press Enter there.
+    fn choose_last(core: &mut LevelCore) -> Outcome {
+        let last = row_count(core.level(), core.shell) - 1;
+        for _ in 0..20 {
+            press(core, XKB_KEY_DOWN);
+            if focused(core) == Some(entry_key(last)) {
+                break;
+            }
+        }
+        assert_eq!(focused(core), Some(entry_key(last)));
+        press(core, RETURN)
+    }
+
+    #[test]
+    fn menu_ends_with_hide_entry_for_a_bar_app() {
+        let tree = level();
+        let all: Vec<_> = rows(&tree, Some(ShellEntry::Hide)).collect();
+        assert_eq!(all.len(), tree.entries.len() + 2);
+        assert_eq!(all[all.len() - 2], MenuRow::Separator);
+        assert_eq!(all[all.len() - 1], MenuRow::Shell(ShellEntry::Hide));
+        assert_eq!(ShellEntry::Hide.label(), copy::TRAY_HIDE);
+        let theme = Theme::dark();
+        let v = level_view(
+            &theme,
+            &tree,
+            Some(ShellEntry::Hide),
+            level_size(&theme, &tree, Some(ShellEntry::Hide)).1,
+        );
+        let last = find(&v, entry_key(all.len() - 1)).expect("the entry's row");
+        let glyph = find(
+            last,
+            Key::indexed("tray-menu-check", (all.len() - 1) as u64),
+        );
+        assert!(matches!(
+            glyph.map(|g| &g.kind),
+            Some(ViewKind::Icon { .. })
+        ));
+        // Choosing it answers with the shell's entry, never an app id.
+        let mut core = shell_core(tree, ShellEntry::Hide);
+        assert_eq!(choose_last(&mut core), Outcome::Shell(ShellEntry::Hide));
+    }
+
+    #[test]
+    fn menu_ends_with_show_entry_for_a_hidden_app() {
+        let tree = level();
+        let all: Vec<_> = rows(&tree, Some(ShellEntry::Show)).collect();
+        assert_eq!(all[all.len() - 2], MenuRow::Separator);
+        assert_eq!(all[all.len() - 1], MenuRow::Shell(ShellEntry::Show));
+        assert_eq!(ShellEntry::Show.label(), copy::TRAY_SHOW);
+        assert_ne!(ShellEntry::Show.glyph(), ShellEntry::Hide.glyph());
+        // A menu already ending in a separator gets no second line.
+        let mut tree = level();
+        tree.entries.push(separator_entry());
+        let all: Vec<_> = rows(&tree, Some(ShellEntry::Show)).collect();
+        assert_eq!(all.len(), tree.entries.len() + 1);
+        let mut core = shell_core(tree, ShellEntry::Show);
+        assert_eq!(choose_last(&mut core), Outcome::Shell(ShellEntry::Show));
+    }
+
+    #[test]
+    fn app_without_menu_gets_a_card_with_only_the_entry() {
+        let empty = MenuTree::default();
+        assert_eq!(
+            rows(&empty, Some(ShellEntry::Hide)).collect::<Vec<_>>(),
+            vec![MenuRow::Shell(ShellEntry::Hide)]
+        );
+        let theme = Theme::dark();
+        assert_eq!(
+            level_size(&theme, &empty, Some(ShellEntry::Hide)).1,
+            2.0 * theme.spacing.sm + theme.row_height
+        );
+        let mut core = shell_core(empty, ShellEntry::Hide);
+        assert_eq!(choose_last(&mut core), Outcome::Shell(ShellEntry::Hide));
+        // Without the entry (an item with no `Id`) nothing is listed.
+        assert!(rows(&MenuTree::default(), None).next().is_none());
     }
 }

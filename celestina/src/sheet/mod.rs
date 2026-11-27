@@ -14,6 +14,7 @@ pub mod body;
 pub mod geometry;
 pub mod motion;
 pub mod subtitle;
+pub mod tray_overflow;
 pub mod workspaces;
 
 use std::time::{Duration, Instant};
@@ -22,7 +23,7 @@ use celestina_paint::{Painter, Rect, TextStyle, Theme};
 use celestina_ui::{Key, Scroll, Tree};
 use celestina_wayland::InputEvent;
 
-pub use body::{BodyOutcome, PageBody, SheetBody, WorkspacesBody};
+pub use body::{BodyOutcome, PageBody, SheetBody, TrayOverflowBody, WorkspacesBody};
 use geometry::Edge;
 use motion::SheetMotion;
 
@@ -283,6 +284,46 @@ impl Sheets {
             .as_mut()
             .filter(|o| !o.motion.is_closing())
             .and_then(|o| o.body.workspaces_body_mut())
+    }
+
+    /// The open tray overflow body (not closing), when the sheet is one.
+    pub fn tray_overflow_body_mut(&mut self) -> Option<&mut TrayOverflowBody> {
+        self.open
+            .as_mut()
+            .filter(|o| !o.motion.is_closing())
+            .and_then(|o| o.body.tray_overflow_body_mut())
+    }
+
+    /// The rect of the open body's node `key` in the surface's coordinates
+    /// (where the window puts the body, less the scroll), for what hangs
+    /// from it.
+    #[must_use]
+    pub fn body_rect(&self, key: Key, anchor: &Anchor) -> Option<Rect> {
+        let o = self.open.as_ref().filter(|o| !o.motion.is_closing())?;
+        let tree = o.body.tree();
+        let rect = tree.rect(tree.node_by_key(key)?);
+        let at = Sheets::target_of(anchor, o.body.size());
+        Some(Rect {
+            x: at.x + rect.x,
+            y: at.y + rect.y - self.scroll.offset(),
+            ..rect
+        })
+    }
+
+    /// The key of the node of the open body that holds the keyboard focus.
+    #[must_use]
+    pub fn body_focused_key(&self) -> Option<Key> {
+        let o = self.open.as_ref().filter(|o| !o.motion.is_closing())?;
+        let tree = o.body.tree();
+        tree.highlight().focused.map(|id| tree.key_of(id))
+    }
+
+    /// Whether the open body is taller than its window (the sheet scrolls).
+    #[must_use]
+    pub fn body_overflows(&self, anchor: &Anchor) -> bool {
+        self.open
+            .as_ref()
+            .is_some_and(|o| o.body.size().1 > Sheets::target_of(anchor, o.body.size()).h + EPS)
     }
 
     /// Something waits for the open thing to close.

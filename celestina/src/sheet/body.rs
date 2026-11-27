@@ -8,9 +8,12 @@ use celestina_paint::{Painter, Rect, Role, Theme, Weight};
 use celestina_ui::{fit_middle, Interaction, Key, Tree, UiEvent, View};
 use celestina_wayland::InputEvent;
 
-use super::{workspaces, Measure};
+use super::{tray_overflow, workspaces, Measure};
 use crate::{
-    island::view::{sheet_more_key, text_style},
+    island::{
+        pages::tray::{display_title, TrayRow},
+        view::{sheet_more_key, text_style},
+    },
     osd::popup::{LevelCore, Outcome},
     pieces::PageId,
     session_menu::{self, SessionAction, SessionCore},
@@ -219,6 +222,126 @@ impl WorkspacesBody {
     }
 }
 
+/// The tray's hidden apps shown as a capsule sheet (CEL-I-012): the list's
+/// tree and its pointer and keyboard state. A row chosen is the app's to
+/// activate; the Island reads the row as it reads a bar icon.
+pub struct TrayOverflowBody {
+    theme: Theme,
+    size: (f32, f32),
+    /// The apps the rows show, with their place in the tray's list.
+    rows: Vec<(usize, TrayRow)>,
+    /// The titles the rows show, cut to the room each has.
+    titles: Vec<String>,
+    tree: Tree,
+    input: Interaction,
+}
+
+impl std::fmt::Debug for TrayOverflowBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TrayOverflowBody")
+            .field("size", &self.size)
+            .finish_non_exhaustive()
+    }
+}
+
+impl TrayOverflowBody {
+    /// The body showing one row for each of `rows`. The titles are whole
+    /// until [`TrayOverflowBody::fit`] cuts them to the room they have.
+    #[must_use]
+    pub fn new(theme: &Theme, reduced: bool, rows: Vec<(usize, TrayRow)>, now: Instant) -> Self {
+        let mut body = TrayOverflowBody {
+            theme: theme.clone(),
+            size: tray_overflow::list_size(theme, 0),
+            rows: Vec::new(),
+            titles: Vec::new(),
+            tree: Tree::new(reduced, theme),
+            input: Interaction::new(),
+        };
+        body.apply(rows, now);
+        body
+    }
+
+    /// Shows `rows` again: what the pointer and keyboard held stays, the sheet
+    /// follows the new height. A title already cut for the same text keeps its
+    /// cut until the next fit.
+    pub fn apply(&mut self, rows: Vec<(usize, TrayRow)>, now: Instant) {
+        let titles = rows
+            .iter()
+            .map(|(index, row)| {
+                let old = self.rows.iter().position(|(i, r)| {
+                    i == index && r.title == row.title && r.status == row.status
+                });
+                match old.and_then(|at| self.titles.get(at)) {
+                    Some(cut) => cut.clone(),
+                    None => display_title(row).to_owned(),
+                }
+            })
+            .collect();
+        self.size = tray_overflow::list_size(&self.theme, rows.len());
+        self.rows = rows;
+        self.titles = titles;
+        self.rebuild(now);
+    }
+
+    fn rebuild(&mut self, now: Instant) {
+        let view = tray_overflow::overflow_view(&self.theme, &self.rows, &self.titles);
+        self.tree.apply(view, now);
+    }
+
+    /// Cuts every title to the room its row leaves with `measure`; whether a
+    /// title changed.
+    pub fn fit(&mut self, now: Instant, measure: &mut Measure<'_>) -> bool {
+        let titles = tray_overflow::fit_titles(&self.theme, &self.rows, measure);
+        if titles == self.titles {
+            return false;
+        }
+        self.titles = titles;
+        self.rebuild(now);
+        true
+    }
+
+    fn set_theme(&mut self, theme: &Theme) -> bool {
+        if *theme == self.theme {
+            return false;
+        }
+        self.theme = theme.clone();
+        self.tree.set_theme(theme);
+        true
+    }
+
+    fn input(&mut self, ev: &InputEvent, now: Instant) -> BodyOutcome {
+        let before = self.tree.highlight();
+        let events = match ev {
+            InputEvent::Key { .. } | InputEvent::FocusLost => self.input.key(&mut self.tree, ev),
+            InputEvent::PopupClosed { .. } | InputEvent::FocusEnter { .. } => Vec::new(),
+            _ => self.input.pointer(&mut self.tree, ev, now),
+        };
+        let changed = !events.is_empty() || self.tree.highlight() != before;
+        for event in events {
+            match event {
+                UiEvent::Escape => return BodyOutcome::Close,
+                UiEvent::Click(key) => {
+                    return BodyOutcome::Activate {
+                        key,
+                        keyboard: false,
+                    }
+                }
+                UiEvent::Activate(key) => {
+                    return BodyOutcome::Activate {
+                        key,
+                        keyboard: true,
+                    }
+                }
+                UiEvent::HoverChanged(..)
+                | UiEvent::Scroll(..)
+                | UiEvent::FieldChanged(_)
+                | UiEvent::SliderChanged(..) => {}
+            }
+        }
+        BodyOutcome::Keep { changed }
+    }
+}
+
 /// A sheet's body.
 #[derive(Debug)]
 pub enum SheetBody {
@@ -230,6 +353,8 @@ pub enum SheetBody {
     Page(Box<PageBody>),
     /// The workspaces list: one row per workspace of the output.
     Workspaces(Box<WorkspacesBody>),
+    /// The tray's hidden apps: one row per app the bar leaves out.
+    TrayOverflow(Box<TrayOverflowBody>),
 }
 
 /// What a body asks of its sheet after an event.
@@ -266,6 +391,7 @@ impl SheetBody {
             SheetBody::Session(core) => core.size(),
             SheetBody::Page(body) => body.size,
             SheetBody::Workspaces(body) => body.size,
+            SheetBody::TrayOverflow(body) => body.size,
         }
     }
 
@@ -275,7 +401,10 @@ impl SheetBody {
     pub fn takes_wheel(&self, x: f32, y: f32, now: Instant) -> bool {
         match self {
             SheetBody::Level(core) => core.slider_at(x, y, now).is_some(),
-            SheetBody::Session(_) | SheetBody::Page(_) | SheetBody::Workspaces(_) => false,
+            SheetBody::Session(_)
+            | SheetBody::Page(_)
+            | SheetBody::Workspaces(_)
+            | SheetBody::TrayOverflow(_) => false,
         }
     }
 
@@ -285,7 +414,10 @@ impl SheetBody {
     pub fn held(&self) -> bool {
         match self {
             SheetBody::Level(core) => core.held(),
-            SheetBody::Session(_) | SheetBody::Page(_) | SheetBody::Workspaces(_) => false,
+            SheetBody::Session(_)
+            | SheetBody::Page(_)
+            | SheetBody::Workspaces(_)
+            | SheetBody::TrayOverflow(_) => false,
         }
     }
 
@@ -296,7 +428,10 @@ impl SheetBody {
             SheetBody::Level(core) => {
                 core.flush(now, true);
             }
-            SheetBody::Session(_) | SheetBody::Page(_) | SheetBody::Workspaces(_) => {}
+            SheetBody::Session(_)
+            | SheetBody::Page(_)
+            | SheetBody::Workspaces(_)
+            | SheetBody::TrayOverflow(_) => {}
         }
     }
 
@@ -319,6 +454,13 @@ impl SheetBody {
                     tracing::warn!(%fault, "workspaces sheet: layout fault");
                 }
             }
+            SheetBody::TrayOverflow(body) => {
+                let size = body.size;
+                lay(&mut body.tree, size);
+                if let Some(fault) = body.tree.take_fault() {
+                    tracing::warn!(%fault, "tray overflow sheet: layout fault");
+                }
+            }
         }
     }
 
@@ -329,6 +471,7 @@ impl SheetBody {
             SheetBody::Session(core) => core.paint(painter, now),
             SheetBody::Page(body) => body.tree.paint(painter, now),
             SheetBody::Workspaces(body) => body.tree.paint(painter, now),
+            SheetBody::TrayOverflow(body) => body.tree.paint(painter, now),
         }
     }
 
@@ -340,6 +483,7 @@ impl SheetBody {
             SheetBody::Session(core) => core.tree(),
             SheetBody::Page(body) => &body.tree,
             SheetBody::Workspaces(body) => &body.tree,
+            SheetBody::TrayOverflow(body) => &body.tree,
         }
     }
 
@@ -351,6 +495,7 @@ impl SheetBody {
             SheetBody::Session(core) => core.is_animating(now),
             SheetBody::Page(body) => body.tree.is_animating(now),
             SheetBody::Workspaces(body) => body.tree.is_animating(now),
+            SheetBody::TrayOverflow(body) => body.tree.is_animating(now),
         }
     }
 
@@ -363,7 +508,10 @@ impl SheetBody {
                 .into_iter()
                 .flatten()
                 .min(),
-            SheetBody::Session(_) | SheetBody::Page(_) | SheetBody::Workspaces(_) => None,
+            SheetBody::Session(_)
+            | SheetBody::Page(_)
+            | SheetBody::Workspaces(_)
+            | SheetBody::TrayOverflow(_) => None,
         }
     }
 
@@ -376,6 +524,9 @@ impl SheetBody {
             SheetBody::Session(core) => core.node_rect(key),
             SheetBody::Page(body) => body.tree.node_by_key(key).map(|id| body.tree.rect(id)),
             SheetBody::Workspaces(body) => body.tree.node_by_key(key).map(|id| body.tree.rect(id)),
+            SheetBody::TrayOverflow(body) => {
+                body.tree.node_by_key(key).map(|id| body.tree.rect(id))
+            }
         }
     }
 
@@ -386,7 +537,7 @@ impl SheetBody {
         match self {
             SheetBody::Level(_) => false,
             SheetBody::Session(core) => core.asking(),
-            SheetBody::Page(_) | SheetBody::Workspaces(_) => false,
+            SheetBody::Page(_) | SheetBody::Workspaces(_) | SheetBody::TrayOverflow(_) => false,
         }
     }
 
@@ -395,7 +546,10 @@ impl SheetBody {
     pub fn page(&self) -> Option<PageId> {
         match self {
             SheetBody::Page(body) => Some(body.page),
-            SheetBody::Level(_) | SheetBody::Session(_) | SheetBody::Workspaces(_) => None,
+            SheetBody::Level(_)
+            | SheetBody::Session(_)
+            | SheetBody::Workspaces(_)
+            | SheetBody::TrayOverflow(_) => None,
         }
     }
 
@@ -403,7 +557,10 @@ impl SheetBody {
     pub fn page_body_mut(&mut self) -> Option<&mut PageBody> {
         match self {
             SheetBody::Page(body) => Some(body),
-            SheetBody::Level(_) | SheetBody::Session(_) | SheetBody::Workspaces(_) => None,
+            SheetBody::Level(_)
+            | SheetBody::Session(_)
+            | SheetBody::Workspaces(_)
+            | SheetBody::TrayOverflow(_) => None,
         }
     }
 
@@ -411,7 +568,21 @@ impl SheetBody {
     pub fn workspaces_body_mut(&mut self) -> Option<&mut WorkspacesBody> {
         match self {
             SheetBody::Workspaces(body) => Some(body),
-            SheetBody::Level(_) | SheetBody::Session(_) | SheetBody::Page(_) => None,
+            SheetBody::Level(_)
+            | SheetBody::Session(_)
+            | SheetBody::Page(_)
+            | SheetBody::TrayOverflow(_) => None,
+        }
+    }
+
+    /// The tray overflow body, when it is one.
+    pub fn tray_overflow_body_mut(&mut self) -> Option<&mut TrayOverflowBody> {
+        match self {
+            SheetBody::TrayOverflow(body) => Some(body),
+            SheetBody::Level(_)
+            | SheetBody::Session(_)
+            | SheetBody::Page(_)
+            | SheetBody::Workspaces(_) => None,
         }
     }
 
@@ -450,6 +621,7 @@ impl SheetBody {
             }
             SheetBody::Page(body) => body.input(ev, now),
             SheetBody::Workspaces(body) => body.input(ev, now),
+            SheetBody::TrayOverflow(body) => body.input(ev, now),
         }
     }
 
@@ -475,6 +647,10 @@ impl SheetBody {
             }
             SheetBody::Page(body) => body.set_theme(theme),
             SheetBody::Workspaces(body) => body.set_theme(theme),
+            SheetBody::TrayOverflow(body) => {
+                let themed = body.set_theme(theme);
+                body.fit(now, measure) || themed
+            }
         }
     }
 }

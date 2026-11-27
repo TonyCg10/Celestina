@@ -473,6 +473,13 @@ impl Backend {
         self.canvas.translate(-cx, -cy);
     }
 
+    /// Turns by `degrees` clockwise about (`cx`, `cy`).
+    pub(crate) fn rotate_about(&mut self, cx: f32, cy: f32, degrees: f32) {
+        self.canvas.translate(cx, cy);
+        self.canvas.rotate(degrees.to_radians());
+        self.canvas.translate(-cx, -cy);
+    }
+
     pub(crate) fn clip_rounded(&mut self, rect: Rect, radius: f32) {
         self.canvas
             .intersect_rounded_scissor(rect.x, rect.y, rect.w, rect.h, radius.max(0.0));

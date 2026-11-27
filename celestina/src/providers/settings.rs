@@ -411,14 +411,36 @@ impl ShellSettings {
     /// protected or cannot be read now, or the write failed; the previous
     /// value then stays in force.
     pub fn set_do_not_disturb(&mut self, on: bool) -> Result<bool, ShellSettingsError> {
-        let pending = self.store.stage(|settings| settings.do_not_disturb = on);
+        self.set_merged(|settings| settings.do_not_disturb = on)
+    }
+
+    /// Hides (`hide`) or shows the tray item whose `Id` is `id` in
+    /// `bar.tray_hidden`, durably, the way [`ShellSettings::set_do_not_disturb`]
+    /// writes its key: it is appended once or removed, the list stays well
+    /// formed and bounded, and a stale read does not revert the write. The
+    /// new list is computed over the list being staged, the file's own when
+    /// it is re-read, so an edit the follower has not delivered yet is kept.
+    /// Returns whether anything changed.
+    ///
+    /// # Errors
+    ///
+    /// As [`ShellSettings::set_do_not_disturb`].
+    pub fn set_tray_hidden(&mut self, id: &str, hide: bool) -> Result<bool, ShellSettingsError> {
+        self.set_merged(|settings| {
+            let ids = settings.bar_layout().tray_hidden_with(id, hide);
+            settings.bar.set_tray_hidden(ids);
+        })
+    }
+
+    /// Stages `change` over the values in force and writes it over the file
+    /// as it is now (see [`ShellSettings::set_do_not_disturb`]).
+    fn set_merged(&mut self, change: impl Fn(&mut Settings)) -> Result<bool, ShellSettingsError> {
+        let pending = self.store.stage(&change);
         if pending.wanted() == self.store.current() || self.protected {
             return self.commit(pending);
         }
         let written = match self.path.as_deref().map(reread) {
-            Some(Reread::Value(on_disk)) => {
-                Store::new(*on_disk).stage(|settings| settings.do_not_disturb = on)
-            }
+            Some(Reread::Value(on_disk)) => Store::new(*on_disk).stage(&change),
             Some(Reread::Unusable) => {
                 // Broken since the last read: kept for the person, as at start.
                 self.protected = true;
@@ -1038,6 +1060,93 @@ mod tests {
         // A read begun after the write is taken.
         let mut newer = wallpaper_off();
         newer.do_not_disturb = true;
+        assert!(shell.adopt_read(ShellRead {
+            settings: newer.clone(),
+            generation: 1,
+        }));
+        assert_eq!(shell.current(), &newer);
+    }
+
+    fn ids(list: &[&str]) -> Vec<String> {
+        list.iter().map(|id| (*id).to_owned()).collect()
+    }
+
+    /// The default hidden list followed by `more`.
+    fn defaults_and(more: &[&str]) -> Vec<String> {
+        let mut list = Settings::default().bar_layout().tray_hidden;
+        list.extend(ids(more));
+        list
+    }
+
+    #[test]
+    fn set_tray_hidden_writes_the_key_and_keeps_others() {
+        let scratch = Scratch::new("tray-hidden");
+        let mut shell = ShellSettings::load_from(Some(scratch.file()));
+        // An edit the follower has not delivered: the bar's end zone.
+        let mut edit = Settings::default();
+        edit.bar.end = Some(ids(&["tray", "clipboard"]));
+        edit.do_not_disturb = true;
+        publish(&scratch, &edit);
+
+        for id in ["a", "a", "b"] {
+            shell.set_tray_hidden(id, true).expect("the write succeeds");
+        }
+        let written = std::fs::read(scratch.file()).expect("the file");
+        let on_disk = Settings::from_bytes(&written).expect("the shell's own bytes");
+        assert_eq!(on_disk.bar.tray_hidden, Some(defaults_and(&["a", "b"])));
+        assert_eq!(on_disk.bar.end, edit.bar.end, "the other keys survive");
+        assert!(on_disk.do_not_disturb);
+        assert_eq!(
+            shell.current().bar_layout().tray_hidden,
+            defaults_and(&["a", "b"])
+        );
+        assert!(
+            !shell.set_tray_hidden("b", true).expect("nothing to write"),
+            "hiding a hidden id changes nothing"
+        );
+    }
+
+    #[test]
+    fn hiding_an_app_keeps_a_hand_edit_the_follower_has_not_delivered() {
+        let scratch = Scratch::new("tray-hand-edit");
+        let mut shell = ShellSettings::load_from(Some(scratch.file()));
+        let mut edit = Settings::default();
+        edit.bar.set_tray_hidden(ids(&["x"]));
+        publish(&scratch, &edit);
+
+        assert!(shell
+            .set_tray_hidden("steam", true)
+            .expect("the write succeeds"));
+        let written = std::fs::read(scratch.file()).expect("the file");
+        let on_disk = Settings::from_bytes(&written).expect("the shell's own bytes");
+        assert_eq!(on_disk.bar.tray_hidden, Some(ids(&["x", "steam"])));
+        // Showing removes only that id, again over the file's own list.
+        assert!(shell
+            .set_tray_hidden("steam", false)
+            .expect("the write succeeds"));
+        let written = std::fs::read(scratch.file()).expect("the file");
+        let on_disk = Settings::from_bytes(&written).expect("the shell's own bytes");
+        assert_eq!(on_disk.bar.tray_hidden, Some(ids(&["x"])));
+    }
+
+    #[test]
+    fn own_write_is_not_reverted_by_a_stale_read() {
+        let scratch = Scratch::new("tray-generation");
+        let mut shell = ShellSettings::load_from(Some(scratch.file()));
+        let stale = ShellRead {
+            settings: wallpaper_off(),
+            generation: 0,
+        };
+        assert!(shell
+            .set_tray_hidden("a", true)
+            .expect("the write succeeds"));
+        assert!(!shell.adopt_read(stale));
+        assert_eq!(
+            shell.current().bar_layout().tray_hidden,
+            defaults_and(&["a"])
+        );
+        let mut newer = wallpaper_off();
+        newer.bar.tray_hidden = Some(ids(&["a"]));
         assert!(shell.adopt_read(ShellRead {
             settings: newer.clone(),
             generation: 1,

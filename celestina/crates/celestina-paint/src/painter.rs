@@ -878,6 +878,15 @@ impl Painter {
     pub fn scale_about(&mut self, cx: f32, cy: f32, s: f32) {
         self.backend.scale_about(cx, cy, s);
     }
+
+    /// Turns subsequent draws by `degrees` (clockwise) about (`cx`, `cy`),
+    /// for a glyph that turns; scoped by the enclosing `push_state` /
+    /// `pop_state`. A non-finite angle turns nothing.
+    pub fn rotate_about(&mut self, cx: f32, cy: f32, degrees: f32) {
+        if degrees.is_finite() && cx.is_finite() && cy.is_finite() {
+            self.backend.rotate_about(cx, cy, degrees);
+        }
+    }
 }
 
 #[cfg(test)]

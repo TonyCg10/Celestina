@@ -100,6 +100,9 @@ impl Tree {
                 h: 0.0,
             };
         };
+        if slot.leaving {
+            return slot.rect;
+        }
         self.extent_of(slot.key)
             .unwrap_or_else(|| translated(slot.rect, self.slide_of(id, now)))
     }
@@ -172,7 +175,14 @@ impl Tree {
                 Visit::Enter(id) => {
                     let base = shifts.last().copied().unwrap_or((0.0, 0.0));
                     let own = self.offset(id, now);
-                    let shift = (base.0 + own.0, base.1 + own.1);
+                    // A node that left fades where it was drawn: the slide of
+                    // the ancestors that move because it left does not carry
+                    // its frozen rect.
+                    let shift = if self.slot(id).is_some_and(|s| s.leaving) {
+                        (0.0, 0.0)
+                    } else {
+                        (base.0 + own.0, base.1 + own.1)
+                    };
                     shifts.push(shift);
                     self.paint_enter(id, painter, &theme, shift, now);
                 }
@@ -243,6 +253,10 @@ impl Tree {
         let scale = slot.scale.value(now);
         if scale != 1.0 {
             painter.scale_about(rect.x + rect.w / 2.0, rect.y + rect.h / 2.0, scale);
+        }
+        let turn = slot.rotation.value(now);
+        if turn != 0.0 {
+            painter.rotate_about(rect.x + rect.w / 2.0, rect.y + rect.h / 2.0, turn);
         }
         let opacity = slot.opacity.value(now);
         if opacity < 1.0 {

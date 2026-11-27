@@ -149,6 +149,7 @@ mod tests {
             history: &[],
             items: &[],
             tray_hidden: &[],
+            tray_open: false,
             phone,
             bubbles: &crate::bubbles::NONE,
             sysmon: None,

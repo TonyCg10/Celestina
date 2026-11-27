@@ -79,7 +79,10 @@ use crate::{
         weather::WeatherReading,
     },
     tray::{
-        menu::{AskSink, Chain, ChoiceSlot as TrayChoiceSlot, MenuContext, MenuModel, TrayMenu},
+        menu::{
+            AskSink, Chain, ChoiceSlot as TrayChoiceSlot, MenuContext, MenuModel,
+            ShellChoiceSlot as TrayShellSlot, ShellEntry, TrayMenu,
+        },
         ItemId, MenuTree, TrayCommand, TrayEvent,
     },
 };
@@ -410,10 +413,30 @@ impl Pending {
             .filter(|old| pending.as_ref().is_some_and(|new| new.item != old.item))
     }
 
+    /// The item of the request that waited past its time, left in `pending`
+    /// (its card may still open, with the shell's entry alone).
+    fn due(pending: &Option<PendingMenu>, now: Instant) -> Option<ItemId> {
+        pending
+            .as_ref()
+            .filter(|p| p.until.is_some_and(|until| until <= now))
+            .map(|p| p.item.clone())
+    }
+
     /// The request that waited past its time, taken out of `pending`.
     fn expired(pending: &mut Option<PendingMenu>, now: Instant) -> Option<PendingMenu> {
         pending.take_if(|p| p.until.is_some_and(|until| until <= now))
     }
+}
+
+/// Writes `bar.tray_hidden` for the shell's `entry` on the item whose `Id`
+/// is `sni_id`: hiding appends it once, showing removes it. Whether the
+/// list changed.
+fn apply_shell_entry(
+    settings: &mut ShellSettings,
+    sni_id: &str,
+    entry: ShellEntry,
+) -> Result<bool, crate::providers::settings::ShellSettingsError> {
+    settings.set_tray_hidden(sni_id, entry == ShellEntry::Hide)
 }
 
 /// The tray menu chain that is open: its Island, its item, the model its
@@ -476,6 +499,8 @@ pub struct App {
     tray_items: TrayList,
     /// Where the open tray menu leaves the entry chosen in it.
     tray_choice: TrayChoiceSlot,
+    /// Where a tray menu leaves the shell's own entry it chose.
+    tray_shell_choice: TrayShellSlot,
     /// The menu the last right click asked for.
     pending_menu: Option<PendingMenu>,
     /// The tray menu chain open right now.
@@ -585,6 +610,7 @@ impl App {
             tray: Rc::new(OnceCell::new()),
             tray_items: TrayList::default(),
             tray_choice: TrayChoiceSlot::default(),
+            tray_shell_choice: TrayShellSlot::default(),
             pending_menu: None,
             open_tray_menu: None,
             tray_refusal_logged: false,
@@ -2048,7 +2074,12 @@ impl App {
             }
             TrayEvent::Menu(item, menu) => self.open_tray_menu(&item, menu, ctl),
             TrayEvent::NoMenu(item) => {
-                self.pending_menu.take_if(|p| p.item == item);
+                // The host already asked the app for its own menu; the shell
+                // adds its card with the one entry (an app that shows its
+                // menu takes the grab and the card closes).
+                if let Some(pending) = self.pending_menu.take_if(|p| p.item == item) {
+                    self.open_tray_card(pending, MenuTree::default(), ctl);
+                }
             }
         }
     }
@@ -2089,11 +2120,41 @@ impl App {
                 return;
             }
             Pending::GiveUp(gone) => {
-                self.give_up_menu(gone);
+                self.give_up_menu_or_card(gone, ctl);
                 return;
             }
             Pending::Open(pending) => pending,
         };
+        self.open_tray_card(pending, menu, ctl);
+    }
+
+    /// The shell's entry for `item`'s menu: hide it while it is in the bar,
+    /// show it while it is hidden; `None` for an item without an `Id`, which
+    /// `bar.tray_hidden` cannot list (and today's filter never hides).
+    fn tray_shell_entry_for(&self, item: &ItemId) -> Option<ShellEntry> {
+        let row = self.tray_items.items.iter().find(|i| i.id == *item)?;
+        if row.sni_id.is_empty() {
+            return None;
+        }
+        let layout = self.settings.current().bar_layout();
+        if layout.tray_hidden.contains(&row.sni_id) {
+            Some(ShellEntry::Show)
+        } else {
+            // Hide only an id the list can take, so the entry never does
+            // nothing.
+            layout.can_hide(&row.sni_id).then_some(ShellEntry::Hide)
+        }
+    }
+
+    /// Hangs the card of `pending` with `menu` as the app's entries (none
+    /// for an app without a menu, which then holds only the shell's entry),
+    /// if its Island still shows what asked for it.
+    fn open_tray_card(&mut self, pending: PendingMenu, menu: MenuTree, ctl: &mut RuntimeCtl<'_>) {
+        let shell_entry = self.tray_shell_entry_for(&pending.item);
+        if menu.entries.is_empty() && shell_entry.is_none() {
+            tracing::debug!("the item has no menu and cannot be hidden; no card");
+            return;
+        }
         let (Some(shared), Some(mut surface)) =
             (self.painter.clone(), ctl.surface(pending.surface))
         else {
@@ -2106,6 +2167,7 @@ impl App {
         let theme = painter.theme().clone();
         drop(painter);
         *self.tray_choice.borrow_mut() = None;
+        *self.tray_shell_choice.borrow_mut() = None;
         let ask: AskSink = {
             let tray = Rc::clone(&self.tray);
             Rc::new(move |command| {
@@ -2125,6 +2187,8 @@ impl App {
             ask,
             chain: Chain::default(),
             reduced: self.appearance.reduced_motion,
+            shell: shell_entry,
+            shell_choice: Rc::clone(&self.tray_shell_choice),
         };
         let shell = TrayMenu::new(&cx, &theme, Vec::new(), pending.keyboard);
         let size = shell.size();
@@ -2144,8 +2208,32 @@ impl App {
 
     /// An empty menu that waited for its layout past [`MENU_LATE_LAYOUT`]
     /// is dropped, and the host stops following it.
+    /// An app that can be hidden or shown still gets its card, with the
+    /// shell's entry alone: the same card an app without a menu gets, posted
+    /// as the host's `NoMenu` so the frame needs no popup context.
     fn expire_pending_menu(&mut self, now: Instant) {
-        if let Some(gone) = Pending::expired(&mut self.pending_menu, now) {
+        let Some(item) = Pending::due(&self.pending_menu, now) else {
+            return;
+        };
+        if self.tray_shell_entry_for(&item).is_some() {
+            self.tray_command(TrayCommand::CloseMenu(item.clone()));
+            if let Some(waiting) = self.pending_menu.as_mut() {
+                // Handled once: the message takes the request.
+                waiting.until = None;
+            }
+            self.post(Message::Tray(TrayEvent::NoMenu(item)));
+        } else if let Some(gone) = Pending::expired(&mut self.pending_menu, now) {
+            self.give_up_menu(gone);
+        }
+    }
+
+    /// [`App::give_up_menu`], except that an app that can be hidden or shown
+    /// gets its card with the shell's entry alone.
+    fn give_up_menu_or_card(&mut self, gone: PendingMenu, ctl: &mut RuntimeCtl<'_>) {
+        if self.tray_shell_entry_for(&gone.item).is_some() {
+            self.tray_command(TrayCommand::CloseMenu(gone.item.clone()));
+            self.open_tray_card(gone, MenuTree::default(), ctl);
+        } else {
             self.give_up_menu(gone);
         }
     }
@@ -2155,6 +2243,32 @@ impl App {
     fn give_up_menu(&mut self, gone: PendingMenu) {
         tracing::debug!("the item's menu stayed empty; nothing opens");
         self.tray_command(TrayCommand::CloseMenu(gone.item));
+    }
+
+    /// The shell's entry chosen in `item`'s menu: writes `bar.tray_hidden`
+    /// and lays every bar out again, so the icon leaves or enters its slot
+    /// on every output.
+    fn tray_shell_entry(&mut self, item: &ItemId, entry: ShellEntry, ctl: &mut RuntimeCtl<'_>) {
+        let Some(sni_id) = self
+            .tray_items
+            .items
+            .iter()
+            .find(|i| i.id == *item)
+            .map(|i| i.sni_id.clone())
+        else {
+            tracing::debug!("the item went before its shell entry was made");
+            return;
+        };
+        match apply_shell_entry(&mut self.settings, &sni_id, entry) {
+            Ok(true) => {
+                tracing::info!(?entry, id = %sni_id, "tray_hidden written");
+                self.relayout_bar(ctl);
+            }
+            Ok(false) => {
+                tracing::info!(?entry, id = %sni_id, "tray_hidden: nothing to write");
+            }
+            Err(err) => tracing::warn!(?entry, "tray_hidden not changed: {}", error_chain(&err)),
+        }
     }
 
     /// The open chain is gone (its root popup closed, or its Island's
@@ -3235,6 +3349,12 @@ impl Shell for App {
             if let Some((item, entry)) = chosen {
                 self.tray_command(TrayCommand::MenuEvent(item, entry));
             }
+            // The shell's own entry is not the app's: the loop writes the
+            // list and every bar follows.
+            let shell_chosen = self.tray_shell_choice.borrow_mut().take();
+            if let Some((item, entry)) = shell_chosen {
+                self.post(Message::TrayShellEntry(item, entry));
+            }
             if !tray_menu_open
                 && self
                     .open_tray_menu
@@ -3329,6 +3449,7 @@ impl Shell for App {
                 }
             }
             Message::Tray(event) => self.tray_event(event, ctl),
+            Message::TrayShellEntry(item, entry) => self.tray_shell_entry(&item, entry, ctl),
             Message::Wallpaper(event) => {
                 self.wallpapers
                     .message(event, &mut self.settings, ctl, self.painter.as_ref());
@@ -3507,6 +3628,26 @@ mod tests {
             Pending::Open(_)
         ));
         assert!(request.is_none());
+    }
+
+    #[test]
+    fn a_due_request_stays_for_its_card_until_the_message_takes_it() {
+        let t0 = Instant::now();
+        let mut request = pending(1);
+        assert_eq!(Pending::due(&request, t0), None, "not waiting yet");
+        assert!(matches!(
+            Pending::of(&mut request, &item(1), true, t0),
+            Pending::Wait(_)
+        ));
+        assert_eq!(
+            Pending::due(&request, t0 + Duration::from_millis(499)),
+            None
+        );
+        let at = t0 + MENU_LATE_LAYOUT;
+        assert_eq!(Pending::due(&request, at), Some(item(1)));
+        assert!(request.is_some(), "the request is kept for the card");
+        // The host's `NoMenu` handling takes it.
+        assert!(request.take_if(|p| p.item == item(1)).is_some());
     }
 
     #[test]
@@ -3750,5 +3891,27 @@ mod tests {
         assert_eq!(focused_output(Some(&model)), Some("HDMI-A-1"));
         assert_eq!(focused_output(Some(&NiriModel::default())), None);
         assert_eq!(focused_output(None), None);
+    }
+
+    #[test]
+    fn hide_entry_moves_the_id_into_tray_hidden() {
+        let dir = std::env::temp_dir().join(format!("cel-i-012-hide-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("a scratch directory");
+        let file = dir.join("shell.json");
+        let mut settings = ShellSettings::load_from(Some(file.clone()));
+        let before = settings.current().bar_layout().tray_hidden;
+        assert!(!before.contains(&"steam".to_owned()));
+
+        assert!(apply_shell_entry(&mut settings, "steam", ShellEntry::Hide).expect("written"));
+        let mut want = before.clone();
+        want.push("steam".to_owned());
+        assert_eq!(settings.current().bar_layout().tray_hidden, want);
+        // Hiding again changes nothing; showing removes it, the rest stays.
+        assert!(!apply_shell_entry(&mut settings, "steam", ShellEntry::Hide).expect("same"));
+        let on_disk = std::fs::read_to_string(&file).expect("the file");
+        assert!(on_disk.contains("steam"));
+        assert!(apply_shell_entry(&mut settings, "steam", ShellEntry::Show).expect("written"));
+        assert_eq!(settings.current().bar_layout().tray_hidden, before);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

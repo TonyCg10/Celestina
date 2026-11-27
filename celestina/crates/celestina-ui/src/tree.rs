@@ -58,6 +58,9 @@ pub(crate) struct Slot {
     pub opacity: Animated,
     /// 1.0 = none; the press recoil animates it about the node's centre.
     pub scale: Animated,
+    /// Degrees clockwise about the node's centre: the view's rotation, which
+    /// turns on the open spring when it changes.
+    pub rotation: Animated,
     /// The slide of a node a reconciliation moved, from its old place to
     /// its new one, relative to its parent's own slide; painted as a
     /// translate of its subtree.
@@ -88,6 +91,7 @@ impl Slot {
     pub(crate) fn is_animating(&self, now: Instant) -> bool {
         self.opacity.is_animating(now)
             || self.scale.is_animating(now)
+            || self.rotation.is_animating(now)
             || self.offset_x.is_animating(now)
             || self.offset_y.is_animating(now)
     }
@@ -139,6 +143,8 @@ pub struct Tree {
     ladder: MotionMs,
     /// The theme's press recoil scale.
     pub(crate) press_scale: f32,
+    /// The theme's overshoot, for the easing of a turn.
+    pub(crate) overshoot: f32,
     /// The theme's slider anatomy, shared by layout, hit-test and paint.
     pub(crate) slider_metrics: SliderMetrics,
     fault: Option<TreeError>,
@@ -190,6 +196,7 @@ impl Tree {
             reduced_motion,
             ladder: theme.motion,
             press_scale: theme.press_scale,
+            overshoot: theme.overshoot,
             slider_metrics: SliderMetrics::of(theme),
             fault: None,
             extents: Vec::new(),
@@ -236,6 +243,7 @@ impl Tree {
     pub fn set_theme(&mut self, theme: &Theme) {
         self.ladder = theme.motion;
         self.press_scale = theme.press_scale;
+        self.overshoot = theme.overshoot;
         let metrics = SliderMetrics::of(theme);
         if metrics != self.slider_metrics {
             self.slider_metrics = metrics;
@@ -266,6 +274,7 @@ impl Tree {
         if on {
             for slot in self.slots.iter_mut().flatten() {
                 slot.scale.settle();
+                slot.rotation.settle();
                 slot.offset_x.settle();
                 slot.offset_y.settle();
             }
@@ -460,6 +469,12 @@ impl Tree {
     /// The node's own recoil scale at `now`; 1 for a stale id.
     pub fn scale(&self, id: NodeId, now: Instant) -> f32 {
         self.slot(id).map_or(1.0, |s| s.scale.value(now))
+    }
+
+    /// The node's own rotation at `now`, in degrees clockwise about its
+    /// centre; 0 for a stale id.
+    pub fn rotation(&self, id: NodeId, now: Instant) -> f32 {
+        self.slot(id).map_or(0.0, |s| s.rotation.value(now))
     }
 
     /// The node's own slide at `now`, relative to its parent's; (0, 0) for

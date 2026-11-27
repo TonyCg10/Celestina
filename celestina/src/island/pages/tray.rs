@@ -12,7 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use celestina_paint::{IconKey, PixmapId, Role, Weight};
+use celestina_paint::{IconKey, PixmapId, Role, Theme, Weight};
 use celestina_ui::{view, Key, View, ViewKind};
 
 use super::{note_list, PageCx, PageView};
@@ -391,8 +391,11 @@ impl PageView for Tray {
             ));
         }
         view::col(Key::named("tray")).child(
-            view::col(Key::named("tray-rows"))
-                .children(rows.iter().enumerate().map(|(i, r)| item_row(cx, i, r))),
+            view::col(Key::named("tray-rows")).children(
+                rows.iter()
+                    .enumerate()
+                    .map(|(i, r)| item_row(cx.theme, i, r, display_title(r))),
+            ),
         )
     }
 
@@ -407,25 +410,45 @@ impl PageView for Tray {
     }
 }
 
-fn item_row(cx: &PageCx<'_>, index: usize, row: &TrayRow) -> View {
-    let theme = cx.theme;
-    let (title_role, weight) = match row.status {
-        Status::Passive => (Role::TextFaint, Weight::Regular),
-        Status::Active => (Role::TextHi, Weight::Regular),
-        Status::NeedsAttention => (Role::TextHi, Weight::Semibold),
-    };
-    let icon_key = Key::indexed("tray-icon", index as u64);
-    let icon = icon_view(icon_key, &row.icon);
-    let title = if row.title.is_empty() {
+/// The title a row shows when the item has none.
+#[must_use]
+pub(crate) fn display_title(row: &TrayRow) -> &str {
+    if row.title.is_empty() {
         copy::TRAY_ITEM_UNTITLED
     } else {
         row.title.as_str()
-    };
-    let status = match row.status {
+    }
+}
+
+/// The status word a row shows and its colour; none for an active item.
+#[must_use]
+pub(crate) fn status_word(row: &TrayRow) -> Option<(&'static str, Role)> {
+    match row.status {
         Status::Active => None,
         Status::Passive => Some((copy::TRAY_PASSIVE, Role::TextFaint)),
         Status::NeedsAttention => Some((copy::TRAY_NEEDS_ATTENTION, Role::Accent)),
+    }
+}
+
+/// The weight a row's title has: bold while the item needs attention.
+#[must_use]
+pub(crate) fn title_weight(row: &TrayRow) -> Weight {
+    match row.status {
+        Status::NeedsAttention => Weight::Semibold,
+        Status::Passive | Status::Active => Weight::Regular,
+    }
+}
+
+/// The row of the item at `index` of the list: its icon, `title` (the page
+/// passes [`display_title`]; the tray's overflow window cuts it to the room
+/// the row has) and, when it is not simply active, a status word.
+pub(crate) fn item_row(theme: &Theme, index: usize, row: &TrayRow, title: &str) -> View {
+    let title_role = match row.status {
+        Status::Passive => Role::TextFaint,
+        Status::Active | Status::NeedsAttention => Role::TextHi,
     };
+    let icon_key = Key::indexed("tray-icon", index as u64);
+    let icon = icon_view(icon_key, &row.icon);
     centred(view::row(row_key(index)))
         .height(theme.row_height)
         .padding_xy(theme.spacing.md, 0.0)
@@ -438,16 +461,18 @@ fn item_row(cx: &PageCx<'_>, index: usize, row: &TrayRow) -> View {
             view::text(
                 Key::indexed("tray-title", index as u64),
                 title,
-                text_style(theme.type_scale.body, weight, false, title_role),
+                text_style(theme.type_scale.body, title_weight(row), false, title_role),
             )
             .grow(),
         )
-        .children(status.map(|(label, role)| {
-            view::text(
+        .children(status_word(row).map(|(label, role)| {
+            let mut text = view::text(
                 Key::indexed("tray-status", index as u64),
                 label,
                 text_style(theme.type_scale.caption, Weight::Regular, false, role),
-            )
+            );
+            text.style.flex_shrink = 0.0;
+            text
         }))
 }
 

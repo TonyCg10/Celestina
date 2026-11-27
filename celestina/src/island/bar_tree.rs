@@ -111,8 +111,8 @@ pub struct BarTree {
     scroll: ScrollRemainder,
     /// The piece out of its capsule: its node is hidden and its slot closed.
     lifted: Option<Key>,
-    /// The lifted piece changed since the last update: the slides it starts
-    /// run on the open spring.
+    /// The lifted piece (or the hidden tray apps) changed since the last
+    /// update: the slides it starts run on the open spring.
     lift_changed: bool,
     /// The open spring, from the theme: how long and on which curve.
     spring: (Duration, Easing),
@@ -233,6 +233,13 @@ impl BarTree {
         if *layout == self.layout {
             return false;
         }
+        // Only the hidden tray apps changed (the person hid or showed one):
+        // the icons beside the one that leaves or comes slide on the open
+        // spring and the capsule glides, as when a piece is lifted. Any
+        // other change is a new placement, which jumps.
+        self.lift_changed |= layout.start == self.layout.start
+            && layout.centre == self.layout.centre
+            && layout.end == self.layout.end;
         self.layout = layout.clone();
         self.zones.new_generation();
         self.stale = true;
@@ -287,13 +294,18 @@ impl BarTree {
         lay: &mut dyn FnMut(&mut Tree, (f32, f32)),
     ) {
         let rebuilt = self.stale;
-        let lift = std::mem::take(&mut self.lift_changed);
+        let mut lift = std::mem::take(&mut self.lift_changed);
+        let had_chevron = self.views.owner(pieces::tray::chevron_key()).is_some();
         if self.stale {
             let cx = BarCx {
                 tray_hidden: &self.layout.tray_hidden,
                 ..*base
             };
             self.views = self.zones.build(&self.layout, &cx);
+            // The tray's chevron enters or leaves the bar (an app was hidden,
+            // shown, registered or gone): it takes its slot as a piece that
+            // is lifted does, on the open spring.
+            lift |= had_chevron != self.views.owner(pieces::tray::chevron_key()).is_some();
             if let Some(key) = self.lifted {
                 self.views.hide(key);
             }
@@ -778,6 +790,13 @@ impl BarTree {
         now.saturating_duration_since(g.start) < self.spring.0
     }
 
+    /// The rotation of the bar's node `key` at `now` (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn rotation_of(&self, key: Key, now: Instant) -> Option<f32> {
+        Some(self.tree.rotation(self.tree.node_by_key(key)?, now))
+    }
+
     /// The key of the node the pointer is over (tests).
     #[cfg(test)]
     #[must_use]
@@ -988,6 +1007,7 @@ mod tests {
             history: &[],
             items: &[],
             tray_hidden: &[],
+            tray_open: false,
             sysmon: None,
             weather: None,
             today: None,
@@ -1177,6 +1197,89 @@ mod tests {
                 Some(0),
                 "a lifted piece is still in its zone"
             );
+        });
+    }
+
+    fn tray_rows(n: usize) -> Vec<crate::island::pages::tray::TrayRow> {
+        (0..n)
+            .map(|i| crate::island::pages::tray::TrayRow {
+                id: crate::tray::ItemId {
+                    bus_name: format!(":1.{i}"),
+                    path: "/StatusNotifierItem".to_owned(),
+                },
+                sni_id: format!("app{i}"),
+                title: format!("app {i}"),
+                ..Default::default()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn hiding_a_tray_app_slides_the_icons_on_the_open_spring_and_settles() {
+        with_cx(|base| {
+            let rows = tray_rows(3);
+            let cx = BarCx {
+                items: &rows,
+                ..*base
+            };
+            let t0 = Instant::now();
+            let mut bar = BarTree::new(&only(&[], &["tray"]), cx.theme, false);
+            bar.update(&cx, 1920.0, 300.0, t0, &mut lay());
+            let first = crate::island::pages::tray::row_key(0);
+            let x_of = |bar: &BarTree| bar.node_rect(first).map_or(f32::NAN, |r| r.x);
+            let old = x_of(&bar);
+            assert!(!bar.is_animating(t0), "a bar at rest draws no frames");
+
+            // The last app is hidden: the capsule narrows and the icons
+            // beside it slide to their new places.
+            let mut hidden = only(&[], &["tray"]);
+            hidden.tray_hidden = vec!["app2".to_owned()];
+            assert!(bar.set_layout(&hidden));
+            bar.update(&cx, 1920.0, 300.0, t0, &mut lay());
+            let new = x_of(&bar);
+            assert!((new - old).abs() > 1.0, "the icon moves: {old} to {new}");
+            let id = bar.tree.node_by_key(first);
+            let painted =
+                |ms: u64| id.map_or(f32::NAN, |id| bar.tree.painted_rect(id, after(t0, ms)).x);
+            assert!((painted(0) - old).abs() < 0.01, "it starts where it was");
+            let k = spring_at(cx.theme, 0.5);
+            assert!((painted(175) - (old + (new - old) * k)).abs() < 0.01);
+            assert!((painted(350) - new).abs() < 0.01);
+            assert!(bar.is_animating(after(t0, 349)));
+            assert!(!bar.is_animating(after(t0, 350)), "settled: no more frames");
+
+            // Showing it again slides back the same way.
+            assert!(bar.set_layout(&only(&[], &["tray"])));
+            bar.update(&cx, 1920.0, 300.0, after(t0, 400), &mut lay());
+            assert!((x_of(&bar) - old).abs() < 0.01);
+            assert!(bar.is_animating(after(t0, 500)));
+            assert!(!bar.is_animating(after(t0, 750)));
+        });
+    }
+
+    #[test]
+    fn a_zone_change_still_jumps_when_the_hidden_list_changes_with_it() {
+        with_cx(|base| {
+            let rows = tray_rows(3);
+            let cx = BarCx {
+                items: &rows,
+                ..*base
+            };
+            let t0 = Instant::now();
+            let mut bar = BarTree::new(&only(&[], &["tray"]), cx.theme, false);
+            bar.update(&cx, 1920.0, 300.0, t0, &mut lay());
+            let mut moved = only(&["tray"], &[]);
+            moved.tray_hidden = vec!["app2".to_owned()];
+            assert!(bar.set_layout(&moved));
+            bar.update(&cx, 1920.0, 300.0, t0, &mut lay());
+            let first = crate::island::pages::tray::row_key(0);
+            let id = bar.tree.node_by_key(first);
+            let landed = bar.node_rect(first).map_or(f32::NAN, |r| r.x);
+            assert!(
+                id.is_some_and(|id| (bar.tree.painted_rect(id, t0).x - landed).abs() < 0.01),
+                "a new placement jumps: nothing slides"
+            );
+            assert!(bar.glides.iter().all(Option::is_none), "no capsule glides");
         });
     }
 

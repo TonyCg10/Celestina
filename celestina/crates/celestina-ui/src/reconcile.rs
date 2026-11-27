@@ -19,7 +19,7 @@ use std::{
 
 use crate::{
     anim::{Animated, Reduced},
-    curve::{Motion, LINEAR},
+    curve::{Easing, Motion, LINEAR},
     field::Field,
     key::Key,
     tree::{NodeId, Slot, Tree},
@@ -81,10 +81,14 @@ impl Tree {
             focusable,
             clip,
             opacity,
+            rotation,
             children,
             ..
         } = view;
         let normal = self.duration(Motion::Normal);
+        let slow = self.duration(Motion::Slow);
+        let turn = Easing::OutBack(self.overshoot);
+        let spatial = self.spatial();
         let Some(slot) = self.slot_mut(id) else {
             return;
         };
@@ -114,6 +118,7 @@ impl Tree {
         slot.clip = clip;
         slot.opacity
             .animate_to(opacity, normal, LINEAR, now, Reduced::Opacity);
+        slot.rotation.animate_to(rotation, slow, turn, now, spatial);
         if restyle {
             let r = self.taffy.set_style(taffy_id, style);
             self.checked("restyle a node", r);
@@ -194,6 +199,7 @@ impl Tree {
             focusable,
             clip,
             opacity: target,
+            rotation,
             children,
         } = view;
         let field = matches!(kind, ViewKind::Field { .. }).then(Field::new);
@@ -214,6 +220,7 @@ impl Tree {
             clip,
             opacity,
             scale: Animated::new(1.0),
+            rotation: Animated::new(rotation),
             offset_x: Animated::new(0.0),
             offset_y: Animated::new(0.0),
             leaving: false,

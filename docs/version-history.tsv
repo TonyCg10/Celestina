@@ -313,3 +313,4 @@ celestina	1.26.0	milestone	CEL-D-009	Replace the capsule sheet with a window of 
 celestina	1.27.0	milestone	CEL-I-010	Add removing any notification and clearing the whole list, and mark the history read when the page is seen (notifications preview variant A approved 2026-11-26)
 celestina	1.27.1	bug	CEL-I-011	Fix tray icons that never resolved and tray menus that never opened
 celestina	1.28.0	milestone	CEL-D-010	Replace the menu window's fold and the open piece's flight with a close that blurs the window out towards its piece and a crossfade of the piece in the bar (the author's request of 2026-11-26; menu-close preview version 3 approved 2026-11-26)
+celestina	1.29.0	milestone	CEL-I-012	Add the collapsible tray: a chevron at the tray's left end opens a 240 px window of the hidden apps, lined up with the right capsule's right edge, and every app's menu ends with an entry that hides it from the bar or shows it again (preview approved 2026-11-26, list G2)

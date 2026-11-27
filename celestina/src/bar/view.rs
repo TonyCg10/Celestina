@@ -253,6 +253,7 @@ mod tests {
             history: &[],
             items: &[],
             tray_hidden: &[],
+            tray_open: false,
             sysmon: None,
             weather: None,
             today: None,

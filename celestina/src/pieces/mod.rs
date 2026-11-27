@@ -178,6 +178,8 @@ pub struct BarCx<'a> {
     /// The item `Id`s the bar's Tray piece leaves out (`bar.tray_hidden`);
     /// the Tray page still lists them.
     pub tray_hidden: &'a [String],
+    /// The tray's overflow window is open: the chevron is lit and turned.
+    pub tray_open: bool,
     /// The system monitor's reading as the bar shows it (held back to the
     /// bar's cadence, never the page's newest); `None` while there is none.
     pub sysmon: Option<&'a SysReading>,
@@ -246,6 +248,8 @@ pub enum SheetKind {
     Page(PageId),
     /// The workspaces list (CEL-D-005).
     Workspaces,
+    /// The tray's hidden apps, from its chevron (CEL-I-012).
+    TrayOverflow,
 }
 
 /// What the Volume piece asks for. The default output is the one it drives;
@@ -626,6 +630,7 @@ mod tests {
             history,
             items,
             tray_hidden: &[],
+            tray_open: false,
             sysmon: None,
             weather: None,
             today: None,
@@ -947,6 +952,7 @@ pub(crate) mod tests_support {
             history: &[],
             items: &[],
             tray_hidden: &[],
+            tray_open: false,
             sysmon: None,
             weather: None,
             today: None,

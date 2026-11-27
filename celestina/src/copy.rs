@@ -191,6 +191,22 @@ pub const TRAY_ITEM_UNTITLED: &str = "Sin título";
 /// ("Needs attention").
 pub const TRAY_NEEDS_ATTENTION: &str = "Requiere atención";
 
+/// The last entry of a tray app's menu while its icon is in the bar
+/// ("Hide from the bar").
+pub const TRAY_HIDE: &str = "Ocultar de la barra";
+
+/// The last entry of a tray app's menu while its icon is hidden ("Show in
+/// the bar").
+pub const TRAY_SHOW: &str = "Mostrar en la barra";
+
+/// The accessible name of the tray's chevron while at least one app is hidden
+/// from the bar ("Hidden icons").
+pub const TRAY_HIDDEN: &str = "Iconos ocultos";
+
+/// The chevron's accessible name while a hidden app needs attention ("Hidden
+/// icons, one needs attention").
+pub const TRAY_HIDDEN_ATTENTION: &str = "Iconos ocultos, uno requiere atención";
+
 /// The Tray page's status word for a passive item ("Inactive").
 pub const TRAY_PASSIVE: &str = "Inactivo";
 

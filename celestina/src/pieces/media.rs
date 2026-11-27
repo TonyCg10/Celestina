@@ -168,6 +168,7 @@ mod tests {
             history: &[],
             items: &[],
             tray_hidden: &[],
+            tray_open: false,
             media,
             sysmon: None,
             weather: None,

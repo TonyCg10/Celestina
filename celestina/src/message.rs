@@ -51,6 +51,9 @@ pub enum Message {
     OpenNotificationsPage(OutputId),
     /// The tray host's news: the watcher's owner, the items, an item's menu.
     Tray(crate::tray::TrayEvent),
+    /// The shell's own entry (hide or show) was chosen in the menu of this
+    /// tray item; the app writes `bar.tray_hidden`.
+    TrayShellEntry(crate::tray::ItemId, crate::tray::menu::ShellEntry),
     /// The wallpaper worker's news: a decoded picture, a fallback, a failure,
     /// an output another client holds, the folder's names.
     Wallpaper(crate::providers::wallpaper::WallpaperEvent),

@@ -67,6 +67,10 @@ pub struct View {
     pub clip: bool,
     /// 0..=1, multiplied into the subtree; changes fade linearly.
     pub opacity: f32,
+    /// Degrees clockwise about the node's centre, drawn over its whole
+    /// subtree; a change turns on the open spring (the theme's slow step
+    /// with the overshoot easing), or at once under reduced motion.
+    pub rotation: f32,
     pub children: Vec<View>,
 }
 
@@ -82,6 +86,7 @@ impl View {
             focusable: false,
             clip: false,
             opacity: 1.0,
+            rotation: 0.0,
             children: Vec::new(),
         }
     }
@@ -206,6 +211,13 @@ impl View {
 
     pub fn clip(mut self) -> View {
         self.clip = true;
+        self
+    }
+
+    /// Turns the node by `degrees` clockwise about its centre (a non-finite
+    /// angle is none).
+    pub fn rotate(mut self, degrees: f32) -> View {
+        self.rotation = if degrees.is_finite() { degrees } else { 0.0 };
         self
     }
 
