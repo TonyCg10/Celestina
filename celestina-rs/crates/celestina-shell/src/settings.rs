@@ -792,6 +792,10 @@ pub enum OsdPosition {
     /// In the bottom-right corner.
     #[serde(rename = "bottom-right")]
     BottomRight,
+    /// In the Island, which widens to show it; the bottom centre while the
+    /// Island's page is open.
+    #[serde(rename = "island")]
+    Island,
 }
 
 /// Which kinds of change the on-screen display shows. All on by default; the
@@ -2329,6 +2333,17 @@ mod tests {
         let read = Settings::from_bytes(br#"{"duties":{"idle":"on"}}"#).expect("read");
         assert_eq!(read.duties.osd, Duty::On);
         assert_eq!(read.osd, OsdSettings::default());
+    }
+
+    #[test]
+    fn osd_position_reads_island_and_defaults_to_bottom() {
+        let read = Settings::from_bytes(br#"{"osd":{"position":"island"}}"#).expect("read");
+        assert_eq!(read.osd.position, OsdPosition::Island);
+        assert_eq!(OsdPosition::default(), OsdPosition::Bottom);
+        let written = serde_json::to_string(&read.osd.position).expect("write");
+        assert_eq!(written, "\"island\"");
+        let unknown = Settings::from_bytes(br#"{"osd":{"position":"top"}}"#).expect("read");
+        assert_eq!(unknown.osd.position, OsdPosition::Bottom);
     }
 
     #[test]

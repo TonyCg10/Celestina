@@ -21,7 +21,7 @@ pub mod clock;
 pub mod menu;
 mod page_sheets;
 pub mod pages;
-mod piece_fade;
+pub(crate) mod piece_fade;
 mod sheets;
 pub mod state;
 pub mod view;
@@ -34,9 +34,10 @@ use std::{
 
 use celestina_paint::{Painter, PixmapId, Rect, TextStyle, Theme};
 use celestina_shell::{
-    connectivity::Action, glance::Today, phone::PhoneState, settings::BarLayout,
+    connectivity::Action, glance::Today, notifications::Notification, phone::PhoneState,
+    settings::BarLayout,
 };
-use celestina_ui::{Interaction, Key, Tree, UiEvent, BTN_LEFT};
+use celestina_ui::{Interaction, Key, Tree, UiEvent, View, BTN_LEFT};
 use celestina_wayland::{CloseReason, FrameCx, InputEvent, PopupId, PopupShell, SurfaceCtl};
 
 use crate::{
@@ -47,6 +48,10 @@ use crate::{
     connectivity::state::ConnectivityState,
     copy,
     media::{cover::Cover, MediaCommand, PlayerView},
+    notifications::{
+        banners::{self, BannerAction},
+        island_notice::{self, Gesture as NoticeGesture},
+    },
     osd::popup as level_popup,
     pieces::{
         self, workspaces as workspaces_piece, AudioAction, AudioLevels, Axis, BarCx,
@@ -156,8 +161,8 @@ pub enum IslandAction {
 /// How long a clear-all waits between one row's leave and the next's.
 const CLEAR_STEP: Duration = Duration::from_millis(30);
 /// Linux `BTN_RIGHT` and `BTN_MIDDLE`.
-const BTN_RIGHT: u32 = 0x111;
-const BTN_MIDDLE: u32 = 0x112;
+pub(crate) const BTN_RIGHT: u32 = 0x111;
+pub(crate) const BTN_MIDDLE: u32 = 0x112;
 /// The Menu key and F10 (with Shift): the keyboard's context menu.
 pub(super) const XKB_KEY_MENU: u32 = 0xff67;
 pub(super) const XKB_KEY_F10: u32 = 0xffc9;
@@ -277,6 +282,21 @@ pub struct Island {
     page: Tree,
     capsule_input: Interaction,
     page_input: Interaction,
+    /// The notices surface paints the capsule while this is set.
+    lent: bool,
+    /// The newest notice the app routed to this Island: it is a card at the
+    /// top of the page while the page is open (§5.5).
+    notice: Option<Notification>,
+    /// What the page keeps free at its top for the card, logical px: the
+    /// card's room while shown, kept while the page closes so it does not
+    /// jump, zero when a page opens without one.
+    lead: f32,
+    /// The pointer is over the card.
+    card_over: bool,
+    /// The server's clock was last told to hold for the card.
+    card_held: bool,
+    /// The scroll gesture that last closed the card's notice.
+    card_wheel: island_notice::WheelLatch,
     clock: String,
     clock_minute: Option<u64>,
     tick: ClockTick,
@@ -434,6 +454,12 @@ impl Island {
             page: Tree::new(false, &theme),
             capsule_input: Interaction::new(),
             page_input: Interaction::new(),
+            lent: false,
+            notice: None,
+            lead: 0.0,
+            card_over: false,
+            card_held: false,
+            card_wheel: island_notice::WheelLatch::default(),
             clock: String::new(),
             clock_minute: None,
             tick: ClockTick::default(),
@@ -1072,12 +1098,12 @@ impl Island {
         }
     }
 
-    /// Builds both views. The page asks for its size first, so it is laid
-    /// out at the size the Island is heading for. While the page slides, the
-    /// view is applied every frame with its new offset and the tree's own
-    /// slide of moved nodes is off, so the offset is the only motion.
-    fn apply_views(&mut self, now: Instant) {
-        let w = self.size.0;
+    /// The capsule's view: the clock, the date and the weather (and the
+    /// workspaces when the bar shows none), as laid out on this surface.
+    /// The notices surface builds the same view, so what it paints for the
+    /// rest Island is what the panel paints.
+    #[must_use]
+    pub fn capsule_view(&self) -> View {
         let rows = view::capsule_shows_workspaces(self.bar.as_ref().map(BarTree::layout))
             .then_some(&self.rows[..]);
         let date = self
@@ -1093,13 +1119,187 @@ impl Island {
             date: date.as_deref(),
             weather: degrees.as_ref().map(|(icon, text)| (*icon, text.as_str())),
         };
-        self.capsule.apply(
-            view::capsule_with(&self.theme, &self.clock, glance, rows, w),
-            now,
-        );
+        view::capsule_with(&self.theme, &self.clock, glance, rows, self.size.0)
+    }
+
+    /// The Island's rect with no page open: centred, y 8, 40 high, as wide
+    /// as the capsule.
+    #[must_use]
+    pub fn rest_rect(&self) -> Rect {
+        self.state.rest_rect(self.size.0)
+    }
+
+    /// Lends the capsule to the notices surface (`true`) or takes it back:
+    /// while lent, the Island paints no capsule glass or tree, leaves its
+    /// rect out of its blur and input regions and takes no pointer input
+    /// over it. The bar keeps the width it placed itself around. A page
+    /// that opens is the Island's again.
+    pub fn lend_capsule(&mut self, lent: bool) {
+        if lent && self.state.is_open() {
+            // The page is the Island's: it is not lent while it is out.
+            return;
+        }
+        if lent && !self.lent {
+            // Its hover ends with it.
+            self.capsule_input.pointer(
+                &mut self.capsule,
+                &InputEvent::PointerLeave,
+                Instant::now(),
+            );
+        }
+        self.lent = lent;
+    }
+
+    /// Whether the page is open (asked and not yet closed).
+    #[must_use]
+    pub fn page_open(&self) -> bool {
+        self.state.is_open()
+    }
+
+    /// Opens `page` at `now` without a surface: what the app's tests use to
+    /// have a page open on an output.
+    #[cfg(test)]
+    pub(crate) fn open_for_test(&mut self, page: PageId, now: Instant) {
+        self.open(page, now);
+    }
+
+    /// The notice the app routes to this Island (the newest toast, while
+    /// the Island's page is open on this output), or `None`. Whether
+    /// anything changed, so the panel is redrawn.
+    pub fn set_notice(&mut self, notice: Option<Notification>, _now: Instant) -> bool {
+        if self.notice == notice {
+            return false;
+        }
+        self.notice = notice;
+        self.stale = true;
+        true
+    }
+
+    /// Whether the Island holds a notice (its page is open and it was routed
+    /// one).
+    #[must_use]
+    pub fn has_notice(&self) -> bool {
+        self.notice.is_some()
+    }
+
+    /// The notice shown as a card: while the page is open and is not the
+    /// Notifications page (which lists it).
+    fn card(&self) -> Option<&Notification> {
+        self.notice
+            .as_ref()
+            .filter(|_| self.state.is_open() && self.state.shown_page() != PageId::NOTIFICATIONS)
+    }
+
+    /// Where the card is on the surface, once laid out.
+    fn card_rect(&self) -> Option<Rect> {
+        let id = self.card()?.id;
+        let node = self.page.node_by_key(banners::banner_key(id))?;
+        Some(self.page.rect(node))
+    }
+
+    /// Closes the page at `now` without a surface.
+    #[cfg(test)]
+    pub(crate) fn close_for_test(&mut self, now: Instant) {
+        self.close(now);
+    }
+
+    /// The id of the notice the Island holds.
+    #[cfg(test)]
+    pub(crate) fn notice_id(&self) -> Option<u32> {
+        self.notice.as_ref().map(|n| n.id)
+    }
+
+    /// Whether the server's clock is to be held (`Some(true)`) or let go
+    /// (`Some(false)`) now: it is held while the pointer is over the card,
+    /// and let go when the pointer leaves or the card goes. `None` while
+    /// that is what it was told last.
+    pub fn take_card_hold(&mut self) -> Option<bool> {
+        let want = self.card_over && self.card().is_some();
+        (want != self.card_held).then(|| {
+            self.card_held = want;
+            want
+        })
+    }
+
+    /// The Island is going: whether it held the server's clock for its card,
+    /// which then has to let go. Told once.
+    pub fn release_card_hold(&mut self) -> bool {
+        self.card_over = false;
+        std::mem::take(&mut self.card_held)
+    }
+
+    /// The pointer is over the card (what a pointer event over it sets).
+    #[cfg(test)]
+    pub(crate) fn hover_card_for_test(&mut self) {
+        self.card_over = true;
+    }
+
+    /// Whether (`x`, `y`) is over the card.
+    fn over_card(&self, x: f32, y: f32) -> bool {
+        self.card_rect().is_some_and(|r| r.contains(x, y))
+    }
+
+    /// Whether `key` is a node of the card.
+    fn card_has(&self, key: Key) -> bool {
+        self.card()
+            .is_some_and(|n| !banners::actions_for(std::slice::from_ref(n), key).is_empty())
+    }
+
+    /// What a gesture on the card asks for, as the Island's actions; a click
+    /// on the body also opens the Notifications page here.
+    fn card_actions(&mut self, gesture: NoticeGesture, now: Instant) -> Vec<IslandAction> {
+        let Some(notice) = self.card().cloned() else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for action in island_notice::gesture_on(std::slice::from_ref(&notice), notice.id, gesture) {
+            match action {
+                BannerAction::Send(command) => out.push(IslandAction::Notification(command)),
+                BannerAction::OpenPage => self.open(PageId::NOTIFICATIONS, now),
+                BannerAction::OpenClock => {}
+            }
+        }
+        out
+    }
+
+    /// Whether the page is open or still closing at `now`: the Island has
+    /// not shrunk back to the capsule.
+    #[must_use]
+    pub fn page_out(&self, now: Instant) -> bool {
+        self.state.is_open() || self.state.progress(now) > 0.0
+    }
+
+    /// Whether the capsule is lent out.
+    #[must_use]
+    pub fn capsule_lent(&self) -> bool {
+        self.lent
+    }
+
+    /// Whether the panel paints its capsule at `now`: not while lent at
+    /// rest.
+    fn paints_capsule(&self, now: Instant) -> bool {
+        !(self.lent && !self.state.is_open() && self.state.progress(now) <= 0.0)
+    }
+
+    /// Builds both views. The page asks for its size first, so it is laid
+    /// out at the size the Island is heading for. While the page slides, the
+    /// view is applied every frame with its new offset and the tree's own
+    /// slide of moved nodes is off, so the offset is the only motion.
+    fn apply_views(&mut self, now: Instant) {
+        let w = self.size.0;
+        self.capsule.apply(self.capsule_view(), now);
         let shown = self.state.shown_page();
         let page = page_view(shown);
         let wants = page.wants(&self.page_cx());
+        let card = self.card().cloned();
+        // The card's room: kept while the page closes so the shrinking page
+        // does not jump, and dropped when a page opens without a card.
+        self.lead = match &card {
+            Some(n) => banners::page_card_room(n),
+            None if self.state.is_open() => 0.0,
+            None => self.lead,
+        };
+        let wants = (wants.0, wants.1 + self.lead);
         self.state.request_page_size(wants, now, self.reduced);
         let slide = self.state.slide(now);
         let moving = slide != 0.0 || self.applied_slide != 0.0;
@@ -1107,7 +1307,7 @@ impl Island {
             self.page.set_reduced_motion(true);
         }
         self.page.apply(
-            view::page(
+            view::page_with_card(
                 &self.theme,
                 shown,
                 page.title(),
@@ -1116,6 +1316,11 @@ impl Island {
                 w,
                 self.state.page_size(),
                 slide,
+                (
+                    self.lead,
+                    card.as_ref()
+                        .map(|n| banners::page_card(&self.theme, n, self.state.page_size().0)),
+                ),
             ),
             now,
         );
@@ -1193,7 +1398,9 @@ impl Island {
             .as_ref()
             .map_or_else(Vec::new, |bar| bar.shapes(now, radius));
         shapes.extend(self.sheet_windows(now));
-        shapes.push((self.state.rect(now, self.size.0), radius));
+        if self.paints_capsule(now) {
+            shapes.push((self.state.rect(now, self.size.0), radius));
+        }
         shapes
     }
 
@@ -1207,21 +1414,24 @@ impl Island {
         if let Some(bar) = self.bar.as_mut() {
             bar.paint(painter, now);
         }
-        painter.haze(rect, radius);
-        painter.push_clip(rect, radius);
-        let layers = [
-            (&mut self.capsule, self.state.capsule_opacity(now)),
-            (&mut self.page, self.state.page_opacity(now)),
-        ];
-        for (tree, opacity) in layers {
-            if opacity > 0.0 {
-                painter.push_state();
-                painter.opacity(opacity);
-                tree.paint(painter, now);
-                painter.pop_state();
+        let capsule = self.paints_capsule(now);
+        if capsule {
+            painter.haze(rect, radius);
+            painter.push_clip(rect, radius);
+            let layers = [
+                (&mut self.capsule, self.state.capsule_opacity(now)),
+                (&mut self.page, self.state.page_opacity(now)),
+            ];
+            for (tree, opacity) in layers {
+                if opacity > 0.0 {
+                    painter.push_state();
+                    painter.opacity(opacity);
+                    tree.paint(painter, now);
+                    painter.pop_state();
+                }
             }
+            painter.pop_clip();
         }
-        painter.pop_clip();
         self.paint_sheet(painter, now);
         painter.end();
     }
@@ -1284,6 +1494,9 @@ impl Island {
         self.capsule_input
             .pointer(&mut self.capsule, &InputEvent::PointerLeave, now);
         self.state.open(page, now, self.reduced);
+        // The page grows out of the panel's own capsule: a notices surface
+        // that held it yields in this same turn.
+        self.lent = false;
     }
 
     fn close(&mut self, now: Instant) {
@@ -1437,6 +1650,16 @@ impl Island {
             _ => None,
         };
         let on_bar = point.is_some_and(|(x, y)| self.on_bar(x, y, now));
+        // The pointer over the card holds the server's clock.
+        if let Some((x, y)) = point {
+            self.card_over = !on_bar && open && self.over_card(x, y);
+            if !self.card_over {
+                self.card_wheel.reset();
+            }
+        } else if matches!(ev, InputEvent::PointerLeave) {
+            self.card_over = false;
+            self.card_wheel.reset();
+        }
         if on_bar {
             // The pointer is the bar's: the Island's tree under it ends its
             // hover and press.
@@ -1501,10 +1724,38 @@ impl Island {
             InputEvent::Key { .. } | InputEvent::KeyRepeat { .. } if open => {
                 self.page_input.key(&mut self.page, &ev)
             }
+            // Outside the page: neither where it is painted nor where it is
+            // headed (a press on a card that is still growing is its own).
             InputEvent::PointerPress { x, y, .. }
-                if open && !self.state.rect(now, self.size.0).contains(*x, *y) =>
+                if open
+                    && !self.state.rect(now, self.size.0).contains(*x, *y)
+                    && !self.state.open_rect(self.size.0).contains(*x, *y) =>
             {
                 self.close(now);
+                Vec::new()
+            }
+            // The card's right and middle clicks and wheel up.
+            InputEvent::PointerRelease { x, y, button, .. }
+                if open
+                    && (*button == BTN_RIGHT || *button == BTN_MIDDLE)
+                    && self.over_card(*x, *y) =>
+            {
+                let gesture = if *button == BTN_RIGHT {
+                    NoticeGesture::Right
+                } else {
+                    NoticeGesture::Middle
+                };
+                actions.extend(self.card_actions(gesture, now));
+                Vec::new()
+            }
+            InputEvent::Axis { x, y, vertical, .. }
+                if open && *vertical < 0.0 && self.over_card(*x, *y) =>
+            {
+                // One scroll gesture closes one notice, however many axis
+                // events it sends.
+                if self.card_wheel.up(*vertical, now) {
+                    actions.extend(self.card_actions(NoticeGesture::WheelUp, now));
+                }
                 Vec::new()
             }
             // The tray rows' other buttons: the page's pointer handling
@@ -1514,9 +1765,17 @@ impl Island {
                 Vec::new()
             }
             _ if open => self.page_input.pointer(&mut self.page, &ev, now),
+            // Lent: the notices surface owns the capsule.
+            _ if !self.paints_capsule(now) => Vec::new(),
             _ => self.capsule_input.pointer(&mut self.capsule, &ev, now),
         };
         for event in events {
+            if let UiEvent::Click(key) = event {
+                if self.card_has(key) {
+                    actions.extend(self.card_actions(NoticeGesture::Left(key), now));
+                    continue;
+                }
+            }
             let tray = self.tray_actions(&event);
             if !tray.is_empty() {
                 actions.extend(tray);
@@ -6565,6 +6824,8 @@ mod tests {
     }
 
     mod crossfade;
+    mod lent;
+    mod notice_card;
     mod page_sheets;
     mod subtitle_gestures;
     mod tray_overflow;

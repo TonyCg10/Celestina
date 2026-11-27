@@ -49,6 +49,23 @@ pub enum Message {
     /// A banner on this output was clicked without a default action: its
     /// Island opens the Notifications page. Sent by the loop to itself.
     OpenNotificationsPage(OutputId),
+    /// The clock face of the lent Island was clicked: the Island of this
+    /// output opens its clock page. Sent by the loop to itself.
+    OpenClockPage(OutputId),
+    /// An Island's page opened or closed: the notices look again (a surface
+    /// yields to a page that opened; a card goes back to the surface when its
+    /// page closes). Sent by the loop to itself.
+    PagesChanged,
+    /// The notices surface drew its first frame: the panel of its output
+    /// lends its capsule. Posted by the loop to itself, because a frame
+    /// controls only its own surface.
+    NoticeLend(SurfaceId),
+    /// The notices surface is back at rest: the panel takes its capsule
+    /// back, then posts [`Message::NoticeRelease`].
+    NoticeRest(SurfaceId),
+    /// The turn after the capsule came back: the notices surface goes
+    /// unless something arrived meanwhile.
+    NoticeRelease(SurfaceId),
     /// The tray host's news: the watcher's owner, the items, an item's menu.
     Tray(crate::tray::TrayEvent),
     /// The shell's own entry (hide or show) was chosen in the menu of this

@@ -15,7 +15,9 @@ in [the handover note](docs/handover.md).
 ## User contract
 
 - The Island, the launcher, the banners and the tray are the shell's surfaces,
-  with the wallpaper when its duty is on; there is no dock
+  with the wallpaper when its duty is on; a notification is the Island itself
+  growing into a notice (older live ones wait as sheets under it), and the
+  Island's page shows the newest one as a card; there is no dock
   ([ADR 0003](docs/decisions/0003-no-dock.md)).
 - The wallpaper duty (`duties.wallpaper` in `~/.config/celestina/shell.json`)
   is on unless the file says `off` (since the cutover, CEL-2-M). When it is
@@ -96,7 +98,9 @@ in [the handover note](docs/handover.md).
   and those reads. Once something was detected, outputs that
   appear or go are followed by one more detection after they have settled
   for 5 s, and while the piece is placed by one read of each monitor whose
-  level is then unknown. The lock-keys OSD is not
+  level is then unknown. `osd.position` is `bottom` by default (also
+  `bottom-right`); `island` shows the level inside the Island instead, for
+  `osd.timeout_ms`. The lock-keys OSD is not
   delivered. With the duty off, the `volume`, `microphone` and `brightness`
   verbs are rejected. See
   [the evidence](docs/evidence/2026-10-17-osd.md).

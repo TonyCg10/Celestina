@@ -1,0 +1,89 @@
+# CEL-D-011 exact change inventory
+
+Base revision	cc715f7bb6d09f16d0ccf4f519fe5056944f2cf5
+Pathspec	celestina-rs/crates/celestina-shell/src/settings.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/README.md
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices.md
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/burst-end.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/burst-fan.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/burst-sheets.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/level-grow.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/level-over-notice.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/level-settled.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/middle-click-closes-all.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/notice-310ms.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/notice-400ms.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/notice-settled.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/page-card.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/page-closed-toast.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/page-closing-toast-live.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/page-without-card.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/rest.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/right-click-closes-front.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/shrink-150ms.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/shrink-end.png
+Pathspec	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/wheel-up-closes.png
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-011.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/state.rs
+Pathspec	celestina/src/island/tests/lent.rs
+Pathspec	celestina/src/island/tests/notice_card.rs
+Pathspec	celestina/src/island/view.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/src/notifications/banners.rs
+Pathspec	celestina/src/notifications/handover.rs
+Pathspec	celestina/src/notifications/island_notice.rs
+Pathspec	celestina/src/notifications/mod.rs
+Pathspec	celestina/src/osd/surface.rs
+Pathspec	celestina/src/sheet/motion.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+15	0	b1a1a78a45de903c681d23629f525b149229e2c97291c11d66d9918ca93def42	celestina-rs/crates/celestina-shell/src/settings.rs
+1	1	1d9cf7de969a88178b07befba873ca3800b6a61addd0fa5b8d5febe8cf49f601	celestina/Cargo.lock
+1	1	a3e9e68fe4a6879c0b7c78287306e414b9c45ca8a732047bf68a942dc0a34980	celestina/Cargo.toml
+6	2	d6799af7b0ef83b9322c179b9f08438148de62e0b156f58a24560c50b3fbeef0	celestina/README.md
+50	6	26e5764a4b41f6740253a28a91fdf3b0eecd48e5ee27075a1d4b7ff6379a0296	celestina/VALIDATION.md
+71	0	5db47257592b49d742c5a76569cae2c68df996f47822437fb953c5bf82456c3a	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices.md
+-	-	b0c7edd0fe48648e3dfc877d8010a65d47e468f0147a83936b79f8b56cd1351d	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/burst-end.png
+-	-	b3985503d28116f87d2aa8a8d4d64610d91a3529eefd34791f180c4a4302b1a6	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/burst-fan.png
+-	-	e6f0416f3efd739d959c6a0af306c3a995a92cae69f28b36a20586c57caab294	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/burst-sheets.png
+-	-	d55b09289519dc85f101d8ef694b27a0dbd69ced14c1f7b49715758ba2b968d0	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/level-grow.png
+-	-	0ec69e8d8e3a55652962bed654110419e569fbfe5a17fde7687d3c216256b1b1	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/level-over-notice.png
+-	-	5b55faacb0dd91c7ec2664654c35e4d70a6da5007cfaac422eadf5ebd3562e5a	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/level-settled.png
+-	-	b40b107b6188bdcbf725cbc5ec349c359cbff67df7c24be5c228a813b3ba7b38	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/middle-click-closes-all.png
+-	-	6f9850a5ff5f79fb20ee8a9656d5339a053478aff5a4b0dd8f60e50168fd2655	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/notice-310ms.png
+-	-	8e79818635d7078e3c00b5ba57e721d2d3d5de85814799ac3762402d9fa1b310	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/notice-400ms.png
+-	-	86aa892787e76b1c591d717a4c45002128d5e1ae4a854d29d213ba94eb5a3e9a	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/notice-settled.png
+-	-	3a298135d999b5d40ae04c7d3def217b78b94a902971d920ccadff9daa7e5dfa	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/page-card.png
+-	-	6867764d36e0f5406195f8197c235b6385ece977132c1e31106c03ff52f6de09	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/page-closed-toast.png
+-	-	0b0c28d2bedd21a32081f3bfe8ab1b4ebb325787ada5f226eda4c5c9dc0546d9	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/page-closing-toast-live.png
+-	-	aed3cbe412f69abd1dd88d5fbe924f0edda1c278eec6b8b37502d74b0df3fce8	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/page-without-card.png
+-	-	d9c2bd22505996cb3ad53d4f5e5ab966918683dfd91072028b76b0f1456aed72	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/rest.png
+-	-	53d1445cec2269036c4f9e54b5b272dc658ef8a2368d1ff0d4465b92e41d3eb5	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/right-click-closes-front.png
+-	-	85d80f3ab1c0816cc70a60fed5320becfc05956605c4292606c9c12e24658b07	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/shrink-150ms.png
+-	-	1955942316f06ef668d71872c96b71363c39d6ba9eaeba804b6b83918f058dac	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/shrink-end.png
+-	-	59b954979ed6a9768591d468a9ec0d4517c71c02d1f355b2304d24abb76fc953	celestina/docs/evidence/2026-11-26-cel-d-011-island-notices/wheel-up-closes.png
+89	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-011.numstat.tsv
+1	0	2b4f359ddd48c59da998c4ada28cf0466ec39aa8cc6843ff498c0df5c41606ec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+740	82	3efa7a906e230ed5609bfe1f5cb21a20227a8472765dbe862f65e46e989bd5ca	celestina/src/app.rs
+292	31	cdf934f3915745ea097c14beb87fd3e3f41082989c4240688cd915968731a7c8	celestina/src/island/mod.rs
+25	0	9f998915573cc26eb9a4e885d408c57fbf7986df4c33734544b297b7b0c8099c	celestina/src/island/state.rs
+73	0	9a2049b74bd47526871620de799a03c41c0110939faf406248e2b82bdc7f06ea	celestina/src/island/tests/lent.rs
+367	0	3faf6e67c6f4c27d1e0ec505332ee2bedd36d661cde0ae629627cfb88015dad3	celestina/src/island/tests/notice_card.rs
+37	4	9267a7d50f476bcf9f90445878114f675a8f7bea511bc6f3285aac774d15e9d2	celestina/src/island/view.rs
+17	0	cf5a24d2bb3dbe65623f652760bfbf13b48b57599764b6ef8e30c486137866c5	celestina/src/message.rs
+1419	359	d5df7a579b4116b75c2a8131fcd1b112c57bee55bbdeed6bf9f0e9c7fb71c96c	celestina/src/notifications/banners.rs
+308	0	e9c5a65057ae0f0213234378bc083d0d2fe28810b07895da6b032c1c81f92972	celestina/src/notifications/handover.rs
+1232	0	9dd69aa744ce4e99af4c611385c10be855d0749307feac62d16004da54273253	celestina/src/notifications/island_notice.rs
+2	0	7db0ec71b7c2c26d7ec6a6a54a4d0cdd5d8e9d7d29607f97fb1a006c085fb31d	celestina/src/notifications/mod.rs
+238	8	75ba0b0d474c965fca005bbb6bffe1b6562e6dd19cde9643588faa8b47e2ab00	celestina/src/osd/surface.rs
+1	1	6be4a9b3e703c1b01be0f5b898dd2069dd0be69e52736bfac3b4bb39fbdc5fa7	celestina/src/sheet/motion.rs
+1	0	62d550765e10ca436ca044c495ccfd339e3d93ab5706feac489de8dceb9e2d94	docs/version-history.tsv

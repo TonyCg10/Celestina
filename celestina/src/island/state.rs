@@ -258,6 +258,31 @@ impl IslandState {
         }
     }
 
+    /// The rect the open page ends at on a surface `surface_w` wide: where a
+    /// press belongs to the page even while it is still growing.
+    #[must_use]
+    pub fn open_rect(&self, surface_w: f32) -> Rect {
+        let (w, h) = self.page_size();
+        Rect {
+            x: (surface_w - w) / 2.0,
+            y: TOP_GAP,
+            w,
+            h,
+        }
+    }
+
+    /// The capsule at rest on a surface `surface_w` wide: where the Island
+    /// is when no page is open, and where a notice grows from.
+    #[must_use]
+    pub fn rest_rect(&self, surface_w: f32) -> Rect {
+        Rect {
+            x: (surface_w - self.capsule_w) / 2.0,
+            y: TOP_GAP,
+            w: self.capsule_w,
+            h: CAPSULE_H,
+        }
+    }
+
     #[must_use]
     pub fn capsule_opacity(&self, now: Instant) -> f32 {
         capsule_opacity_at(self.progress(now))

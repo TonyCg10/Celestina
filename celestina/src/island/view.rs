@@ -293,6 +293,34 @@ pub fn page(
     size: (f32, f32),
     slide: f32,
 ) -> View {
+    page_with_card(
+        theme,
+        open,
+        title,
+        clock,
+        content,
+        surface_w,
+        size,
+        slide,
+        (0.0, None),
+    )
+}
+
+/// [`page`] with room kept at its top: `lead` px that push the title row,
+/// the content and the tabs down, and `card` (a view placed at its own
+/// corner of the page) drawn in it.
+#[must_use]
+pub fn page_with_card(
+    theme: &Theme,
+    open: PageId,
+    title: &str,
+    clock: &str,
+    content: View,
+    surface_w: f32,
+    size: (f32, f32),
+    slide: f32,
+    (lead, card): (f32, Option<View>),
+) -> View {
     let title = view::text(
         Key::named("title"),
         title,
@@ -322,9 +350,13 @@ pub fn page(
         .child(button(theme, more_key(), "more-label", copy::MORE))
         .child(button(theme, close_key(), "close-label", copy::CLOSE));
     let body_w = (size.0 - 2.0 * theme.spacing.lg).max(0.0);
-    let body_h =
-        (size.1 - 2.0 * theme.spacing.lg - TITLE_ROW_H - tabs::TABS_H - 2.0 * theme.spacing.sm)
-            .max(0.0);
+    let body_h = (size.1
+        - 2.0 * theme.spacing.lg
+        - lead
+        - TITLE_ROW_H
+        - tabs::TABS_H
+        - 2.0 * theme.spacing.sm)
+        .max(0.0);
     let body = view::col(Key::named("body"))
         .size(body_w, body_h)
         .clip()
@@ -337,8 +369,9 @@ pub fn page(
     view::col(Key::named("page-root"))
         .absolute((surface_w - size.0) / 2.0, TOP_GAP)
         .size(size.0, size.1)
-        .padding(theme.spacing.lg)
+        .padding_sides(theme.spacing.lg + lead, theme.spacing.lg, theme.spacing.lg)
         .gap(theme.spacing.sm)
+        .children(card)
         .child(title_row)
         .child(body)
         .child(tabs::tabs(theme, open, body_w))

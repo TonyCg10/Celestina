@@ -20,6 +20,7 @@ use std::{
 use celestina_core::desktop_entry::{DesktopEntry, Locale};
 use celestina_paint::{Painter, Rect, TextSystem, Theme};
 use celestina_settings::Appearance;
+use celestina_shell::notifications::Notification;
 use celestina_shell::phone::PhoneState;
 use celestina_shell::settings::{BarLayout, Duties, Duty, Settings};
 use celestina_wayland::{
@@ -27,7 +28,11 @@ use celestina_wayland::{
     OutputInfo, PopupId, RuntimeCtl, RuntimeError, Sender, Shell, SurfaceCtl, SurfaceId,
 };
 
-use crate::notifications::banners::{self, BannerAction, BannerStack};
+use crate::notifications::{
+    banners::{self, BannerAction, NoticePainter},
+    handover::{Answer, Handover, Post},
+    island_notice::Level,
+};
 use crate::{
     bar,
     bubbles::{self, Bubbles, BubblesHandle, BubblesNews},
@@ -39,7 +44,8 @@ use crate::{
     error_chain,
     glance::{self, GlanceHandle},
     island::{
-        self,
+        self, clock,
+        clock::ClockTick,
         menu::{self, ChoiceSlot, Menu, MenuChoice, MenuState, SharedPainter},
         pages::{tray::TrayList, NameOwner},
         Island, IslandAction, Shared,
@@ -51,6 +57,7 @@ use crate::{
     notifications::NotificationsState,
     osd::{
         control::{self, Controls, Opened, Opening},
+        surface::{Order, Placement},
         verbs::{self as level_verbs, NoWorkers},
         Suppression,
     },
@@ -209,6 +216,17 @@ impl Islands {
         gone
     }
 
+    /// `output`'s Islands are going: whether one of them held the server's
+    /// clock for its card, which must then let go. Call it before
+    /// [`Islands::remove_output`]; told once.
+    pub fn release_card_holds(&mut self, output: OutputId) -> bool {
+        let mut held = false;
+        for slot in self.slots.iter_mut().filter(|s| s.output == output) {
+            held |= slot.island.release_card_hold();
+        }
+        held
+    }
+
     /// Closes the level sheets of `output`'s Islands, flushing what their
     /// throttles hold. Their surfaces may be gone already: no surface is
     /// touched.
@@ -294,12 +312,120 @@ impl Islands {
             .map(|s| s.output)
     }
 
-    /// The exclusive zone of `output`'s Island.
-    fn zone_of(&self, output: OutputId) -> Option<i32> {
+    /// The surfaces to redraw when what every Island shows changed: all but
+    /// the one on `covered`, the output whose capsule a notices surface is
+    /// about to lend or return, and whose redraw then carries the change.
+    fn redraw_targets(&self, covered: Option<OutputId>) -> Vec<SurfaceId> {
+        self.slots
+            .iter()
+            .filter(|s| Some(s.output) != covered)
+            .map(|s| s.surface)
+            .collect()
+    }
+
+    /// `output`'s Island.
+    fn island_of(&self, output: OutputId) -> Option<&Island> {
         self.slots
             .iter()
             .find(|s| s.output == output)
-            .map(|s| s.island.exclusive_zone())
+            .map(|s| &s.island)
+    }
+
+    /// Lends `output`'s capsule to the notices surface, or takes it back;
+    /// whether an Island is there.
+    fn lend(&mut self, output: OutputId, lent: bool) -> bool {
+        match self.slots.iter_mut().find(|s| s.output == output) {
+            Some(slot) => {
+                slot.island.lend_capsule(lent);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Does what the hand-over answered on `output`. Returns whether its
+    /// panel is to be redrawn and whether the release is to be posted for
+    /// the next loop turn.
+    fn answer(&mut self, answer: Answer, output: OutputId) -> (bool, bool) {
+        match answer {
+            Answer::Lend => (self.lend(output, true), false),
+            Answer::Return => (self.lend(output, false), true),
+            Answer::Nothing => (false, false),
+        }
+    }
+
+    /// A notices surface on `output` goes for another reason (the focus
+    /// moved): the panel takes the capsule back if it was lent. Whether the
+    /// panel is to be redrawn.
+    fn retire(&mut self, handover: &mut Handover, output: OutputId) -> bool {
+        handover.retire() && self.lend(output, false)
+    }
+
+    /// Where the notices and the pages are at `now`, for the display's choice
+    /// of output and position: a page is there while it is open or still
+    /// shrinking back to the capsule.
+    fn placement(&self, notices: Option<OutputId>, now: std::time::Instant) -> Placement {
+        Placement {
+            notices,
+            pages: self.pages_out(now),
+        }
+    }
+
+    /// Whether `output`'s Island has its page open.
+    fn page_open_on(&self, output: OutputId) -> bool {
+        self.island_of(output).is_some_and(Island::page_open)
+    }
+
+    /// Whether `output`'s Island page is open or still closing at `now`.
+    fn page_out_on(&self, output: OutputId, now: std::time::Instant) -> bool {
+        self.island_of(output).is_some_and(|i| i.page_out(now))
+    }
+
+    /// The outputs whose Island page is open or still closing at `now`.
+    fn pages_out(&self, now: std::time::Instant) -> Vec<OutputId> {
+        self.slots
+            .iter()
+            .filter(|s| s.island.page_out(now))
+            .map(|s| s.output)
+            .collect()
+    }
+
+    /// Routes the newest toast (§5.5): when the page of `wanted`'s Island is
+    /// open, that Island takes it as a card and the others hold none;
+    /// otherwise no Island holds one and the notices surface shows it.
+    fn route_notice(
+        &mut self,
+        wanted: Option<OutputId>,
+        toast: Option<&Notification>,
+        now: std::time::Instant,
+    ) -> NoticeRoute {
+        let carded = toast.is_some() && wanted.is_some_and(|o| self.page_open_on(o));
+        let mut redraw = Vec::new();
+        for slot in &mut self.slots {
+            let mine = if carded && Some(slot.output) == wanted {
+                toast.cloned()
+            } else {
+                None
+            };
+            if slot.island.set_notice(mine, now) {
+                redraw.push(slot.surface);
+            }
+        }
+        NoticeRoute { carded, redraw }
+    }
+
+    /// Whether an Island holds a notice as a card.
+    fn any_notice(&self) -> bool {
+        self.slots.iter().any(|s| s.island.has_notice())
+    }
+
+    /// What each Island wants the server's clock to do for its card now
+    /// (`true` holds it, `false` lets it go).
+    fn take_card_holds(&mut self) -> Vec<bool> {
+        self.slots
+            .iter_mut()
+            .filter_map(|slot| slot.island.take_card_hold())
+            .collect()
     }
 
     /// The surface of `output`'s Island.
@@ -311,12 +437,25 @@ impl Islands {
     }
 }
 
-/// The banners' surface and the output it is on.
+/// Where the newest toast went.
+#[derive(Debug)]
+struct NoticeRoute {
+    /// The banner output's Island took it as a card: no surface.
+    carded: bool,
+    /// The panels whose notice changed.
+    redraw: Vec<SurfaceId>,
+}
+
+/// The notices' surface, the output it is on, what it paints and where the
+/// Island's capsule is.
 #[derive(Debug)]
 struct BannerSurface {
     output: OutputId,
     surface: SurfaceId,
-    stack: BannerStack,
+    notice: NoticePainter,
+    handover: Handover,
+    /// The minute deadline of the clock face it paints.
+    clock: ClockTick,
 }
 
 /// The output niri's focused workspace is on.
@@ -485,8 +624,17 @@ pub struct App {
     sender: Rc<OnceCell<Sender<Message>>>,
     /// The notification server's latest snapshot, holder and queue.
     notifications: NotificationsState,
-    /// The banners' surface, while a banner shows.
+    /// The notices' surface, while the Island shows a notice (or is still
+    /// shrinking back from one).
     banners: Option<BannerSurface>,
+    /// The level the display last ordered on the Island, until it leaves:
+    /// a notices surface made later (or on another output) starts with it.
+    island_level: Option<Level>,
+    /// Surfaces of notices that left an output whose focus moved: their
+    /// capsule is back on the panel and they go on the next loop turn.
+    banners_retiring: Vec<SurfaceId>,
+    /// The outputs whose Island page was open when the notices last looked.
+    pages_seen: Vec<OutputId>,
     /// The catchers under the Islands that show something (CEL-D-003).
     catchers: Catchers,
     /// Why the run stopped on a failure, for the binary to report.
@@ -603,6 +751,9 @@ impl App {
             sender: Rc::new(OnceCell::new()),
             notifications: NotificationsState::new(notifications),
             banners: None,
+            island_level: None,
+            banners_retiring: Vec::new(),
+            pages_seen: Vec::new(),
             catchers: Catchers::default(),
             fatal,
             refusal_logged: false,
@@ -874,6 +1025,7 @@ impl App {
             self.close_open_level_control(ctl);
         }
         self.osds.settings_changed(&before, &after, ctl, &theme);
+        self.level_orders(ctl);
         self.levels_settings_changed(&before, &after, ctl);
         if before.duties != after.duties {
             self.apply_phone_and_bubbles(&after, ctl);
@@ -1030,6 +1182,7 @@ impl App {
             if let Some(released) = self.controls.closed() {
                 let theme = self.theme();
                 self.osds.set_suppressed(released, ctl, &theme);
+                self.level_orders(ctl);
             }
             if self.controls.readings.clear() {
                 self.levels_changed(ctl);
@@ -1286,71 +1439,130 @@ impl App {
     /// banners and the Notifications page extend this.
     fn notifications_changed(&mut self, ctl: &mut RuntimeCtl<'_>) {
         self.mark_read_if_viewed();
-        self.redraw_all(ctl);
+        // Sync first: the output whose capsule the notices surface holds is
+        // redrawn by the lend and the return, which paint the latest state.
         self.sync_banners(ctl);
+        // Only while a lend or a return is on its way: the steady lent panel
+        // still draws its bar, bell and unread mark included.
+        let covered = self
+            .banners
+            .as_ref()
+            .filter(|b| b.handover.answer_pending())
+            .map(|b| b.output);
+        for surface in self.islands.redraw_targets(covered) {
+            if let Some(mut s) = ctl.surface(surface) {
+                s.request_redraw();
+            }
+        }
     }
 
-    /// The banners follow the snapshot's toasts: the surface is created on
-    /// the focused output when the first banner shows, redrawn when the
-    /// stack changes and destroyed when none remains.
+    /// The notices follow the snapshot's toasts: the surface is created on
+    /// the focused output when the first one shows, moves with the focus,
+    /// gets the changes and stays until the Island is back at rest (the
+    /// release comes from [`App::notice_release`]).
     fn sync_banners(&mut self, ctl: &mut RuntimeCtl<'_>) {
-        let toasts = &self.notifications.snapshot().toasts;
-        if banners::shown(toasts).is_empty() {
-            if let Some(gone) = self.banners.take() {
-                ctl.destroy_surface(gone.surface);
-                self.banners_gone(gone);
-                tracing::info!("banners surface released: no toast left");
+        let now = std::time::Instant::now();
+        let toasts = self.notifications.snapshot().toasts.clone();
+        let showing = !banners::shown(&toasts).is_empty();
+        let wanted = self
+            .islands
+            .banner_output(focused_output(self.model.as_ref()));
+        // A page that opened on the surface's output is the Island's now:
+        // the surface yields at once, without its shrink, and a level it
+        // showed is not shown again at the bottom.
+        if self
+            .banners
+            .as_ref()
+            .is_some_and(|b| self.islands.page_open_on(b.output))
+        {
+            self.banners_yield(ctl);
+            self.island_level = None;
+        }
+        if showing
+            && self
+                .banners
+                .as_ref()
+                .is_some_and(|b| Some(b.output) != wanted)
+        {
+            self.banners_follow_focus(ctl);
+        }
+        // The page of the banner output is open: the newest toast is a card
+        // at its top and there is no surface for it.
+        let route = self.islands.route_notice(wanted, toasts.first(), now);
+        for surface in route.redraw {
+            if let Some(mut s) = ctl.surface(surface) {
+                s.request_redraw();
             }
+        }
+        self.send_card_holds();
+        if route.carded {
+            return;
+        }
+        // The page is still shrinking: the toast waits for the Island to be
+        // back at the capsule, or the surface would grow over the page.
+        if self.banners.is_none() && wanted.is_some_and(|o| self.islands.page_out_on(o, now)) {
             return;
         }
         if self.banners.is_none() {
+            if !showing {
+                return;
+            }
             self.banners = self.create_banners(ctl);
             // The smoke reads this line from stderr.
             tracing::info!(
                 created = self.banners.is_some(),
-                toasts = self.notifications.snapshot().toasts.len(),
+                toasts = toasts.len(),
                 "banners surface requested"
             );
         }
-        let toasts = &self.notifications.snapshot().toasts;
         let Some(banners) = self.banners.as_mut() else {
             return;
         };
-        if banners.stack.set_toasts(toasts) {
-            if let Some(mut surface) = ctl.surface(banners.surface) {
-                surface.request_redraw();
+        if let Some(island) = self.islands.island_of(banners.output) {
+            banners.notice.set_rest(island.rest_rect(), now);
+        }
+        let changed = banners.notice.set_toasts(&toasts, now);
+        let hold = banners.notice.take_hold();
+        let surface = banners.surface;
+        if let Some(command) = hold {
+            self.notifications.send(command);
+        }
+        if banners.notice.needs_frame(changed, now) {
+            if let Some(mut s) = ctl.surface(surface) {
+                s.request_redraw();
             }
         }
     }
 
-    /// The banners' surface on the output niri has focused (else the
-    /// first), under that output's Island.
+    /// The notices surface on the output niri has focused (else the
+    /// first): the Island's rest rect there is what it grows from.
     fn create_banners(&self, ctl: &mut RuntimeCtl<'_>) -> Option<BannerSurface> {
         let output = self
             .islands
             .banner_output(focused_output(self.model.as_ref()))?;
-        let zone = self.islands.zone_of(output)?;
-        let theme = self.theme();
-        let spec = LayerSpec {
-            output,
-            namespace: banners::NAMESPACE,
-            layer: Layer::Overlay,
-            anchor: Anchoring::Top,
-            size: banners::surface_size(&theme, zone),
-            // The stack is painted under the Island inside the surface;
-            // the surface itself ignores every exclusive zone.
-            exclusive_zone: -1,
-            keyboard: KeyboardInteractivity::None,
-        };
-        match ctl.create_layer_surface(spec) {
+        self.create_banners_on(output, ctl)
+    }
+
+    /// The notices surface on `output`, which starts with the level the
+    /// display last ordered.
+    fn create_banners_on(
+        &self,
+        output: OutputId,
+        ctl: &mut RuntimeCtl<'_>,
+    ) -> Option<BannerSurface> {
+        let rest = self.islands.island_of(output)?.rest_rect();
+        match ctl.create_layer_surface(banners::layer_spec(output)) {
             Ok(surface) => Some(BannerSurface {
                 output,
                 surface,
-                stack: BannerStack::new(
-                    &theme,
-                    banners::top_offset(&theme, zone),
-                    self.appearance.reduced_motion,
-                ),
+                notice: {
+                    let mut notice =
+                        NoticePainter::new(&self.theme(), rest, self.appearance.reduced_motion);
+                    notice.set_level(self.island_level, std::time::Instant::now());
+                    notice
+                },
+                handover: Handover::new(),
+                clock: ClockTick::default(),
             }),
             Err(err) => {
                 tracing::error!(output = output.0, %err, "no banners on this output");
@@ -1359,11 +1571,198 @@ impl App {
         }
     }
 
-    /// The banners' surface is gone: a hover it held ends with it, so the
+    /// Where the notices and the pages are, for the display's choice of
+    /// output and of position.
+    fn osd_placement(&self) -> Placement {
+        self.islands.placement(
+            self.banners.as_ref().map(|b| b.output),
+            std::time::Instant::now(),
+        )
+    }
+
+    /// Carries out what the display asked of the Island's level: the level
+    /// goes to the notices surface (made, for a level alone, on the output
+    /// the display chose) and the server's clock is held or released with
+    /// it.
+    fn level_orders(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        let now = std::time::Instant::now();
+        for order in self.osds.take_orders() {
+            match order {
+                Order::Show(output, level) => {
+                    // The page of this output is still out: the Island is
+                    // its, and a surface now would grow over it. The display
+                    // places a level away from a page that is out, so this
+                    // only guards a page that opened since.
+                    if self.banners.is_none() && self.islands.page_out_on(output, now) {
+                        self.island_level = None;
+                        continue;
+                    }
+                    self.island_level = Some(level);
+                    if self.banners.is_none() {
+                        self.banners = self.create_banners_on(output, ctl);
+                        // The smoke's `notify` phase greps the toasts' line;
+                        // a level alone has its own.
+                        tracing::info!(
+                            created = self.banners.is_some(),
+                            "notices surface requested for a level"
+                        );
+                    }
+                }
+                Order::Clear => self.island_level = None,
+            }
+            let level = self.island_level;
+            let Some(banners) = self.banners.as_mut() else {
+                continue;
+            };
+            if let Some(island) = self.islands.island_of(banners.output) {
+                banners.notice.set_rest(island.rest_rect(), now);
+            }
+            banners.notice.set_level(level, now);
+            let hold = banners.notice.take_hold();
+            let surface = banners.surface;
+            if let Some(command) = hold {
+                self.notifications.send(command);
+            }
+            if let Some(mut s) = ctl.surface(surface) {
+                s.request_redraw();
+            }
+        }
+    }
+
+    /// The notices' surface is gone: a hold it kept ends with it, so the
     /// server's expiry runs again.
     fn banners_gone(&mut self, mut gone: BannerSurface) {
-        if let Some(command) = gone.stack.release_hover() {
+        if let Some(command) = gone.notice.release_hover() {
             self.notifications.send(command);
+        }
+    }
+
+    /// Redraws the panel of `output`.
+    fn redraw_output(&self, output: OutputId, ctl: &mut RuntimeCtl<'_>) {
+        if let Some(surface) = self.islands.surface_of(output) {
+            if let Some(mut s) = ctl.surface(surface) {
+                s.request_redraw();
+            }
+        }
+    }
+
+    /// The focus moved to another output while a notice shows: the old
+    /// output's panel takes its capsule back, its surface goes on the next
+    /// turn, and the new output gets its own (its Island lends the capsule
+    /// after the new surface's first frame).
+    /// A surface that showed only a level goes the same way, without a
+    /// shrink (a known limit: the focus must move within the level's second
+    /// and a half, and a notification arrive in it).
+    fn banners_follow_focus(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        if let Some(output) = self.banners_yield(ctl) {
+            tracing::info!(output = output.0, "banners follow the focus");
+        }
+    }
+
+    /// The notices surface goes without a shrink: its output's panel takes
+    /// the capsule back at once (when it was lent), the surface is destroyed
+    /// on the next turn and the hold it kept ends. The output it was on.
+    fn banners_yield(&mut self, ctl: &mut RuntimeCtl<'_>) -> Option<OutputId> {
+        let mut old = self.banners.take()?;
+        if self.islands.retire(&mut old.handover, old.output) {
+            self.redraw_output(old.output, ctl);
+        }
+        self.banners_retiring.push(old.surface);
+        self.post(Message::NoticeRelease(old.surface));
+        if let Some(command) = old.notice.release_hover() {
+            self.notifications.send(command);
+        }
+        Some(old.output)
+    }
+
+    /// Tells the server's clock what the cards of the open pages want.
+    fn send_card_holds(&mut self) {
+        for hold in self.islands.take_card_holds() {
+            self.notifications.send(NotificationsCommand::Hover(hold));
+        }
+    }
+
+    /// A page opened or closed somewhere: the notices follow (a surface
+    /// yields to a page that opened, a card goes back to the surface when
+    /// its page closes).
+    fn pages_changed(&mut self, ctl: &mut RuntimeCtl<'_>) {
+        self.pages_seen = self.islands.pages_out(std::time::Instant::now());
+        self.sync_banners(ctl);
+    }
+
+    /// Posts [`Message::PagesChanged`] when the set of open pages is not the
+    /// one the notices last saw. Cheap: called after input and frames.
+    fn watch_pages(&mut self) {
+        let out = self.islands.pages_out(std::time::Instant::now());
+        if out != self.pages_seen {
+            self.pages_seen = out;
+            self.post(Message::PagesChanged);
+        }
+    }
+
+    /// The first frame of the notices surface is out: its output's panel
+    /// lends the capsule, unless nothing is left to show.
+    fn notice_lend(&mut self, surface: SurfaceId, ctl: &mut RuntimeCtl<'_>) {
+        let now = std::time::Instant::now();
+        let Some(banners) = self.banners.as_mut().filter(|b| b.surface == surface) else {
+            return;
+        };
+        let wants = banners.notice.wants_surface(now);
+        let output = banners.output;
+        let answer = banners.handover.lend(wants);
+        self.notice_answer(answer, surface, output, ctl);
+    }
+
+    /// The Island is back at rest: the panel takes the capsule back and
+    /// redraws it first; the surface goes on the next turn.
+    fn notice_rest(&mut self, surface: SurfaceId, ctl: &mut RuntimeCtl<'_>) {
+        let now = std::time::Instant::now();
+        let Some(banners) = self.banners.as_mut().filter(|b| b.surface == surface) else {
+            return;
+        };
+        let wants = banners.notice.wants_surface(now);
+        let output = banners.output;
+        let answer = banners.handover.rest(wants);
+        self.notice_answer(answer, surface, output, ctl);
+    }
+
+    /// Does what the hand-over answered: lend the capsule, or take it back,
+    /// redraw the panel and post the release for the next turn.
+    fn notice_answer(
+        &mut self,
+        answer: Answer,
+        surface: SurfaceId,
+        output: OutputId,
+        ctl: &mut RuntimeCtl<'_>,
+    ) {
+        let (redraw, release) = self.islands.answer(answer, output);
+        if redraw {
+            self.redraw_output(output, ctl);
+        }
+        if release {
+            self.post(Message::NoticeRelease(surface));
+        }
+    }
+
+    /// The turn after the capsule came back: the surface goes unless a
+    /// notice arrived meanwhile, in which case it is reused.
+    fn notice_release(&mut self, surface: SurfaceId, ctl: &mut RuntimeCtl<'_>) {
+        if let Some(at) = self.banners_retiring.iter().position(|s| *s == surface) {
+            self.banners_retiring.remove(at);
+            ctl.destroy_surface(surface);
+            return;
+        }
+        let now = std::time::Instant::now();
+        let goes = self.banners.as_ref().is_some_and(|b| {
+            b.surface == surface && b.handover.release(b.notice.wants_surface(now))
+        });
+        if !goes {
+            return;
+        }
+        if let Some(gone) = self.banners.take() {
+            ctl.destroy_surface(gone.surface);
+            self.banners_gone(gone);
+            tracing::info!("banners surface released: no toast left");
         }
     }
 
@@ -1374,24 +1773,57 @@ impl App {
                 BannerAction::Send(command) => {
                     self.notifications.send(command);
                 }
-                BannerAction::OpenPage => match self.sender.get() {
-                    Some(sender) => {
-                        if sender.send(Message::OpenNotificationsPage(output)).is_err() {
-                            tracing::debug!("the loop is gone: the page is not opened");
-                        }
-                    }
-                    None => tracing::debug!("no loop sender: the page is not opened"),
-                },
+                BannerAction::OpenPage => self.post(Message::OpenNotificationsPage(output)),
+                BannerAction::OpenClock => self.post(Message::OpenClockPage(output)),
             }
         }
     }
 
-    /// Opens the Notifications page on `output`'s Island.
-    fn open_notifications_page(&mut self, output: OutputId, ctl: &mut RuntimeCtl<'_>) {
+    /// One frame of the notices surface: the Island growing into the
+    /// notice, painted over the panel's rest rect. When it is out, the
+    /// hand-over of the capsule is posted (the panel lends it on the next
+    /// loop turn, not in this frame).
+    fn notice_frame(&mut self, cx: &mut FrameCx<'_>) {
+        let (Some(shared), Some(banners)) = (self.painter.as_ref(), self.banners.as_mut()) else {
+            return;
+        };
+        let Some(island) = self.islands.island_of(banners.output) else {
+            return;
+        };
+        let Ok(mut painter) = shared.try_borrow_mut() else {
+            tracing::warn!("the painter is in use; the banners' frame is skipped");
+            cx.ctl.request_redraw();
+            return;
+        };
+        let wants =
+            banners
+                .notice
+                .frame(cx, &mut painter, island.rest_rect(), island.capsule_view());
+        drop(painter);
+        let post = banners.handover.frame(wants).map(|post| match post {
+            Post::Lend => Message::NoticeLend(banners.surface),
+            Post::Rest => Message::NoticeRest(banners.surface),
+        });
+        // The clock face rolls over at the minute while it holds the capsule.
+        let (secs, nanos) = clock::unix_now();
+        if let Some(wait) = banners::clock_wait(
+            banners.handover.holds(),
+            &mut banners.clock,
+            cx.now,
+            secs,
+            nanos,
+        ) {
+            cx.ctl.redraw_after(wait);
+        }
+        if let Some(message) = post {
+            self.post(message);
+        }
+    }
+
+    /// Opens `page` on `output`'s Island.
+    fn open_page_on(&mut self, output: OutputId, page: PageId, ctl: &mut RuntimeCtl<'_>) {
         if self.polkit_claims_keyboard() {
-            tracing::info!(
-                "notifications: page not opened while a polkit prompt holds the keyboard"
-            );
+            tracing::info!("island: page not opened while a polkit prompt holds the keyboard");
             return;
         }
         let Some(surface) = self.islands.surface_of(output) else {
@@ -1404,7 +1836,7 @@ impl App {
             // The Island hears the claim before the verb: its own flag is
             // only refreshed on frame and input.
             island.set_keyboard_claimed(claimed);
-            island.command(&Verb::IslandOpen(PageId::NOTIFICATIONS), &mut ctl);
+            island.command(&Verb::IslandOpen(page), &mut ctl);
         }
     }
 
@@ -3071,6 +3503,11 @@ impl Shell for App {
                     self.launcher = None;
                     tracing::info!("launcher: closed with its output");
                 }
+                // A card held the server's clock under the pointer: its
+                // Island goes with the output, so the hold ends here.
+                if self.islands.release_card_holds(output) {
+                    self.notifications.send(NotificationsCommand::Hover(false));
+                }
                 // The banners' surface went with the output: no frame for
                 // it; they come back on another output if any remain.
                 if let Some(banners) = self.banners.take_if(|b| b.output == output) {
@@ -3245,21 +3682,13 @@ impl Shell for App {
             }
             return;
         }
-        if let (Some(shared), Some(banners)) = (self.painter.as_ref(), self.banners.as_mut()) {
-            if banners.surface == cx.surface {
-                match shared.try_borrow_mut() {
-                    Ok(mut painter) => {
-                        banners
-                            .stack
-                            .frame(cx, &mut painter, self.appearance.reduced_motion);
-                    }
-                    Err(_) => {
-                        tracing::warn!("the painter is in use; the banners' frame is skipped");
-                        cx.ctl.request_redraw();
-                    }
-                }
-                return;
-            }
+        if self
+            .banners
+            .as_ref()
+            .is_some_and(|b| b.surface == cx.surface)
+        {
+            self.notice_frame(cx);
+            return;
         }
         let claimed = self.polkit_claims_keyboard();
         let (Some(shared), Some(island)) =
@@ -3296,6 +3725,7 @@ impl Shell for App {
             self.appearance.reduced_motion,
         );
         drop(painter);
+        self.watch_pages();
         self.settle_level_sheet(cx.surface);
         // A sheet that opened from the queue in this frame is seen too.
         self.mark_read_if_viewed();
@@ -3314,9 +3744,9 @@ impl Shell for App {
                 return;
             };
             let now = std::time::Instant::now();
-            banners.stack.layout(&mut painter, now);
+            banners.notice.prepare(&mut painter, now);
             drop(painter);
-            let input = banners.stack.pointer(&ev, now);
+            let input = banners.notice.pointer(&ev, now);
             if input.redraw {
                 ctl.request_redraw();
             }
@@ -3372,6 +3802,10 @@ impl Shell for App {
         };
         let tray_menu_open = island.tray_menu_open();
         self.act(actions, surface, &shared, ctl);
+        // The pointer over the card holds the server's clock; the page may
+        // have opened or closed.
+        self.send_card_holds();
+        self.watch_pages();
         self.settle_level_sheet(surface);
         self.mark_read_if_viewed();
         self.catchers_due();
@@ -3427,6 +3861,11 @@ impl Shell for App {
                     }
                 }
                 self.model = Some(model);
+                // The notices follow the focus to another output, a card
+                // as much as the surface.
+                if self.banners.is_some() || self.islands.any_notice() {
+                    self.sync_banners(ctl);
+                }
             }
             Message::Appearance(appearance) => {
                 if appearance == self.appearance {
@@ -3449,11 +3888,22 @@ impl Shell for App {
             Message::Command(verb) => {
                 self.command(verb, ctl);
                 self.mark_read_if_viewed();
+                // A verb that opened or closed a page: the notices follow.
+                self.watch_pages();
             }
             Message::OpenNotificationsPage(output) => {
-                self.open_notifications_page(output, ctl);
+                self.open_page_on(output, PageId::NOTIFICATIONS, ctl);
                 self.mark_read_if_viewed();
+                self.watch_pages();
             }
+            Message::OpenClockPage(output) => {
+                self.open_page_on(output, PageId::CLOCK, ctl);
+                self.watch_pages();
+            }
+            Message::PagesChanged => self.pages_changed(ctl),
+            Message::NoticeLend(surface) => self.notice_lend(surface, ctl),
+            Message::NoticeRest(surface) => self.notice_rest(surface, ctl),
+            Message::NoticeRelease(surface) => self.notice_release(surface, ctl),
             Message::DesktopIndex(entries) => {
                 tracing::info!(entries = entries.len(), "desktop index received");
                 self.index = entries;
@@ -3529,8 +3979,15 @@ impl Shell for App {
                     self.levels_changed(ctl);
                 }
                 let theme = self.theme();
-                self.osds
-                    .audio(event, focused_output(self.model.as_ref()), ctl, &theme);
+                let place = self.osd_placement();
+                self.osds.audio(
+                    event,
+                    focused_output(self.model.as_ref()),
+                    place,
+                    ctl,
+                    &theme,
+                );
+                self.level_orders(ctl);
             }
             // The volume popup's rows; no piece draws it, and the display
             // never hears of it.
@@ -3549,8 +4006,15 @@ impl Shell for App {
                     self.levels_changed(ctl);
                 }
                 let theme = self.theme();
-                self.osds
-                    .brightness(event, focused_output(self.model.as_ref()), ctl, &theme);
+                let place = self.osd_placement();
+                self.osds.brightness(
+                    event,
+                    focused_output(self.model.as_ref()),
+                    place,
+                    ctl,
+                    &theme,
+                );
+                self.level_orders(ctl);
             }
             Message::CloseLevelSheet(surface) => {
                 if let (Some(island), Some(mut surface_ctl)) =
@@ -3562,10 +4026,12 @@ impl Shell for App {
             Message::OsdSuppressed(suppression) => {
                 let theme = self.theme();
                 self.osds.set_suppressed(suppression, ctl, &theme);
+                self.level_orders(ctl);
             }
             Message::Osd(tick) => {
                 let theme = self.theme();
                 self.osds.tick(tick, ctl, &theme);
+                self.level_orders(ctl);
             }
             Message::Melibea(news) => self.bubbles_news(*news, ctl),
             Message::Phone(news) => self.phone_news(*news, ctl),
@@ -3625,6 +4091,198 @@ mod tests {
             Island::new("HDMI-A-1", (2560.0, 560.0)),
         );
         islands
+    }
+
+    #[test]
+    fn focus_moving_to_another_output_hands_the_capsule_back() {
+        let mut islands = islands();
+        let (dp, hdmi) = (OutputId(1), OutputId(2));
+        // The notices surface on DP-1 drew its first frame: DP-1 lends.
+        let mut first = Handover::new();
+        assert_eq!(first.frame(true), Some(Post::Lend));
+        assert_eq!(islands.answer(first.lend(true), dp), (true, false));
+        assert!(islands.island_of(dp).is_some_and(Island::capsule_lent));
+        // The focus moves while the notice is out: DP-1 gets its capsule
+        // back at once and its surface is released on the next turn.
+        assert!(islands.retire(&mut first, dp), "DP-1's panel is redrawn");
+        assert!(!islands.island_of(dp).is_some_and(Island::capsule_lent));
+        // HDMI-A-1's own surface lends only after its first frame.
+        let mut second = Handover::new();
+        assert!(!islands.island_of(hdmi).is_some_and(Island::capsule_lent));
+        assert_eq!(second.frame(true), Some(Post::Lend));
+        assert_eq!(islands.answer(second.lend(true), hdmi), (true, false));
+        assert!(islands.island_of(hdmi).is_some_and(Island::capsule_lent));
+        // At no point was a capsule missing on an output with no surface
+        // lending it: the old one is back.
+        assert!(!islands.island_of(dp).is_some_and(Island::capsule_lent));
+        // The end on HDMI-A-1: the capsule comes back, then the release.
+        assert_eq!(second.frame(false), Some(Post::Rest));
+        assert_eq!(islands.answer(second.rest(false), hdmi), (true, true));
+        assert!(!islands.island_of(hdmi).is_some_and(Island::capsule_lent));
+        // A retired surface that never lent has nothing to give back.
+        let mut never = Handover::new();
+        assert!(!islands.retire(&mut never, dp));
+    }
+
+    fn toast(id: u32) -> celestina_shell::notifications::Notification {
+        celestina_shell::notifications::Notification {
+            id,
+            app_name: "app".to_owned(),
+            summary: format!("n{id}"),
+            body: String::new(),
+            image: None,
+            actions: Vec::new(),
+            urgency: celestina_shell::notifications::Urgency::Normal,
+            posted_ms: 0,
+            expires_at_ms: None,
+            read: false,
+        }
+    }
+
+    #[test]
+    fn a_toast_goes_to_the_open_page_of_the_banner_output_only() {
+        let mut islands = islands();
+        let (dp, hdmi) = (OutputId(1), OutputId(2));
+        let now = Instant::now();
+        // No page open: the notices surface takes it, no Island gets a card.
+        let route = islands.route_notice(Some(dp), Some(&toast(1)), now);
+        assert!(!route.carded);
+        assert!(route.redraw.is_empty());
+        // The page opens on the banner output: that Island takes the newest.
+        if let Some(island) = islands.slots.iter_mut().find(|s| s.output == dp) {
+            island.island.open_for_test(PageId::CLOCK, now);
+        }
+        let route = islands.route_notice(Some(dp), Some(&toast(2)), now);
+        assert!(route.carded);
+        assert_eq!(route.redraw, vec![SurfaceId(10)]);
+        assert_eq!(islands.island_of(dp).map(Island::notice_id), Some(Some(2)));
+        assert_eq!(islands.island_of(hdmi).map(Island::notice_id), Some(None));
+        assert!(
+            islands.any_notice(),
+            "a card is a notice the focus must move"
+        );
+        // The same toast again changes nothing (no redraw).
+        let route = islands.route_notice(Some(dp), Some(&toast(2)), now);
+        assert!(route.carded && route.redraw.is_empty());
+        // A page open on another output than the banner's is not the card's.
+        let route = islands.route_notice(Some(hdmi), Some(&toast(2)), now);
+        assert!(!route.carded);
+        assert_eq!(islands.island_of(dp).map(Island::notice_id), Some(None));
+        // The notice goes: the card goes.
+        let route = islands.route_notice(Some(dp), None, now);
+        assert!(!route.carded);
+        assert_eq!(islands.island_of(dp).map(Island::notice_id), Some(None));
+        assert!(!islands.any_notice());
+    }
+
+    #[test]
+    fn a_closing_page_is_still_out_until_the_island_is_back_at_the_capsule() {
+        let mut islands = islands();
+        let dp = OutputId(1);
+        let t = Instant::now();
+        if let Some(slot) = islands.slots.iter_mut().find(|s| s.output == dp) {
+            slot.island.open_for_test(PageId::CLOCK, t);
+            slot.island
+                .close_for_test(t + std::time::Duration::from_secs(1));
+        }
+        let closing = t + std::time::Duration::from_millis(1100);
+        assert!(!islands.page_open_on(dp), "closed as far as the verb goes");
+        assert!(islands.page_out_on(dp, closing), "but still shrinking");
+        assert_eq!(islands.pages_out(closing), vec![dp]);
+        let done = t + std::time::Duration::from_secs(3);
+        assert!(!islands.page_out_on(dp, done));
+        assert!(islands.pages_out(done).is_empty());
+    }
+
+    #[test]
+    fn a_closing_page_is_a_page_for_the_levels_placement() {
+        let mut islands = islands();
+        let (dp, hdmi) = (OutputId(1), OutputId(2));
+        let t = Instant::now();
+        if let Some(slot) = islands.slots.iter_mut().find(|s| s.output == dp) {
+            slot.island.open_for_test(PageId::CLOCK, t);
+            slot.island
+                .close_for_test(t + std::time::Duration::from_secs(1));
+        }
+        let closing = t + std::time::Duration::from_millis(1100);
+        let place = islands.placement(Some(hdmi), closing);
+        assert_eq!(place.pages, vec![dp], "still shrinking: still a page");
+        assert_eq!(place.notices, Some(hdmi));
+        let done = t + std::time::Duration::from_secs(3);
+        assert!(islands.placement(None, done).pages.is_empty());
+    }
+
+    #[test]
+    fn removing_an_output_releases_the_hold_of_its_card_once() {
+        let mut islands = islands();
+        let (dp, hdmi) = (OutputId(1), OutputId(2));
+        let now = Instant::now();
+        for slot in islands.slots.iter_mut() {
+            slot.island.open_for_test(PageId::CLOCK, now);
+            slot.island.set_notice(Some(toast(1)), now);
+            slot.island.hover_card_for_test();
+        }
+        assert_eq!(islands.take_card_holds(), vec![true, true]);
+        // Nothing to say about an output that held nothing.
+        assert!(!islands.release_card_holds(OutputId(9)));
+        // DP-1 goes with its pointer on the card: its hold must end.
+        assert!(islands.release_card_holds(dp));
+        assert!(!islands.release_card_holds(dp), "once");
+        assert_eq!(islands.remove_output(dp), vec![SurfaceId(10)]);
+        // The other Island still holds its own, and is not asked twice.
+        assert!(islands.take_card_holds().is_empty());
+        assert!(islands.release_card_holds(hdmi));
+        assert!(!islands.release_card_holds(hdmi), "once");
+    }
+
+    #[test]
+    fn the_page_opening_takes_the_capsule_back_and_the_surface_goes_without_a_shrink() {
+        let mut islands = islands();
+        let dp = OutputId(1);
+        let now = Instant::now();
+        let mut handover = Handover::new();
+        assert_eq!(handover.frame(true), Some(Post::Lend));
+        assert_eq!(islands.answer(handover.lend(true), dp), (true, false));
+        assert!(islands.island_of(dp).is_some_and(Island::capsule_lent));
+        assert!(!islands.page_open_on(dp));
+        // The page opens on the lent Island: the capsule is the panel's in
+        // the same turn.
+        if let Some(slot) = islands.slots.iter_mut().find(|s| s.output == dp) {
+            slot.island.open_for_test(PageId::CLOCK, now);
+        }
+        assert!(islands.page_open_on(dp));
+        assert!(!islands.island_of(dp).is_some_and(Island::capsule_lent));
+        // The surface retires: nothing is left to give back, and it is
+        // released on the next turn whatever it still wants to show.
+        assert!(islands.retire(&mut handover, dp), "its panel is redrawn");
+        assert!(handover.release(false));
+        // The panel has to be able to lend again for the next notice.
+        let mut next = Handover::new();
+        assert_eq!(next.frame(true), Some(Post::Lend));
+        assert_eq!(islands.answer(next.lend(true), dp), (true, false));
+        assert!(
+            !islands.island_of(dp).is_some_and(Island::capsule_lent),
+            "an open page is never lent out"
+        );
+    }
+
+    #[test]
+    fn the_lent_outputs_panel_skips_the_redraw_a_snapshot_change_would_ask() {
+        let islands = islands();
+        assert_eq!(
+            islands.redraw_targets(None),
+            vec![SurfaceId(10), SurfaceId(20)]
+        );
+        // The panel the lend and the return redraw anyway is left out;
+        // another output's panel redraws as before.
+        assert_eq!(
+            islands.redraw_targets(Some(OutputId(1))),
+            vec![SurfaceId(20)]
+        );
+        assert_eq!(
+            islands.redraw_targets(Some(OutputId(2))),
+            vec![SurfaceId(10)]
+        );
     }
 
     fn pending(item: u32) -> Option<PendingMenu> {

@@ -4,7 +4,9 @@
 //! the snapshot; the verbs and the menu send commands through it.
 
 pub mod banners;
+pub mod handover;
 pub mod history;
+pub mod island_notice;
 
 use std::{cell::OnceCell, rc::Rc};
 

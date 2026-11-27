@@ -53,7 +53,7 @@ fn finite(v: f32) -> f32 {
     }
 }
 
-pub(super) fn lerp(a: f32, b: f32, k: f32) -> f32 {
+pub(crate) fn lerp(a: f32, b: f32, k: f32) -> f32 {
     a + (b - a) * k
 }
 

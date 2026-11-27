@@ -229,17 +229,17 @@ None has been run and none is closed by an agent.
   banner leaves after 5 s, the normal one after 10 s and the critical one
   stays. Send a notification with an action (for example
   `notify-send --action=open=Open "Celestina" "Actions"`), click its button and
-  check that the action runs. Click a banner body without a default action:
+  check that the action runs. Click a notice body without a default action:
   the Notifications page opens on that output. Send four notifications and
-  check that three banners show. Point at the banner stack and check that
-  the expiry pauses; move the pointer away and check that it resumes. Dismiss
-  one banner with its icon button. Turn on do-not-disturb from the overflow
+  check that the Island shows the newest as a notice with two sheets under it.
+  Point at the notice and check that the expiry pauses; move the pointer away
+  and check that it resumes. Dismiss one notice with its icon button. Turn on do-not-disturb from the overflow
   menu, send a normal notification and check that no banner shows, while the
   Notifications page keeps it in its history
 - **Pass condition:** each step does what is described: 5 s, 10 s and a
   staying critical banner; the action button and the body click behave as
-  described; four notifications show three banners; hover pauses the expiry
-  and leaving resumes it; the dismiss button closes the banner; do-not-disturb
+  described; four notifications show one notice and two sheets; hover pauses the expiry
+  and leaving resumes it; the dismiss button closes the notice; do-not-disturb
   hides banners and keeps history
 - **Result:** not run
 - **Evidence:** none
@@ -1908,6 +1908,50 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-010](docs/evidence/2026-11-26-cel-d-010-menu-close.md)
+
+## VAL-CEL-D-011 — Notifications and the level display come out of the Island
+
+- **Status:** pending
+- **Related implementation:** CEL-D-011 (a notification is the Island growing
+  into a notice; older live ones wait as sheets under it and fan out under the
+  pointer; right click or wheel up closes a notice, middle click closes all;
+  `osd.position: "island"` shows the level inside the Island; an open Island
+  page shows the newest notice as a card at its top)
+- **Requires:** the deployed shell after the landing of CEL-D-011 on the
+  author's session with three monitors; a copy of `shell.json` to restore
+- **Procedure:** (1) In `~/.config/celestina/shell.json` set the OSD block to
+  `"osd": { "position": "island", "timeout_ms": 1500, ... }`, keeping its
+  other keys (`kinds` and the rest) as they are. (2) With the Island at rest, send `notify-send -A reply=Reply -A
+  archive=Archive "Title" "A body long enough to take two lines"` and look at
+  the Island grow into the notice; leave it to expire and look at it shrink back
+  into the clock. (3) Send three notifications in a row: the newest is the
+  notice with two thin sheets under it; move the pointer over it and the
+  sheets fan out as full notices; move away and wait: they fold back. (4)
+  With the fan open, right click one notice, then wheel up over another, then
+  middle click: each closes what it points at, the last closes every one.
+  (5) Turn the volume up three steps with the keys: the Island shows the level
+  (icon, track, percentage) and goes back to the clock after the timeout; send a
+  notification during it and check that the notice waits until the level has
+  gone. (6) Click the Island to open the Clock page and send a notification: it
+  shows as a card at the top of the page, the page grows by its height, and its
+  button and close button work; close the page with the notification still
+  live: the Island grows into the notice. (7) Move the focus to another
+  monitor and send a notification: it grows on the focused monitor's Island and
+  the other monitors keep their clock. (8) Open a fullscreen window (a video),
+  send a notification and check that it shows over it. (9) Repeat (2) and (3)
+  with reduced motion on. (10) Set `"position": "bottom"` again and check that
+  the level display is back at the bottom of the screen
+- **Pass condition:** the Island grows from its own place and the notice
+  settles at the top (y 8) with no second capsule behind it; the clock is back
+  at its place after the shrink with no jump; sheets, fan, right click, wheel
+  up and middle click behave as described; the level shows in the Island and a
+  notice waits for it; the card sits at the top of the page without overflow;
+  the notice follows the focused monitor only; it shows over a fullscreen
+  window; with reduced motion nothing blurs or moves and the faces still fade;
+  at rest nothing moves and no frame is drawn
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-011](docs/evidence/2026-11-26-cel-d-011-island-notices.md)
 
 ## VAL-CEL-I-018 — A held key repeats
 

@@ -27,6 +27,13 @@
 //! - **Duty off.** Any surface is destroyed at once, the baselines are
 //!   forgotten and the workers stop (see [`super::OsdRuntime`]).
 //!
+//! - **Island.** With `osd.position: "island"` the display creates no surface:
+//!   the reading goes to the notices' Island as an [`Order`] the app takes
+//!   ([`Osds::take_orders`]), on the output that owns the notices surface, else
+//!   the focused one. The timer, the kinds and the suppression are the same.
+//!   While that output's Island page is open the reading shows at the bottom
+//!   centre, on a surface, as `bottom` does.
+//!
 //! The decisions are written against [`Host`], so they are tested without a
 //! compositor or GL; [`Osds`]' public methods supply the real one.
 
@@ -46,6 +53,7 @@ use celestina_wayland::{
 use super::view::{Metrics, OsdView};
 use super::{OsdRuntime, OsdTick, Suppression, NAMESPACE};
 use crate::island::menu::SharedPainter;
+use crate::notifications::island_notice::Level;
 use crate::providers::audio::{AudioEvent, Device};
 use crate::providers::brightness::BrightnessEvent;
 
@@ -64,6 +72,29 @@ pub trait Host {
     fn redraw(&mut self, surface: SurfaceId);
     /// Delivers `tick` to the loop `after` from now.
     fn arm(&mut self, after: Duration, tick: OsdTick);
+    /// The output that owns the notices' surface, if there is one.
+    fn notices_output(&mut self) -> Option<OutputId>;
+    /// Whether the Island page is open, or still closing, on `output`.
+    fn page_open(&mut self, output: OutputId) -> bool;
+}
+
+/// Where the notices and the Island pages are, as the app sees them when it
+/// hands a reading in.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Placement {
+    /// The output that owns the notices' surface.
+    pub notices: Option<OutputId>,
+    /// The outputs whose Island page is open or still closing.
+    pub pages: Vec<OutputId>,
+}
+
+/// What the display asks of the notices' Island, for the app to carry out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Order {
+    /// Show this level on `output`'s Island.
+    Show(OutputId, Level),
+    /// The level leaves.
+    Clear,
 }
 
 /// The surface while it exists.
@@ -88,6 +119,10 @@ pub struct Osds {
     /// The outputs, in announcement order: id and connector name.
     outputs: Vec<(OutputId, String)>,
     live: Option<Live>,
+    /// The output whose Island shows the level, with `position: "island"`.
+    island: Option<OutputId>,
+    /// What the Island is yet to be told, in order.
+    orders: Vec<Order>,
     /// The generation of the last retire timer; a newer show bumps it.
     retire: u64,
     /// How long the exit fade takes, with a frame's margin.
@@ -114,6 +149,8 @@ impl Osds {
             monitors: BTreeMap::new(),
             outputs: Vec::new(),
             live: None,
+            island: None,
+            orders: Vec::new(),
             retire: 0,
             exit: Duration::from_millis(u64::from(theme.motion.exit)) + RETIRE_MARGIN,
             epoch: Instant::now(),
@@ -132,6 +169,11 @@ impl Osds {
     #[must_use]
     pub fn runtime(&self) -> &Rc<OnceCell<OsdRuntime>> {
         &self.runtime
+    }
+
+    /// What the notices' Island is to be told since the last call.
+    pub fn take_orders(&mut self) -> Vec<Order> {
+        std::mem::take(&mut self.orders)
     }
 
     /// Whether the display has a surface (for tests and the smoke's log).
@@ -183,7 +225,7 @@ impl Osds {
             return;
         }
         let runtime = Rc::clone(&self.runtime);
-        let mut host = AppHost::new(ctl, runtime.get(), theme);
+        let mut host = AppHost::new(ctl, runtime.get(), theme, Placement::default());
         let now = self.now();
         self.apply(after, now, &mut host);
     }
@@ -205,11 +247,12 @@ impl Osds {
         &mut self,
         event: AudioEvent,
         focused: Option<&str>,
+        place: Placement,
         ctl: &mut RuntimeCtl<'_>,
         theme: &Theme,
     ) {
         let runtime = Rc::clone(&self.runtime);
-        let mut host = AppHost::new(ctl, runtime.get(), theme);
+        let mut host = AppHost::new(ctl, runtime.get(), theme, place);
         let now = self.now();
         self.audio_read(event, focused, now, &mut host);
     }
@@ -219,11 +262,12 @@ impl Osds {
         &mut self,
         event: BrightnessEvent,
         focused: Option<&str>,
+        place: Placement,
         ctl: &mut RuntimeCtl<'_>,
         theme: &Theme,
     ) {
         let runtime = Rc::clone(&self.runtime);
-        let mut host = AppHost::new(ctl, runtime.get(), theme);
+        let mut host = AppHost::new(ctl, runtime.get(), theme, place);
         let now = self.now();
         self.brightness_read(event, focused, now, &mut host);
     }
@@ -240,7 +284,7 @@ impl Osds {
         theme: &Theme,
     ) {
         let runtime = Rc::clone(&self.runtime);
-        let mut host = AppHost::new(ctl, runtime.get(), theme);
+        let mut host = AppHost::new(ctl, runtime.get(), theme, Placement::default());
         let now = self.now();
         self.suppress(suppression, now, &mut host);
     }
@@ -254,7 +298,7 @@ impl Osds {
             return;
         }
         let runtime = Rc::clone(&self.runtime);
-        let mut host = AppHost::new(ctl, runtime.get(), theme);
+        let mut host = AppHost::new(ctl, runtime.get(), theme, Placement::default());
         self.ticked(tick, &mut host);
     }
 
@@ -280,11 +324,15 @@ impl Osds {
     fn apply(&mut self, settings: &Settings, now: Duration, host: &mut impl Host) {
         let on = settings.duties.osd == Duty::On;
         self.position = settings.osd.position;
+        if self.position != OsdPosition::Island {
+            self.island_clear();
+        }
         if !on {
             if self.duty {
                 tracing::info!("osd duty off: no display, baselines forgotten");
             }
             self.duty = false;
+            self.island_clear();
             if let Some(live) = self.live.take() {
                 host.destroy(live.surface);
             }
@@ -443,6 +491,27 @@ impl Osds {
     /// Puts `shown` on screen: on the surface there is (live), else on a new
     /// one on the focused output.
     fn show(&mut self, shown: Shown, focused: Option<&str>, host: &mut impl Host) {
+        if self.position == OsdPosition::Island {
+            let output = host.notices_output().or_else(|| self.target(focused));
+            // With the page open the Island has no capsule to widen: this
+            // reading shows at the bottom centre.
+            if let Some(output) = output.filter(|o| !host.page_open(*o)) {
+                if self.live.as_ref().is_some_and(|l| l.shown.is_some()) {
+                    self.leave_surface(host);
+                }
+                self.island = Some(output);
+                self.orders.push(Order::Show(
+                    output,
+                    Level {
+                        kind: shown.kind,
+                        percent: shown.reading.percent,
+                        muted: shown.reading.muted,
+                    },
+                ));
+                return;
+            }
+            self.island_clear();
+        }
         // A pending retire must not take the surface this show reuses.
         self.retire = self.retire.wrapping_add(1);
         if let Some(live) = self.live.as_mut() {
@@ -458,7 +527,7 @@ impl Osds {
             tracing::debug!("osd: no output to show on");
             return;
         };
-        match host.create(output, self.position) {
+        match host.create(output, self.surface_position()) {
             Some(surface) => {
                 self.live = Some(Live {
                     surface,
@@ -475,6 +544,27 @@ impl Osds {
     /// The content goes: the card fades out and the surface is retired
     /// after the fade.
     fn leave(&mut self, host: &mut impl Host) {
+        self.island_clear();
+        self.leave_surface(host);
+    }
+
+    /// The Island's level leaves, if it showed one.
+    fn island_clear(&mut self) {
+        if self.island.take().is_some() {
+            self.orders.push(Order::Clear);
+        }
+    }
+
+    /// Where the surface sits: the Island's fallback is the bottom centre.
+    fn surface_position(&self) -> OsdPosition {
+        match self.position {
+            OsdPosition::Island => OsdPosition::Bottom,
+            other => other,
+        }
+    }
+
+    /// The surface's card leaves; nothing when there is no surface.
+    fn leave_surface(&mut self, host: &mut impl Host) {
         let Some(live) = self.live.as_mut() else {
             return;
         };
@@ -499,14 +589,21 @@ struct AppHost<'a, 'b> {
     ctl: &'a mut RuntimeCtl<'b>,
     runtime: Option<&'a OsdRuntime>,
     theme: &'a Theme,
+    place: Placement,
 }
 
 impl<'a, 'b> AppHost<'a, 'b> {
-    fn new(ctl: &'a mut RuntimeCtl<'b>, runtime: Option<&'a OsdRuntime>, theme: &'a Theme) -> Self {
+    fn new(
+        ctl: &'a mut RuntimeCtl<'b>,
+        runtime: Option<&'a OsdRuntime>,
+        theme: &'a Theme,
+        place: Placement,
+    ) -> Self {
         Self {
             ctl,
             runtime,
             theme,
+            place,
         }
     }
 }
@@ -521,7 +618,7 @@ impl Host for AppHost<'_, '_> {
             namespace: NAMESPACE,
             layer: Layer::Overlay,
             anchor: match position {
-                OsdPosition::Bottom => Anchoring::Bottom,
+                OsdPosition::Bottom | OsdPosition::Island => Anchoring::Bottom,
                 OsdPosition::BottomRight => Anchoring::BottomRight,
             },
             size: Metrics::of(self.theme).surface(),
@@ -565,6 +662,14 @@ impl Host for AppHost<'_, '_> {
             None => tracing::warn!(?tick, "osd: the loop's timer is not ready; not armed"),
         }
     }
+
+    fn notices_output(&mut self) -> Option<OutputId> {
+        self.place.notices
+    }
+
+    fn page_open(&mut self, output: OutputId) -> bool {
+        self.place.pages.contains(&output)
+    }
 }
 
 #[cfg(test)]
@@ -586,6 +691,10 @@ mod tests {
         redraws: usize,
         armed: Vec<(Duration, OsdTick)>,
         refuse: bool,
+        /// The output that owns the notices' surface.
+        notices: Option<OutputId>,
+        /// The outputs whose Island page is open.
+        pages: Vec<OutputId>,
     }
 
     impl Fake {
@@ -619,6 +728,12 @@ mod tests {
         }
         fn arm(&mut self, after: Duration, tick: OsdTick) {
             self.armed.push((after, tick));
+        }
+        fn notices_output(&mut self) -> Option<OutputId> {
+            self.notices
+        }
+        fn page_open(&mut self, output: OutputId) -> bool {
+            self.pages.contains(&output)
         }
     }
 
@@ -1072,5 +1187,120 @@ mod tests {
         // Its timeout comes and goes harmlessly.
         fire(&mut osds, &mut host);
         assert!(!osds.has_surface());
+    }
+
+    fn island_osds() -> Osds {
+        let mut osds = osds(true);
+        osds.position = OsdPosition::Island;
+        osds
+    }
+
+    fn level(kind: Kind, percent: u8, muted: bool) -> Level {
+        Level {
+            kind,
+            percent,
+            muted,
+        }
+    }
+
+    #[test]
+    fn island_position_creates_no_osd_surface_and_sets_the_level() {
+        let mut osds = island_osds();
+        let mut host = Fake::default();
+        osds.audio_read(volume(40, false), Some("HDMI-A-1"), T, &mut host);
+        osds.audio_read(volume(45, true), Some("HDMI-A-1"), T, &mut host);
+        assert!(host.created.is_empty() && !osds.has_surface());
+        // The focused output, when no notices surface exists.
+        assert_eq!(
+            osds.take_orders(),
+            [Order::Show(OutputId(2), level(Kind::Volume, 45, true))]
+        );
+        assert!(osds.take_orders().is_empty());
+        // The notices surface's output wins over the focused one.
+        host.notices = Some(OutputId(1));
+        osds.audio_read(volume(50, false), Some("HDMI-A-1"), T, &mut host);
+        assert_eq!(
+            osds.take_orders(),
+            [Order::Show(OutputId(1), level(Kind::Volume, 50, false))]
+        );
+        // The timeout takes it away.
+        fire(&mut osds, &mut host);
+        assert_eq!(osds.take_orders(), [Order::Clear]);
+        assert!(host.created.is_empty());
+    }
+
+    #[test]
+    fn an_open_island_page_falls_back_to_the_bottom_display() {
+        let mut osds = island_osds();
+        let mut host = Fake {
+            pages: vec![OutputId(2)],
+            ..Fake::default()
+        };
+        osds.audio_read(volume(40, false), Some("HDMI-A-1"), T, &mut host);
+        osds.audio_read(volume(45, false), Some("HDMI-A-1"), T, &mut host);
+        assert_eq!(host.created.len(), 1);
+        assert_eq!(host.created[0].0, OutputId(2));
+        assert_eq!(host.created[0].1, OsdPosition::Bottom);
+        assert!(osds.take_orders().is_empty());
+        // The page closes: the next reading goes to the Island and the
+        // bottom card leaves.
+        host.pages.clear();
+        osds.audio_read(volume(50, false), Some("HDMI-A-1"), T, &mut host);
+        assert_eq!(
+            osds.take_orders(),
+            [Order::Show(OutputId(2), level(Kind::Volume, 50, false))]
+        );
+        assert!(osds.live.as_ref().is_some_and(|l| l.shown.is_none()));
+        // And back: the Island's level leaves as the bottom one shows.
+        host.pages = vec![OutputId(2)];
+        osds.audio_read(volume(55, false), Some("HDMI-A-1"), T, &mut host);
+        assert_eq!(osds.take_orders(), [Order::Clear]);
+        assert!(osds.live.as_ref().is_some_and(|l| l.shown.is_some()));
+    }
+
+    #[test]
+    fn the_level_leaves_after_timeout_ms_and_the_notice_timeout_resumes() {
+        let mut osds = island_osds();
+        let mut host = Fake::default();
+        osds.audio_read(volume(40, false), None, T, &mut host);
+        osds.audio_read(volume(45, false), None, T, &mut host);
+        // The timer is the machine's: the configured timeout.
+        let (after, tick) = *host.armed.last().expect("armed");
+        assert_eq!(after, Duration::from_millis(1500));
+        assert_eq!(osds.take_orders().len(), 1);
+        osds.ticked(tick, &mut host);
+        assert_eq!(osds.take_orders(), [Order::Clear]);
+        // A second expiry changes nothing.
+        osds.ticked(tick, &mut host);
+        assert!(osds.take_orders().is_empty());
+    }
+
+    #[test]
+    fn an_open_slider_menu_still_suppresses_the_level() {
+        let mut osds = island_osds();
+        let mut host = Fake::default();
+        osds.audio_read(volume(40, false), None, T, &mut host);
+        osds.audio_read(volume(45, false), None, T, &mut host);
+        assert_eq!(osds.take_orders().len(), 1);
+        osds.suppress(Suppression::Open(VOLUME), T, &mut host);
+        assert_eq!(osds.take_orders(), [Order::Clear]);
+        osds.audio_read(volume(60, false), None, T, &mut host);
+        assert!(osds.take_orders().is_empty());
+        osds.suppress(closed(VOLUME, &[(Kind::Volume, Some(60))]), T, &mut host);
+        osds.audio_read(volume(65, false), None, T, &mut host);
+        assert_eq!(osds.take_orders().len(), 1);
+    }
+
+    #[test]
+    fn leaving_the_island_position_takes_the_level_away() {
+        let mut osds = island_osds();
+        let mut host = Fake::default();
+        osds.audio_read(volume(40, false), None, T, &mut host);
+        osds.audio_read(volume(45, false), None, T, &mut host);
+        assert_eq!(osds.take_orders().len(), 1);
+        let mut after = settings(true);
+        after.osd.position = OsdPosition::Bottom;
+        osds.apply(&after, T, &mut host);
+        assert_eq!(osds.take_orders(), [Order::Clear]);
     }
 }
