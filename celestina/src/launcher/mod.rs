@@ -40,7 +40,7 @@ pub mod spawn;
 pub mod state;
 pub mod view;
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use celestina_core::desktop_entry::DesktopEntry;
 use celestina_paint::{silhouette_slices, Painter, Rect, Role, Theme};
@@ -56,6 +56,7 @@ use crate::island::state::SILHOUETTE_STEP;
 /// The launcher's layer-shell namespace.
 pub const NAMESPACE: &str = "celestina-overlay";
 
+const XKB_KEY_BACKSPACE: u32 = 0xff08;
 const XKB_KEY_TAB: u32 = 0xff09;
 const XKB_KEY_ISO_LEFT_TAB: u32 = 0xfe20;
 const XKB_KEY_DELETE: u32 = 0xffff;
@@ -65,6 +66,34 @@ const XKB_KEY_DOWN: u32 = 0xff54;
 const XKB_KEY_LEFT: u32 = 0xff51;
 const XKB_KEY_LOWER_V: u32 = 0x76;
 const XKB_KEY_UPPER_V: u32 = 0x56;
+
+/// How long a held Backspace sweeps the query before it empties it.
+pub const SWEEP: Duration = Duration::from_millis(450);
+
+/// How long Backspace must stay down before the sweep starts: niri's default
+/// key-repeat delay, so the hold feels like the start of a repeat. The shell's
+/// keyboard asks for no key repeat, so the launcher times the hold itself; a
+/// repeat that does arrive earlier starts the sweep at once.
+pub const HOLD_DELAY: Duration = Duration::from_millis(600);
+
+/// The state of a Backspace press (design §5.3): the first press deletes one
+/// grapheme as the field does; held for [`HOLD_DELAY`] (or repeated), with
+/// text left to sweep, it starts the sweep, which empties the query at its
+/// end unless the key is released first.
+#[derive(Clone, Copy, Debug)]
+enum Hold {
+    Idle,
+    /// A plain Backspace went down at `since` and is not released.
+    Pressed {
+        since: Instant,
+    },
+    /// Backspace went down during a composition: until it is released it
+    /// edits as the field does and never sweeps.
+    Blocked,
+    Sweeping {
+        since: Instant,
+    },
+}
 
 /// What the launcher asks the app to do; each one closes it except
 /// [`LauncherAction::RequestClose`].
@@ -108,6 +137,8 @@ pub struct Launcher {
     stale: bool,
     /// The keyboard moved the selection: the selected row shows the ring.
     keyboard_moved: bool,
+    /// The hold-Backspace sweep (the launcher of applications only).
+    hold: Hold,
 }
 
 impl Launcher {
@@ -151,7 +182,10 @@ impl Launcher {
         state: LauncherState,
     ) -> Launcher {
         let mut tree = Tree::new(reduced, theme);
-        tree.apply(view::launcher(theme, &state, (0.0, 0.0)), Instant::now());
+        tree.apply(
+            view::launcher(theme, &state, (0.0, 0.0), None),
+            Instant::now(),
+        );
         let mut input = Interaction::new();
         // The field is the only node in the Tab order: a Tab focuses it.
         input.key(
@@ -175,6 +209,7 @@ impl Launcher {
             state,
             stale: false,
             keyboard_moved: false,
+            hold: Hold::Idle,
         }
     }
 
@@ -244,8 +279,15 @@ impl Launcher {
 
     /// Draws one frame: the card, the selected row's ring once the keyboard
     /// moved it, the blur and input regions, the caret for the input method.
-    pub fn frame(&mut self, cx: &mut FrameCx<'_>, painter: &mut Painter, reduced: bool) {
+    pub fn frame(
+        &mut self,
+        cx: &mut FrameCx<'_>,
+        painter: &mut Painter,
+        reduced: bool,
+        index: &[DesktopEntry],
+    ) {
         let now = cx.now;
+        let sweep_due = self.advance(now, index);
         self.tree.set_reduced_motion(reduced);
         if painter.theme() != &self.theme {
             self.theme = painter.theme().clone();
@@ -271,9 +313,63 @@ impl Launcher {
         if let Some(caret) = self.caret() {
             cx.ctl.set_text_input_rect(caret);
         }
-        if self.tree.is_animating(now) {
+        if sweep_due || self.tree.is_animating(now) {
             cx.ctl.request_redraw();
         }
+    }
+
+    /// Moves the hold-Backspace sweep to `now`: the view is rebuilt while it
+    /// runs, and at its end the query is cleared. Returns whether another
+    /// frame is due for it.
+    fn advance(&mut self, now: Instant, index: &[DesktopEntry]) -> bool {
+        if let Hold::Pressed { since } = self.hold {
+            if now.saturating_duration_since(since) < HOLD_DELAY {
+                return true;
+            }
+            self.start_sweep(now);
+            if !matches!(self.hold, Hold::Sweeping { .. }) {
+                return false;
+            }
+        }
+        let Hold::Sweeping { since } = self.hold else {
+            return false;
+        };
+        if now.saturating_duration_since(since) >= SWEEP {
+            self.hold = Hold::Idle;
+            self.clear_query(index);
+            return false;
+        }
+        self.stale = true;
+        true
+    }
+
+    /// Starts the sweep at `now` when there is text to sweep and no
+    /// composition; otherwise the hold stays as it is.
+    fn start_sweep(&mut self, now: Instant) {
+        if !self.composing() && !self.state.query.text().is_empty() {
+            self.hold = Hold::Sweeping { since: now };
+            self.stale = true;
+        } else {
+            self.hold = Hold::Idle;
+        }
+    }
+
+    /// The sweep to draw at `now`, while Backspace is held long enough.
+    fn sweep(&self, now: Instant) -> Option<view::Sweep> {
+        let Hold::Sweeping { since } = self.hold else {
+            return None;
+        };
+        let field = self.tree.field(view::FIELD)?;
+        let text = field.run().map_or(0.0, |r| r.size().0);
+        // The wash stays inside the field however far the text runs past it.
+        let visible = self
+            .tree
+            .node_by_key(view::field_key())
+            .map_or(0.0, |id| self.tree.rect(id).w);
+        Some(view::Sweep {
+            progress: now.saturating_duration_since(since).as_secs_f32() / SWEEP.as_secs_f32(),
+            text_end: (text - field.scroll_x()).clamp(0.0, visible.max(0.0)),
+        })
     }
 
     /// Builds the view when it is stale and lays the tree out (a no-op when
@@ -293,8 +389,11 @@ impl Launcher {
 
     fn apply(&mut self, now: Instant) {
         if self.stale {
-            self.tree
-                .apply(view::launcher(&self.theme, &self.state, self.size), now);
+            let sweep = self.sweep(now);
+            self.tree.apply(
+                view::launcher(&self.theme, &self.state, self.size, sweep),
+                now,
+            );
             self.stale = false;
         }
     }
@@ -360,6 +459,7 @@ impl Launcher {
         let mut outcome = Outcome::default();
         let events = match ev {
             InputEvent::FocusLost => {
+                self.hold = Hold::Idle;
                 outcome.action = Some(LauncherAction::Close);
                 return outcome;
             }
@@ -429,10 +529,60 @@ impl Launcher {
                 outcome.paste = true;
                 return outcome;
             }
+            InputEvent::Key {
+                keysym: XKB_KEY_BACKSPACE,
+                pressed: false,
+                ..
+            } => {
+                // A release ends the hold; a sweep in flight is cancelled and
+                // the text stays.
+                if matches!(self.hold, Hold::Sweeping { .. }) {
+                    self.stale = true;
+                    outcome.changed = true;
+                }
+                self.hold = Hold::Idle;
+                return outcome;
+            }
+            InputEvent::Key {
+                keysym: XKB_KEY_BACKSPACE,
+                modifiers:
+                    Modifiers {
+                        ctrl: false,
+                        alt: false,
+                        logo: false,
+                        // Shift and Caps Lock do not change what a held
+                        // Backspace means, as in the field.
+                        ..
+                    },
+                pressed: true,
+                ..
+            } if !self.state.is_selector() => match self.hold {
+                Hold::Blocked => self.input.key(&mut self.tree, ev),
+                Hold::Idle => {
+                    self.hold = if self.composing() {
+                        Hold::Blocked
+                    } else {
+                        Hold::Pressed { since: now }
+                    };
+                    self.input.key(&mut self.tree, ev)
+                }
+                Hold::Pressed { .. } => {
+                    self.start_sweep(now);
+                    outcome.changed = true;
+                    return outcome;
+                }
+                Hold::Sweeping { .. } => return outcome,
+            },
+            // Another key's release (a letter let go after Backspace went
+            // down) leaves the hold alone.
+            InputEvent::Key { pressed: false, .. } => self.input.key(&mut self.tree, ev),
             InputEvent::Key { .. }
             | InputEvent::Preedit { .. }
             | InputEvent::CommitText(_)
-            | InputEvent::Paste(_) => self.input.key(&mut self.tree, ev),
+            | InputEvent::Paste(_) => {
+                self.hold = Hold::Idle;
+                self.input.key(&mut self.tree, ev)
+            }
             InputEvent::PointerPress { x, y, .. }
                 if self.sized() && !self.card().contains(*x, *y) =>
             {
@@ -469,6 +619,9 @@ impl Launcher {
                         return outcome;
                     }
                 }
+                UiEvent::Click(key) if key == view::clear_key() => {
+                    self.clear_query(index);
+                }
                 UiEvent::Click(key) => {
                     if let Some(row) = view::row_of(key, self.state.rows.len()) {
                         self.state.selected = row;
@@ -487,6 +640,24 @@ impl Launcher {
         }
         outcome.changed |= self.stale;
         outcome
+    }
+
+    /// Empties the search field and answers the empty query: the clear
+    /// button's click.
+    fn clear_query(&mut self, index: &[DesktopEntry]) {
+        if let Some(field) = self.tree.field_mut(view::FIELD) {
+            field.set_text("");
+        }
+        self.state.set_query("", index);
+        self.keyboard_moved = false;
+        self.stale = true;
+    }
+
+    /// The input method is composing text in the field.
+    fn composing(&self) -> bool {
+        self.tree
+            .field(view::FIELD)
+            .is_some_and(|f| f.preedit().is_some())
     }
 
     /// Whether Delete does nothing in the search field, so the selector may
@@ -992,5 +1163,309 @@ mod tests {
         let index = [entry("aa", "Aa")];
         assert!(l.set_index(&index));
         assert_eq!(l.state().rows, [Row::App(Box::new(index[0].clone()))]);
+    }
+
+    /// Presses and releases the pointer on the node `key` names.
+    fn click_on(l: &mut Launcher, key: celestina_ui::Key, index: &[DesktopEntry]) -> Outcome {
+        let rect = l
+            .tree
+            .node_by_key(key)
+            .map(|id| l.tree.rect(id))
+            .expect("the node is laid out");
+        let (x, y) = (rect.x + rect.w / 2.0, rect.y + rect.h / 2.0);
+        let now = Instant::now();
+        l.handle(&press(x, y), index, now);
+        let release = InputEvent::PointerRelease {
+            x,
+            y,
+            button: 0x110,
+            serial: 3,
+        };
+        l.handle(&release, index, now)
+    }
+
+    #[test]
+    fn the_clear_button_empties_the_query_and_keeps_the_launcher_and_the_focus() {
+        let index = [entry("aa", "Aa"), entry("ab", "Ab")];
+        let mut l = launcher(&index);
+        sized(&mut l, (2560.0, 1440.0));
+        typed(&mut l, "ab", &index);
+        l.apply(Instant::now());
+        l.tree
+            .layout_measured((2560.0, 1440.0), |s, _, _| (7.0 * s.len() as f32, 16.0));
+        assert_eq!(l.state().query.text(), "ab");
+
+        let o = click_on(&mut l, view::clear_key(), &index);
+        assert_eq!(o.action, None, "the launcher stays open");
+        assert!(o.changed);
+        assert_eq!(l.state().query.text(), "");
+        assert_eq!(
+            l.tree.field(view::FIELD).map(|f| f.text().to_owned()),
+            Some(String::new())
+        );
+        assert_eq!(l.state().rows.len(), 2, "an empty query lists the index");
+        assert!(l.stale);
+        // The focus stays in the field: the next key still types.
+        typed(&mut l, "a", &index);
+        assert_eq!(l.state().query.text(), "a");
+    }
+
+    fn backspace(pressed: bool, shift: bool, ctrl: bool) -> InputEvent {
+        InputEvent::Key {
+            keysym: XKB_KEY_BACKSPACE,
+            utf8: None,
+            modifiers: Modifiers {
+                shift,
+                ctrl,
+                ..Modifiers::default()
+            },
+            pressed,
+            serial: 1,
+        }
+    }
+
+    fn text(l: &Launcher) -> String {
+        l.tree
+            .field(view::FIELD)
+            .map(|f| f.text().to_owned())
+            .unwrap_or_default()
+    }
+
+    fn sweeping(l: &Launcher) -> bool {
+        matches!(l.hold, Hold::Sweeping { .. })
+    }
+
+    const MS: fn(u64) -> Duration = Duration::from_millis;
+
+    #[test]
+    fn holding_backspace_sweeps_then_clears() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "steam", &index);
+        let t0 = Instant::now();
+        l.handle(&backspace(true, false, false), &index, t0);
+        assert_eq!(text(&l), "stea", "the first press deletes one letter");
+        assert!(!sweeping(&l));
+        // The first repeat starts the sweep and deletes nothing.
+        let o = l.handle(&backspace(true, false, false), &index, t0 + MS(10));
+        assert!(o.changed && o.action.is_none());
+        assert_eq!(text(&l), "stea");
+        assert!(sweeping(&l));
+        l.handle(&backspace(true, false, false), &index, t0 + MS(40));
+        assert_eq!(text(&l), "stea", "later repeats are swallowed");
+        // Half way: the text is still there and a frame is due.
+        assert!(l.advance(t0 + MS(10) + SWEEP / 2, &index));
+        assert_eq!(text(&l), "stea");
+        // At the end the query is empty, in the field and in the state.
+        assert!(!l.advance(t0 + MS(10) + SWEEP, &index));
+        assert_eq!(text(&l), "");
+        assert_eq!(l.state().query.text(), "");
+        assert!(matches!(l.hold, Hold::Idle));
+        assert!(l.stale);
+    }
+
+    #[test]
+    fn releasing_before_the_end_keeps_the_text_and_a_new_query_answers() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "steam", &index);
+        let t0 = Instant::now();
+        l.handle(&backspace(true, false, false), &index, t0);
+        l.handle(&backspace(true, false, false), &index, t0);
+        assert!(sweeping(&l));
+        let o = l.handle(&backspace(false, false, false), &index, t0 + MS(200));
+        assert!(o.changed, "the sweep leaves the view");
+        assert!(matches!(l.hold, Hold::Idle));
+        assert!(!l.advance(t0 + SWEEP, &index));
+        assert_eq!(text(&l), "stea");
+        // Review focus 5: the next typing answers as usual.
+        typed(&mut l, "m", &index);
+        assert_eq!(l.state().query.text(), "steam");
+        l.handle(&backspace(true, false, false), &index, t0 + SWEEP);
+        assert_eq!(text(&l), "stea", "a fresh press is one grapheme again");
+        assert!(!sweeping(&l));
+    }
+
+    #[test]
+    fn repeats_never_delete_letters() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "steam", &index);
+        let t0 = Instant::now();
+        for i in 0..6 {
+            l.handle(&backspace(true, false, false), &index, t0 + MS(i * 30));
+        }
+        assert_eq!(text(&l), "stea", "one grapheme, not six");
+    }
+
+    #[test]
+    fn a_repeat_on_an_empty_query_starts_no_sweep() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "a", &index);
+        let t0 = Instant::now();
+        l.handle(&backspace(true, false, false), &index, t0);
+        assert_eq!(text(&l), "");
+        l.handle(&backspace(true, false, false), &index, t0 + MS(30));
+        assert!(!sweeping(&l));
+        assert!(matches!(l.hold, Hold::Idle));
+        assert!(!l.advance(t0 + HOLD_DELAY * 2, &index));
+    }
+
+    #[test]
+    fn another_keys_release_keeps_the_hold() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "steam", &index);
+        let t0 = Instant::now();
+        l.handle(&backspace(true, false, false), &index, t0);
+        let release_m = InputEvent::Key {
+            keysym: 0x6d,
+            utf8: Some("m".to_owned()),
+            modifiers: Modifiers::default(),
+            pressed: false,
+            serial: 2,
+        };
+        l.handle(&release_m, &index, t0 + MS(20));
+        assert!(matches!(l.hold, Hold::Pressed { .. }));
+        assert!(l.advance(t0 + HOLD_DELAY, &index));
+        assert!(sweeping(&l));
+    }
+
+    #[test]
+    fn a_hold_with_no_repeats_sweeps_after_the_delay() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "steam", &index);
+        let t0 = Instant::now();
+        l.handle(&backspace(true, false, false), &index, t0);
+        assert_eq!(text(&l), "stea");
+        assert!(
+            l.advance(t0 + HOLD_DELAY - MS(1), &index),
+            "a frame keeps timing"
+        );
+        assert!(!sweeping(&l));
+        assert!(l.advance(t0 + HOLD_DELAY, &index));
+        assert!(sweeping(&l));
+        assert!(!l.advance(t0 + HOLD_DELAY + SWEEP, &index));
+        assert_eq!(text(&l), "");
+        assert_eq!(l.state().query.text(), "");
+    }
+
+    #[test]
+    fn a_ctrl_backspace_is_not_a_hold() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "one two three", &index);
+        let t0 = Instant::now();
+        l.handle(&backspace(true, false, true), &index, t0);
+        assert_eq!(text(&l), "one two ");
+        l.handle(&backspace(true, false, true), &index, t0 + MS(30));
+        assert_eq!(text(&l), "one ", "a repeat deletes the next word");
+        assert!(matches!(l.hold, Hold::Idle));
+    }
+
+    #[test]
+    fn a_preedit_blocks_the_hold() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "abcdef", &index);
+        l.handle(
+            &InputEvent::Preedit {
+                text: "ni".to_owned(),
+                cursor: 2,
+            },
+            &index,
+            Instant::now(),
+        );
+        assert!(l
+            .tree
+            .field(view::FIELD)
+            .is_some_and(|f| f.preedit().is_some()));
+        let t0 = Instant::now();
+        l.handle(&backspace(true, false, false), &index, t0);
+        l.handle(&backspace(true, false, false), &index, t0 + MS(30));
+        // The first press ended the composition (a fresh press afterwards),
+        // so the repeat started nothing.
+        assert!(!sweeping(&l));
+        assert!(!l.advance(t0 + SWEEP * 2, &index));
+        let kept = l.state().query.text().to_owned();
+        assert!(kept.len() >= 4, "two presses deleted at most two: {kept:?}");
+
+        // A composition that starts during a hold ends it.
+        l.handle(&backspace(false, false, false), &index, t0);
+        l.handle(&backspace(true, false, false), &index, t0);
+        assert!(matches!(l.hold, Hold::Pressed { .. }));
+        l.handle(
+            &InputEvent::Preedit {
+                text: "ni".to_owned(),
+                cursor: 2,
+            },
+            &index,
+            t0,
+        );
+        l.handle(&backspace(true, false, false), &index, t0 + MS(30));
+        assert!(!sweeping(&l));
+        assert!(!l.advance(t0 + SWEEP * 2, &index));
+        assert!(!l.state().query.text().is_empty(), "no sweep emptied it");
+    }
+
+    #[test]
+    fn shift_backspace_deletes_one_and_a_single_press_never_sweeps() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "steam", &index);
+        let t0 = Instant::now();
+        l.handle(&backspace(true, true, false), &index, t0);
+        assert_eq!(text(&l), "stea");
+        assert!(!sweeping(&l));
+        l.handle(&backspace(false, true, false), &index, t0 + MS(100));
+        assert!(!l.advance(t0 + HOLD_DELAY * 2, &index));
+        assert_eq!(text(&l), "stea");
+    }
+
+    #[test]
+    fn focus_loss_during_the_sweep_leaves_no_hold_behind() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "steam", &index);
+        let t0 = Instant::now();
+        l.handle(&backspace(true, false, false), &index, t0);
+        l.handle(&backspace(true, false, false), &index, t0);
+        assert!(sweeping(&l));
+        let o = l.handle(&InputEvent::FocusLost, &index, t0 + MS(100));
+        assert_eq!(o.action, Some(LauncherAction::Close));
+        assert!(matches!(l.hold, Hold::Idle));
+        assert!(!l.advance(t0 + SWEEP * 2, &index));
+        assert_eq!(text(&l), "stea");
+        // The next open starts idle.
+        assert!(matches!(launcher(&index).hold, Hold::Idle));
+    }
+
+    #[test]
+    fn any_other_key_ends_the_hold() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "steam", &index);
+        let t0 = Instant::now();
+        l.handle(&backspace(true, false, false), &index, t0);
+        l.handle(&key(u32::from('x'), Some("x"), false), &index, t0);
+        assert!(matches!(l.hold, Hold::Idle));
+        l.handle(&backspace(true, false, false), &index, t0);
+        l.handle(&backspace(true, false, false), &index, t0);
+        assert!(sweeping(&l));
+        l.handle(&key(XKB_KEY_LEFT, None, false), &index, t0);
+        assert!(matches!(l.hold, Hold::Idle));
+    }
+
+    #[test]
+    fn the_selector_has_no_sweep() {
+        let mut l = selector(&bubbles(&[1, 2]));
+        typed(&mut l, "ab", &[]);
+        let t0 = Instant::now();
+        l.handle(&backspace(true, false, false), &[], t0);
+        l.handle(&backspace(true, false, false), &[], t0 + MS(30));
+        assert_eq!(text(&l), "", "the repeat deletes as the field does");
+        assert!(matches!(l.hold, Hold::Idle));
     }
 }

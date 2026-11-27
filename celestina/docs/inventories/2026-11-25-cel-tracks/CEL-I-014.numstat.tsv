@@ -1,0 +1,45 @@
+# CEL-I-014 exact change inventory
+
+Base revision	82851050eb1cd705f9f22cd1dd4e6c72ac6c9502
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-ui/src/field.rs
+Pathspec	celestina/crates/celestina-ui/src/input.rs
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/after-clear-click.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/clear-button-hover.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/cleared-after-hold.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/ctrl-backspace.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/released-early.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/sweep-mid.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/typed-with-clear.png
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-014.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/launcher/mod.rs
+Pathspec	celestina/src/launcher/view.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	3666751a2442aa7fc3cfe91d471f9b7bc5e7972694e0a78541cd407d81bfdfd9	celestina/Cargo.lock
+1	1	d0433a7f45727665a506db3b893637ba69cabb0091e142e6f19a6f7c4d317746	celestina/Cargo.toml
+18	0	a1ff4848bbd1ba201403d9cc9a4009f8586dac44280fd0f47ee863de24f5111e	celestina/VALIDATION.md
+52	0	cc7b8398494db4c496e49a243d15764fe919e4cdd265fe8ebd67cf3cbcfbe142	celestina/crates/celestina-ui/src/field.rs
+26	1	6142af59a0f1c7c15515e1ab0c7dc57a6296c6a7f531afc52870b15c7c5ecad9	celestina/crates/celestina-ui/src/input.rs
+76	0	b1bdb58b60611d50088d9b962cbf5994ad1ef7807d4267b07a3b65eca9e9cea7	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear.md
+-	-	60302df28852ddd92259ece3b569c1b34c55479b0281ea69d40605219a08d24a	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/after-clear-click.png
+-	-	5f41afda03ad3e92e0805f1747d40f7488465305025677a49a415a8ab88b75fb	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/clear-button-hover.png
+-	-	e8ae8069a542c88c7dc2079210681e906c10a782d245330c0b127ea08439fa04	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/cleared-after-hold.png
+-	-	c8cf7b8ee7f02228a6dc72b357e057ba561cd2e6e3928f99044ac00c568fa136	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/ctrl-backspace.png
+-	-	4e97a04fa8d4202fcb176272b8a70d7754adf1e2aba53520c4228e6231191705	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/released-early.png
+-	-	18bcbc12eca0c68b1795ac0d5d2eb646c95db1597b36ac6934be133be110c6fb	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/sweep-mid.png
+-	-	c72725408175dc216cedbaf3b6b3cce43686adc698fabe88ae2af5096f8ef9bf	celestina/docs/evidence/2026-11-27-cel-i-014-quick-clear/typed-with-clear.png
+45	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-014.numstat.tsv
+1	0	b9e15bbae6aa4db6609721e3003b5437b338c60d781f818c0aef7b4716c00445	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+6	1	7175f8b7b3d355ed0d248ce6c28ede28b03d5158b4c400ec8c6ee15837ec5446	celestina/src/app.rs
+482	7	df6003ac534bd88ed3a77dc3079e79282ad41b1cdadcb755667d4d4e95422ec8	celestina/src/launcher/mod.rs
+179	15	a9ffbdf99bfaa53cf18344c8ab3efd7be17243278ecceb935eddd22e1f21cbcb	celestina/src/launcher/view.rs
+1	0	ded0edacc7f18f556b1f93af6aad913bd57f95725218c4cef650b2d177942b23	docs/version-history.tsv

@@ -169,7 +169,7 @@ impl Interaction {
     /// While a text field has the focus it consumes the keys it edits with
     /// (see [`Interaction::field_consumes`]) and they do nothing else:
     /// printable keys, Space included, insert; the left and right arrows
-    /// (Ctrl by word, Shift to select), Home, End, Backspace and Delete move
+    /// (Ctrl by word, Shift to select), Home, End, Backspace and Delete (Ctrl by word) move
     /// and delete; Ctrl+A selects all. Tab, Enter, Escape and the up and down
     /// arrows pass through to the rules above and to the surface. The input
     /// method's `Preedit` and `CommitText` and the clipboard's `Paste` edit
@@ -417,6 +417,8 @@ fn key_to_edit(keysym: u32, utf8: Option<&str>, m: Modifiers) -> Option<EditOp> 
         XKB_KEY_RIGHT if !m.alt && !m.logo => Some(EditOp::Right { select, word }),
         XKB_KEY_HOME if !m.alt && !m.logo => Some(EditOp::Home { select }),
         XKB_KEY_END if !m.alt && !m.logo => Some(EditOp::End { select }),
+        XKB_KEY_BACKSPACE if m.ctrl && !m.alt && !m.logo => Some(EditOp::DeleteWordBack),
+        XKB_KEY_DELETE if m.ctrl && !m.alt && !m.logo => Some(EditOp::DeleteWordForward),
         XKB_KEY_BACKSPACE if plain => Some(EditOp::Backspace),
         XKB_KEY_DELETE if plain => Some(EditOp::Delete),
         XKB_KEY_LOWER_A | XKB_KEY_UPPER_A if m.ctrl && !m.alt && !m.logo => Some(EditOp::SelectAll),
@@ -565,6 +567,29 @@ mod tests {
 
     fn key(keysym: u32) -> InputEvent {
         key_with(keysym, false, true)
+    }
+
+    #[test]
+    fn ctrl_backspace_and_ctrl_delete_map_to_word_deletions() {
+        let ctrl = Modifiers {
+            ctrl: true,
+            ..Modifiers::default()
+        };
+        let ctrl_alt = Modifiers {
+            ctrl: true,
+            alt: true,
+            ..Modifiers::default()
+        };
+        assert_eq!(
+            key_to_edit(XKB_KEY_BACKSPACE, None, ctrl),
+            Some(EditOp::DeleteWordBack)
+        );
+        assert_eq!(
+            key_to_edit(XKB_KEY_DELETE, None, ctrl),
+            Some(EditOp::DeleteWordForward)
+        );
+        assert_eq!(key_to_edit(XKB_KEY_BACKSPACE, None, ctrl_alt), None);
+        assert_eq!(key_to_edit(XKB_KEY_DELETE, None, ctrl_alt), None);
     }
 
     fn hover(i: u64, on: bool) -> UiEvent {

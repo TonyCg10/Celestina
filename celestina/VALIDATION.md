@@ -1768,6 +1768,24 @@ None has been run and none is closed by an agent.
 - **Evidence:** none; the unit's automated evidence is
   [CEL-I-011](docs/evidence/2026-11-26-cel-i-011-tray-fixes.md)
 
+## VAL-CEL-I-014 — The launcher's quick clear
+
+- **Status:** pending
+- **Related implementation:** CEL-I-014 (holding Backspace for 600 ms sweeps
+  the launcher's query and empties it; a clear button sits in the field while
+  it holds text; Ctrl+Backspace and Ctrl+Delete delete a word in every field)
+- **Requires:** the deployed shell after the landing of CEL-I-014
+- **Procedure:** open the launcher; type a word and press the clear button;
+  type two words and press Ctrl+Backspace; type a word and hold Backspace for
+  a second; type again, hold Backspace and let go before the field empties
+- **Pass condition:** the button shows only with text and empties the field;
+  Ctrl+Backspace removes the last word; the held Backspace deletes one letter,
+  then a blue wash sweeps the text and the field empties; letting go early
+  keeps the text
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-I-014](docs/evidence/2026-11-27-cel-i-014-quick-clear.md)
+
 ## VAL-CEL-I-013 — The chevron's plate and its window's place
 
 - **Status:** pending

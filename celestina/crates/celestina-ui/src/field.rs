@@ -41,6 +41,10 @@ pub enum EditOp {
     Backspace,
     /// Deletes the selection, else the grapheme after the cursor.
     Delete,
+    /// Deletes the selection, else back to the previous word start.
+    DeleteWordBack,
+    /// Deletes the selection, else forward to the next word end.
+    DeleteWordForward,
     /// One grapheme (a word with `word`) to the left; `select` extends the
     /// selection. Without `select`, a selection collapses to its start.
     Left {
@@ -181,6 +185,21 @@ impl Field {
                         .next()
                         .map_or(0, str::len);
                     self.text.replace_range(self.cursor..self.cursor + len, "");
+                }
+            }
+            EditOp::DeleteWordBack => {
+                self.end_preedit();
+                if !self.delete_selection() {
+                    let start = self.word_before();
+                    self.text.replace_range(start..self.cursor, "");
+                    self.cursor = start;
+                }
+            }
+            EditOp::DeleteWordForward => {
+                self.end_preedit();
+                if !self.delete_selection() {
+                    let end = self.word_after();
+                    self.text.replace_range(self.cursor..end, "");
                 }
             }
             EditOp::Left { select, word } => {
@@ -691,6 +710,39 @@ mod tests {
         f.set_text(&"q".repeat(300));
         assert_eq!(f.text().chars().count(), 256);
         assert_eq!(f.cursor(), 256);
+    }
+
+    #[test]
+    fn delete_word_back_removes_to_the_previous_word_start() {
+        let mut f = Field::new();
+        f.set_text("alpha beta gamma");
+        assert!(f.edit(EditOp::DeleteWordBack));
+        assert_eq!(f.text(), "alpha beta ");
+        assert!(f.edit(EditOp::DeleteWordBack));
+        assert_eq!(f.text(), "alpha ");
+        f.edit(EditOp::Home { select: false });
+        assert!(!f.edit(EditOp::DeleteWordBack), "nothing before the cursor");
+    }
+
+    #[test]
+    fn delete_word_forward_removes_to_the_next_word_end() {
+        let mut f = Field::new();
+        f.set_text("one two");
+        f.edit(EditOp::Home { select: false });
+        assert!(f.edit(EditOp::DeleteWordForward));
+        assert_eq!(f.text(), " two");
+    }
+
+    #[test]
+    fn a_word_deletion_with_a_selection_deletes_the_selection_only() {
+        let mut f = Field::new();
+        f.set_text("abc def");
+        f.edit(EditOp::Left {
+            select: true,
+            word: false,
+        });
+        assert!(f.edit(EditOp::DeleteWordBack));
+        assert_eq!(f.text(), "abc de");
     }
 
     #[test]

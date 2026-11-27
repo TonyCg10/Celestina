@@ -9,7 +9,7 @@
 
 use celestina_paint::{IconKey, Rect, Role, TextStyle, Theme, Weight};
 use celestina_ui::{view, FieldId, Key, View, ViewKind};
-use taffy::AlignItems;
+use taffy::{AlignItems, JustifyContent, LengthPercentageAuto};
 
 use super::{
     commands::Switch,
@@ -24,6 +24,11 @@ pub const LAUNCHER_W: f32 = 560.0;
 pub const ICON_SIZE: f32 = 24.0;
 /// The search glyph in the field.
 const SEARCH_ICON: f32 = 18.0;
+/// The clear button's side, its glyph and how far it reaches into the
+/// pill's right padding.
+const CLEAR_SIZE: f32 = 28.0;
+const CLEAR_ICON: f32 = 16.0;
+const CLEAR_MARGIN: f32 = -8.0;
 /// The icon of an application whose entry names none.
 const FALLBACK_ICON: &str = "app-window";
 
@@ -48,6 +53,18 @@ pub fn field_key() -> Key {
     Key::named("launcher-field")
 }
 
+/// The clear button in the pill.
+#[must_use]
+pub fn clear_key() -> Key {
+    Key::named("launcher-clear")
+}
+
+/// The hold-Backspace sweep in the pill.
+#[must_use]
+pub fn sweep_key() -> Key {
+    Key::named("launcher-sweep")
+}
+
 /// The row at `index`.
 #[must_use]
 pub fn row_key(index: usize) -> Key {
@@ -59,6 +76,19 @@ pub fn row_key(index: usize) -> Key {
 pub fn row_of(key: Key, count: usize) -> Option<usize> {
     (0..count).find(|&i| row_key(i) == key)
 }
+
+/// The wash that sweeps the query away while Backspace is held: it grows
+/// from the text's end towards its start.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Sweep {
+    /// 0 (just started) to 1 (the whole text).
+    pub progress: f32,
+    /// The text's end, logical px from the field's left edge.
+    pub text_end: f32,
+}
+
+/// The wash's distance from the pill's top and bottom.
+const SWEEP_INSET: f32 = 10.0;
 
 /// The card's logical size with `theme`: the card's width; the field, the
 /// small gap and eight rows, padded by the medium spacing.
@@ -115,22 +145,28 @@ pub fn card_rect(surface: (f32, f32), card: (f32, f32)) -> Rect {
 /// The launcher for `state` in `theme` on a surface of `surface` size: a
 /// transparent root as large as the surface, with the card centred in it.
 #[must_use]
-pub fn launcher(theme: &Theme, state: &LauncherState, surface: (f32, f32)) -> View {
+pub fn launcher(
+    theme: &Theme,
+    state: &LauncherState,
+    surface: (f32, f32),
+    sweep: Option<Sweep>,
+) -> View {
     let at = card_rect(surface, card_size(theme));
     view::col(surface_key())
         .size(surface.0, surface.1)
-        .child(card(theme, state).absolute(at.x, at.y))
+        .child(card(theme, state, sweep).absolute(at.x, at.y))
 }
 
-/// The card for `state` in `theme`.
+/// The card for `state` in `theme`, with the `sweep` over the query while
+/// there is one (the launcher of applications only).
 #[must_use]
-pub fn card(theme: &Theme, state: &LauncherState) -> View {
+pub fn card(theme: &Theme, state: &LauncherState, sweep: Option<Sweep>) -> View {
     let (w, h) = card_size(theme);
     let (placeholder, note) = match &state.source {
         Source::Apps => (copy::LAUNCHER_PLACEHOLDER, None),
         Source::Bubbles(bubbles) => (copy::SELECTOR_PLACEHOLDER, selector::note(bubbles)),
     };
-    let pill = centred(view::row(Key::named("launcher-pill")))
+    let mut pill = centred(view::row(Key::named("launcher-pill")))
         .height(theme.top_bar)
         .radius(theme.top_bar / 2.0)
         .fill(Role::ControlFill)
@@ -151,6 +187,21 @@ pub fn card(theme: &Theme, state: &LauncherState) -> View {
             )
             .grow(),
         );
+    let apps = matches!(state.source, Source::Apps);
+    if let Some(sweep) = sweep.filter(|_| apps) {
+        // First, so the text and the glyphs draw over it.
+        let text_end = sweep.text_end.max(0.0);
+        let width = text_end * sweep.progress.clamp(0.0, 1.0);
+        let field_left = theme.spacing.lg + SEARCH_ICON + theme.spacing.sm;
+        let wash = view::col(sweep_key())
+            .size(width, theme.top_bar - 2.0 * SWEEP_INSET)
+            .fill(Role::AccentSoft)
+            .absolute(field_left + text_end - width, SWEEP_INSET);
+        pill.children.insert(0, wash);
+    }
+    if apps {
+        pill = pill.child(clear_button(!state.query.text().is_empty()));
+    }
     let rows = view::col(Key::named("launcher-rows"));
     let rows = if state.rows.is_empty() {
         rows.child(
@@ -179,6 +230,28 @@ pub fn card(theme: &Theme, state: &LauncherState) -> View {
         .gap(theme.spacing.sm)
         .child(pill)
         .child(rows)
+}
+
+/// The clear button: a round plate with an `x`, at the pill's right end. It
+/// fades in with the first character and out with the last, and takes no
+/// click while it is out.
+fn clear_button(shown: bool) -> View {
+    let mut v = centred(view::row(clear_key()))
+        .size(CLEAR_SIZE, CLEAR_SIZE)
+        .radius(CLEAR_SIZE / 2.0)
+        .opacity(if shown { 1.0 } else { 0.0 })
+        .child(icon(
+            Key::named("launcher-clear-icon"),
+            IconKey::Semantic("x"),
+            Some(Role::TextLo),
+            CLEAR_ICON,
+        ));
+    v.style.justify_content = JustifyContent::CENTER;
+    v.style.margin.right = LengthPercentageAuto::length(CLEAR_MARGIN);
+    if shown {
+        v = v.interactive();
+    }
+    v
 }
 
 /// One row: the icon, the name growing, the secondary text on the right.
@@ -291,7 +364,7 @@ mod tests {
         let size = card_size(&theme);
         let surface = (2560.0, 1440.0);
         let at = card_rect(surface, size);
-        tree.apply(launcher(&theme, &state, surface), t0);
+        tree.apply(launcher(&theme, &state, surface, None), t0);
         tree.layout_measured(surface, fake_measure);
 
         let root = tree.node_by_key(surface_key()).map(|id| tree.rect(id));
@@ -327,14 +400,14 @@ mod tests {
             field.set_text("ab");
         }
         state.set_query("ab", &index);
-        tree.apply(launcher(&theme, &state, surface), t0);
+        tree.apply(launcher(&theme, &state, surface, None), t0);
         tree.layout_measured(surface, fake_measure);
         assert_eq!(
             tree.field(FIELD).map(|f| f.text().to_owned()),
             Some("ab".to_owned())
         );
         // One answer now; the rows that left fade out in the tree.
-        assert_eq!(card(&theme, &state).children[1].children.len(), 1);
+        assert_eq!(card(&theme, &state, None).children[1].children.len(), 1);
     }
 
     #[test]
@@ -344,7 +417,7 @@ mod tests {
         let mut state = LauncherState::new(Vec::new());
         state.set_query("a", &index);
         state.move_selection(1);
-        let v = card(&theme, &state);
+        let v = card(&theme, &state, None);
         let rows = &v.children[1].children;
         let fills: Vec<_> = rows
             .iter()
@@ -387,7 +460,7 @@ mod tests {
         let theme = Theme::dark();
         let mut state = LauncherState::new(Vec::new());
         state.set_query("/zzz", &[]);
-        let v = card(&theme, &state);
+        let v = card(&theme, &state, None);
         let rows = &v.children[1].children;
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].key, Key::named("launcher-empty"));
@@ -413,14 +486,17 @@ mod tests {
             windows: Vec::new(),
             link: Link::Live,
         });
-        assert_eq!(note_text(&card(&theme, &empty)), copy::SELECTOR_NO_WINDOWS);
+        assert_eq!(
+            note_text(&card(&theme, &empty, None)),
+            copy::SELECTOR_NO_WINDOWS
+        );
         for link in [Link::Absent, Link::Refused, Link::Unavailable] {
             let gone = LauncherState::selector(Bubbles {
                 windows: Vec::new(),
                 link,
             });
             assert_eq!(
-                note_text(&card(&theme, &gone)),
+                note_text(&card(&theme, &gone, None)),
                 copy::SELECTOR_UNAVAILABLE,
                 "{link:?}"
             );
@@ -436,7 +512,7 @@ mod tests {
             link: Link::Live,
         });
         some.set_query("zzz", &[]);
-        assert_eq!(note_text(&card(&theme, &some)), copy::LAUNCHER_EMPTY);
+        assert_eq!(note_text(&card(&theme, &some, None)), copy::LAUNCHER_EMPTY);
     }
 
     #[test]
@@ -461,7 +537,7 @@ mod tests {
             ],
             link: Link::Live,
         });
-        let v = card(&theme, &state);
+        let v = card(&theme, &state, None);
         let rows = &v.children[1].children;
         assert_eq!(rows.len(), 2);
         assert!(rows.iter().all(|r| r.interactive));
@@ -489,5 +565,93 @@ mod tests {
             }
         ));
         assert_eq!(texts(&rows[1]), [copy::WINDOW_UNTITLED, ""]);
+    }
+
+    #[test]
+    fn the_clear_button_fades_with_the_query_and_the_selector_has_none() {
+        let theme = Theme::dark();
+        let index = [entry("aa", "Aa")];
+        let mut state = LauncherState::new(Vec::new());
+        let pill = |state: &LauncherState| card(&theme, state, None).children.remove(0);
+        let empty = pill(&state);
+        let button = empty.children.last().expect("the pill has children");
+        assert_eq!(button.key, clear_key());
+        assert_eq!(button.opacity, 0.0);
+        assert!(!button.interactive, "a hidden button takes no click");
+
+        state.set_query("ab", &index);
+        let shown = pill(&state);
+        let button = shown.children.last().expect("the pill has children");
+        assert_eq!(button.key, clear_key());
+        assert_eq!(button.opacity, 1.0);
+        assert!(button.interactive);
+        assert!(matches!(
+            button.kind,
+            ViewKind::Box { radius, .. } if radius == 14.0
+        ));
+        assert_eq!(
+            button.style.size,
+            taffy::Size {
+                width: taffy::Dimension::length(28.0),
+                height: taffy::Dimension::length(28.0)
+            }
+        );
+        assert!(matches!(
+            button.children[0].kind,
+            ViewKind::Icon {
+                key: IconKey::Semantic("x"),
+                tint: Some(Role::TextLo),
+                size,
+            } if size == 16.0
+        ));
+
+        use crate::bubbles::Bubbles;
+        let selector = LauncherState::selector(Bubbles::default());
+        assert!(pill(&selector)
+            .children
+            .iter()
+            .all(|c| c.key != clear_key()));
+    }
+
+    #[test]
+    fn the_sweep_is_a_wash_that_grows_from_the_texts_end_inside_the_pill() {
+        let theme = Theme::dark();
+        let state = LauncherState::new(Vec::new());
+        let sweep = Sweep {
+            progress: 0.5,
+            text_end: 120.0,
+        };
+        let v = card(&theme, &state, Some(sweep));
+        let node = v.children[0]
+            .children
+            .iter()
+            .find(|c| c.key == sweep_key())
+            .expect("the pill holds the sweep");
+        let field_left = theme.spacing.lg + SEARCH_ICON + theme.spacing.sm;
+        assert!(matches!(
+            node.kind,
+            ViewKind::Box {
+                fill: Some(Role::AccentSoft),
+                ..
+            }
+        ));
+        assert_eq!(node.style.position, taffy::Position::Absolute);
+        assert_eq!(node.style.size.width, taffy::Dimension::length(60.0));
+        assert_eq!(node.style.size.height, taffy::Dimension::length(28.0));
+        assert_eq!(node.style.inset.top, LengthPercentageAuto::length(10.0));
+        assert_eq!(
+            node.style.inset.left,
+            LengthPercentageAuto::length(field_left + 120.0 - 60.0),
+            "the right edge stays at the text's end"
+        );
+        assert!(!node.interactive);
+        let first = &v.children[0].children[0];
+        assert_eq!(first.key, sweep_key(), "under the text: the first child");
+
+        let none = card(&theme, &state, None);
+        assert!(none.children[0]
+            .children
+            .iter()
+            .all(|c| c.key != sweep_key()));
     }
 }

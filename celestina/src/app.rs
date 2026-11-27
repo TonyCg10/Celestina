@@ -3170,7 +3170,12 @@ impl Shell for App {
         if let (Some(shared), Some(open)) = (self.painter.as_ref(), self.launcher.as_mut()) {
             if open.surface() == cx.surface {
                 match shared.try_borrow_mut() {
-                    Ok(mut painter) => open.frame(cx, &mut painter, self.appearance.reduced_motion),
+                    Ok(mut painter) => open.frame(
+                        cx,
+                        &mut painter,
+                        self.appearance.reduced_motion,
+                        &self.index,
+                    ),
                     Err(_) => {
                         tracing::warn!("the painter is in use; the launcher's frame is skipped");
                         cx.ctl.request_redraw();
