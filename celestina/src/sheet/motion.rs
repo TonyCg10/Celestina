@@ -1,7 +1,10 @@
 //! The clocks of a capsule menu window: the rect's flights (grow from the
-//! pill, a resize at rest, the close that blurs it out towards its piece),
-//! its corner radius, the opacities of its glass and body and the close's
-//! blur. Pure: every method takes the instant, nothing reads a clock.
+//! pill, a resize at rest, the close that blurs it out towards its piece,
+//! the travel to another menu's shape on the same capsule), its corner
+//! radius, the opacities of its glass and body, the close's blur and the
+//! travel's two contents (the one left fades and blurs out, the new one
+//! fades in sharpening). Pure: every method takes the instant, nothing
+//! reads a clock.
 
 use std::time::{Duration, Instant};
 
@@ -13,8 +16,17 @@ use celestina_ui::{Easing, Motion, LINEAR, ONE_UI};
 enum Kind {
     Open,
     Close,
+    /// The window on the same capsule goes to another menu's shape.
+    Travel,
 }
 
+/// The travel's duration.
+pub const TRAVEL_MS: u64 = 300;
+/// The fraction of a travel by which the content left has gone.
+const TRAVEL_OLD_END: f32 = 0.3;
+/// The blur the content left reaches, and the new one starts from, in
+/// logical px.
+const TRAVEL_BLUR_PX: f32 = 8.0;
 /// The close's duration.
 const CLOSE_MS: u64 = 260;
 /// The blur a close reaches, in logical px.
@@ -27,6 +39,13 @@ pub const PIECE_RESTORE_AT: f32 = 0.0;
 /// A closing window's glass below this opacity leaves the compositor's blur
 /// region (the backdrop blur cannot fade).
 pub const BLUR_REGION_MIN_GLASS: f32 = 0.35;
+
+/// A content as it was shown: its opacity and its blur in logical px.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Shown {
+    pub alpha: f32,
+    pub blur: f32,
+}
 
 /// The window's rect, radius and opacities over time.
 #[derive(Clone, Debug)]
@@ -45,6 +64,11 @@ pub struct SheetMotion {
     ladder: MotionMs,
     overshoot: f32,
     reduced: bool,
+    /// A travel or a close: the glass opacity it starts from.
+    from_glass: f32,
+    /// A travel: the content being left, as it was shown at the start. A
+    /// close: the content it fades from, whole unless it cut a travel short.
+    old: Shown,
 }
 
 /// `v` when finite, else 0.
@@ -96,6 +120,14 @@ impl SheetMotion {
         reduced: bool,
     ) -> SheetMotion {
         let (duration, easing) = match kind {
+            Kind::Travel => (
+                if reduced {
+                    Duration::ZERO
+                } else {
+                    Duration::from_millis(TRAVEL_MS.min(u64::from(ladder.ceiling)))
+                },
+                Easing::Bezier(ONE_UI),
+            ),
             Kind::Close => (
                 Duration::from_millis(CLOSE_MS.min(u64::from(ladder.ceiling))),
                 Easing::Bezier(LINEAR),
@@ -113,6 +145,11 @@ impl SheetMotion {
             ladder,
             overshoot,
             reduced,
+            from_glass: 1.0,
+            old: Shown {
+                alpha: 1.0,
+                blur: 0.0,
+            },
         }
     }
 
@@ -148,6 +185,19 @@ impl SheetMotion {
         }
         let reduced = self.reduced;
         let radius = (self.radius(now), finite(pill.h) / 2.0);
+        // A close that cuts a travel short fades the content and the glass
+        // from what they show at that frame, so nothing pops back to whole.
+        let (content, glass) = if self.kind == Kind::Travel {
+            (self.content_shown(now), self.glass_opacity(now))
+        } else {
+            (
+                Shown {
+                    alpha: 1.0,
+                    blur: 0.0,
+                },
+                1.0,
+            )
+        };
         *self = SheetMotion::flight(
             Kind::Close,
             shown,
@@ -157,6 +207,75 @@ impl SheetMotion {
             self.overshoot,
             reduced,
         );
+        self.from_glass = glass;
+        self.old = content;
+    }
+
+    /// Takes in the reduced-motion setting at the moment of a switch (the
+    /// flight that follows reads it).
+    pub fn set_reduced(&mut self, reduced: bool) {
+        self.reduced = reduced;
+    }
+
+    /// The window goes to another menu's shape on the same capsule: from
+    /// `shown` (the rect as painted now), with the radius and glass it has
+    /// now, to the theme's large radius and a whole glass. `old` is the
+    /// content being left as it is shown now. Starts from any flight, a
+    /// close included; under reduced motion the swap is at once.
+    pub fn travel(&mut self, shown: Rect, old: Shown, theme: &Theme, now: Instant) {
+        let radius = (self.radius(now), theme.radius_lg);
+        let from_glass = self.glass_opacity(now);
+        let reduced = self.reduced;
+        *self = SheetMotion::flight(
+            Kind::Travel,
+            shown,
+            radius,
+            now,
+            theme.motion,
+            theme.overshoot,
+            reduced,
+        );
+        self.from_glass = from_glass;
+        self.old = old;
+    }
+
+    /// The open body as painted at `now`: its opacity and its blur.
+    #[must_use]
+    pub fn content_shown(&self, now: Instant) -> Shown {
+        Shown {
+            alpha: self.body_opacity(now),
+            blur: if self.kind == Kind::Close {
+                self.blur_px(now)
+            } else {
+                self.content_blur_px(now)
+            },
+        }
+    }
+
+    /// The new content's own blur over a travel, in logical px:
+    /// `8 * (1 - clamp((t - 0.2) / 0.6))`. None for every other flight and
+    /// under reduced motion.
+    #[must_use]
+    pub fn content_blur_px(&self, now: Instant) -> f32 {
+        if self.kind != Kind::Travel || self.reduced {
+            return 0.0;
+        }
+        TRAVEL_BLUR_PX * (1.0 - ((self.fraction(now) - 0.2) / 0.6).clamp(0.0, 1.0))
+    }
+
+    /// The content left by a travel, while it still shows: opacity
+    /// `a0 * (1 - t / 0.3)`, blur `max(b0, 8 * t / 0.3)`. `None` once it has
+    /// gone (`t >= 0.3`) and for every other flight.
+    #[must_use]
+    pub fn old_content(&self, now: Instant) -> Option<Shown> {
+        if self.kind != Kind::Travel {
+            return None;
+        }
+        let k = self.fraction(now) / TRAVEL_OLD_END;
+        (k < 1.0).then(|| Shown {
+            alpha: self.old.alpha * (1.0 - k),
+            blur: self.old.blur.max(TRAVEL_BLUR_PX * k),
+        })
     }
 
     fn elapsed(&self, now: Instant) -> Duration {
@@ -234,23 +353,30 @@ impl SheetMotion {
         CLOSE_SHRINK * (1.0 - (1.0 - t) * (1.0 - t))
     }
 
-    /// The body's opacity: fades in over the last 65 % of an open, and out
-    /// as `1 - (t / 0.8)^1.4` over a close (the window being left in a
-    /// switch closes the same way).
+    /// The body's opacity: fades in over the last 65 % of an open, as
+    /// `clamp((t - 0.2) / 0.5)` over a travel, and out as
+    /// `1 - (t / 0.8)^1.4` over a close (a window left on another capsule
+    /// closes the same way), scaled by what the content showed when a close
+    /// cut a travel short.
     pub fn body_opacity(&self, now: Instant) -> f32 {
         let t = self.fraction(now);
         match self.kind {
             Kind::Open => ((t - 0.35) / 0.65).clamp(0.0, 1.0),
-            Kind::Close => (1.0 - (t / 0.8).min(1.0).powf(1.4)).clamp(0.0, 1.0),
+            Kind::Close => (self.old.alpha * (1.0 - (t / 0.8).min(1.0).powf(1.4))).clamp(0.0, 1.0),
+            Kind::Travel => ((t - 0.2) / 0.5).clamp(0.0, 1.0),
         }
     }
 
-    /// The glass's opacity: whole while the window grows or stays, and
+    /// The glass's opacity: whole while the window grows or stays, from the
+    /// glass it had to whole on the ONE_UI curve over a travel, and
     /// `1 - t^1.6` over a close.
     pub fn glass_opacity(&self, now: Instant) -> f32 {
         match self.kind {
             Kind::Open => 1.0,
-            Kind::Close => (1.0 - self.fraction(now).powf(1.6)).clamp(0.0, 1.0),
+            Kind::Close => (self.from_glass * (1.0 - self.fraction(now).powf(1.6))).clamp(0.0, 1.0),
+            Kind::Travel => {
+                lerp(self.from_glass, 1.0, self.easing.eval(self.fraction(now))).clamp(0.0, 1.0)
+            }
         }
     }
 
@@ -262,14 +388,18 @@ impl SheetMotion {
         if self.kind != Kind::Close || self.reduced {
             return 0.0;
         }
-        CLOSE_BLUR_PX * (self.fraction(now) / 0.6).min(1.0).powf(0.7)
+        (CLOSE_BLUR_PX * (self.fraction(now) / 0.6).min(1.0).powf(0.7)).max(self.old.blur)
     }
 
     /// Whether the compositor's blur still covers the window: always but
-    /// for a close whose glass has faded below [`BLUR_REGION_MIN_GLASS`].
+    /// for a close, or a travel started from a faint glass, whose glass is
+    /// below [`BLUR_REGION_MIN_GLASS`] (the backdrop blur cannot fade).
     #[must_use]
     pub fn blur_region(&self, now: Instant) -> bool {
-        self.kind != Kind::Close || self.glass_opacity(now) >= BLUR_REGION_MIN_GLASS
+        match self.kind {
+            Kind::Close | Kind::Travel => self.glass_opacity(now) >= BLUR_REGION_MIN_GLASS,
+            Kind::Open => true,
+        }
     }
 
     /// Where the flight started: the window as it was shown, for a close.
@@ -480,9 +610,9 @@ mod tests {
     }
 
     #[test]
-    fn a_switch_closes_the_old_window_the_same_way() {
-        // The window being left is closed by `Sheets::open` with the very
-        // same call; its clocks are the close's.
+    fn a_window_left_on_another_capsule_closes_the_same_way() {
+        // A window left on another capsule is closed by `Sheets::open` with
+        // the very same call; its clocks are the close's.
         let t0 = Instant::now();
         let (m, slot, done) = closing(t0);
         let mut left = opened(t0);
@@ -621,5 +751,241 @@ mod tests {
         let m = opened(t0);
         assert!(m.wants_frame(t0));
         assert!(!m.wants_frame(ms(t0, 350.0)));
+    }
+
+    fn travel_to() -> Rect {
+        r(1400.0, 56.0, 360.0, 300.0)
+    }
+
+    const FRESH: Shown = Shown {
+        alpha: 1.0,
+        blur: 0.0,
+    };
+
+    /// An open window at rest that travels at `t0 + 400 ms`.
+    fn travelling(t0: Instant) -> (SheetMotion, Instant) {
+        let mut m = opened(t0);
+        let at = ms(t0, 400.0);
+        m.travel(target(), FRESH, &Theme::dark(), at);
+        (m, at)
+    }
+
+    #[test]
+    fn a_travel_morphs_the_rect_on_one_ui_in_300_ms() {
+        let t0 = Instant::now();
+        let (m, at) = travelling(t0);
+        let to = travel_to();
+        let large = Theme::dark().radius_lg;
+        assert!(near_rect(m.rect(at, to, SURFACE), target()));
+        assert!(near_rect(
+            m.rect(ms(at, 150.0), to, SURFACE),
+            lerp_rect(target(), to, ONE_UI.eval(0.5))
+        ));
+        assert!(near_rect(m.rect(ms(at, 300.0), to, SURFACE), to));
+        assert_eq!(m.rect(ms(at, 900.0), to, SURFACE), to);
+        for n in [0.0, 75.0, 150.0, 299.0, 300.0] {
+            assert_eq!(m.radius(ms(at, n)), large, "radius at {n}");
+            assert_eq!(m.glass_opacity(ms(at, n)), 1.0, "glass at {n}");
+        }
+        assert!(m.wants_frame(ms(at, 299.0)));
+        assert!(!m.wants_frame(ms(at, 300.0)));
+        assert!(!m.is_closing());
+        assert!(m.blur_region(at));
+        assert_eq!(m.blur_px(ms(at, 100.0)), 0.0);
+    }
+
+    #[test]
+    fn the_old_content_fades_and_blurs_out_by_90_ms() {
+        let t0 = Instant::now();
+        let (m, at) = travelling(t0);
+        let old = |n: f32| m.old_content(ms(at, n));
+        let s = old(0.0).unwrap_or(Shown {
+            alpha: -1.0,
+            blur: -1.0,
+        });
+        assert!(near(s.alpha, 1.0) && near(s.blur, 0.0), "{s:?}");
+        let s = old(45.0).unwrap_or(Shown {
+            alpha: -1.0,
+            blur: -1.0,
+        });
+        assert!(near(s.alpha, 0.5) && near(s.blur, 4.0), "{s:?}");
+        assert!(old(89.0).is_some());
+        assert!(old(90.0).is_none());
+        assert!(old(900.0).is_none());
+        // An open at rest has none.
+        assert!(opened(t0).old_content(t0).is_none());
+    }
+
+    #[test]
+    fn the_new_content_fades_in_from_60_ms_and_is_sharp_at_240_ms() {
+        let t0 = Instant::now();
+        let (m, at) = travelling(t0);
+        for (n, a) in [
+            (0.0, 0.0),
+            (60.0, 0.0),
+            (90.0, 0.2),
+            (150.0, 0.6),
+            (210.0, 1.0),
+        ] {
+            assert!(near(m.body_opacity(ms(at, n)), a), "opacity at {n}");
+        }
+        for (n, b) in [
+            (0.0, 8.0),
+            (60.0, 8.0),
+            (90.0, 6.667),
+            (150.0, 4.0),
+            (210.0, 1.333),
+            (240.0, 0.0),
+            (300.0, 0.0),
+        ] {
+            assert!(
+                (m.content_blur_px(ms(at, n)) - b).abs() < 2e-3,
+                "blur at {n}"
+            );
+        }
+        assert_eq!(opened(t0).content_blur_px(t0), 0.0);
+    }
+
+    #[test]
+    fn a_travel_during_the_open_starts_from_the_shape_shown() {
+        let t0 = Instant::now();
+        let mut m = opened(t0);
+        let mid = ms(t0, 100.0);
+        let rect = m.rect(mid, target(), SURFACE);
+        let radius = m.radius(mid);
+        let large = Theme::dark().radius_lg;
+        assert!(radius < large);
+        m.travel(rect, FRESH, &Theme::dark(), mid);
+        assert!(near_rect(m.rect(mid, travel_to(), SURFACE), rect));
+        assert!(near(m.radius(mid), radius));
+        assert!(near(m.radius(ms(t0, 400.0)), large));
+        assert!(near_rect(
+            m.rect(ms(t0, 400.0), travel_to(), SURFACE),
+            travel_to()
+        ));
+    }
+
+    #[test]
+    fn a_travel_during_a_close_turns_the_window_back() {
+        let t0 = Instant::now();
+        let (mut m, slot, done) = closing(t0);
+        let at = ms(done, 130.0);
+        let shown = m.rect(at, slot, SURFACE);
+        let old = m.content_shown(at);
+        m.travel(shown, old, &Theme::dark(), at);
+        let o = m.old_content(at).unwrap_or(Shown {
+            alpha: -1.0,
+            blur: -1.0,
+        });
+        assert!(near(o.alpha, 1.0 - 0.625f32.powf(1.4)), "{o:?}");
+        assert!(near(o.blur, 12.0 * (0.5f32 / 0.6).powf(0.7)), "{o:?}");
+        assert!(near(m.glass_opacity(at), 1.0 - 0.5f32.powf(1.6)));
+        assert!(near(m.glass_opacity(ms(at, 300.0)), 1.0));
+        assert!(!m.is_closing());
+        assert!(!m.closed(ms(at, 900.0)));
+        assert!(near_rect(m.rect(at, travel_to(), SURFACE), shown));
+        assert!(m.blur_region(at));
+    }
+
+    #[test]
+    fn a_close_during_a_travel_fades_from_the_content_shown() {
+        let t0 = Instant::now();
+        let mut m = opened(t0);
+        let at = ms(t0, 400.0);
+        let theme = Theme::dark();
+        m.travel(
+            target(),
+            Shown {
+                alpha: 1.0,
+                blur: 0.0,
+            },
+            &theme,
+            at,
+        );
+        // +150 ms: the new content shows 0.6 at 4 px.
+        let mid = ms(at, 150.0);
+        let shown = m.rect(mid, travel_to(), SURFACE);
+        m.close(shown, pill(), mid);
+        assert!(m.is_closing());
+        assert!(near(m.body_opacity(mid), 0.6), "{}", m.body_opacity(mid));
+        assert!(near(m.blur_px(mid), 4.0), "{}", m.blur_px(mid));
+        // It fades to nothing on the close's own curve, from that start.
+        let half = ms(mid, 104.0);
+        assert!(near(m.body_opacity(half), 0.6 * (1.0 - 0.5f32.powf(1.4))));
+        assert!(near(m.body_opacity(ms(mid, 208.0)), 0.0));
+        assert!(m.blur_px(ms(mid, 260.0)) >= 4.0);
+        // From rest a close still starts whole and unblurred.
+        let mut rest = opened(t0);
+        rest.close(target(), pill(), at);
+        assert!(near(rest.body_opacity(at), 1.0));
+        assert!(near(rest.blur_px(at), 0.0));
+    }
+
+    #[test]
+    fn a_close_during_a_travel_keeps_the_glass_it_had() {
+        let t0 = Instant::now();
+        let (mut m, slot, done) = closing(t0);
+        let at = ms(done, 130.0);
+        let shown = m.rect(at, slot, SURFACE);
+        let old = m.content_shown(at);
+        m.travel(shown, old, &Theme::dark(), at);
+        let glass = m.glass_opacity(ms(at, 60.0));
+        assert!(glass < 1.0);
+        let mid = ms(at, 60.0);
+        let shown = m.rect(mid, travel_to(), SURFACE);
+        m.close(shown, pill(), mid);
+        assert!(near(m.glass_opacity(mid), glass), "no pop of the glass");
+        assert!(m.glass_opacity(ms(mid, 130.0)) < glass);
+        assert!(near(m.glass_opacity(ms(mid, 260.0)), 0.0));
+    }
+
+    #[test]
+    fn the_old_content_keeps_a_blur_it_already_had() {
+        let t0 = Instant::now();
+        let mut m = opened(t0);
+        let at = ms(t0, 400.0);
+        let old = Shown {
+            alpha: 0.4,
+            blur: 10.0,
+        };
+        m.travel(target(), old, &Theme::dark(), at);
+        let s = m.old_content(at).unwrap_or(Shown {
+            alpha: -1.0,
+            blur: -1.0,
+        });
+        assert!(near(s.alpha, 0.4) && near(s.blur, 10.0), "{s:?}");
+        let s = m.old_content(ms(at, 45.0)).unwrap_or(Shown {
+            alpha: -1.0,
+            blur: -1.0,
+        });
+        assert!(near(s.alpha, 0.2) && near(s.blur, 10.0), "{s:?}");
+    }
+
+    #[test]
+    fn a_resize_during_a_travel_is_carried_by_the_travel() {
+        let t0 = Instant::now();
+        let (mut m, at) = travelling(t0);
+        let during = ms(at, 100.0);
+        m.resize(m.rect(during, travel_to(), SURFACE), during);
+        assert!(m.wants_frame(ms(at, 299.0)));
+        let taller = r(1400.0, 56.0, 360.0, 400.0);
+        assert!(near_rect(m.rect(ms(at, 300.0), taller, SURFACE), taller));
+        assert!(!m.wants_frame(ms(at, 300.0)));
+        assert!(!m.wants_frame(ms(at, 500.0)));
+    }
+
+    #[test]
+    fn reduced_motion_swaps_at_once() {
+        let t0 = Instant::now();
+        let mut m = SheetMotion::open(pill(), &Theme::dark(), t0, true);
+        let at = ms(t0, 400.0);
+        m.travel(target(), FRESH, &Theme::dark(), at);
+        assert_eq!(m.rect(at, travel_to(), SURFACE), travel_to());
+        assert_eq!(m.radius(at), Theme::dark().radius_lg);
+        assert_eq!(m.glass_opacity(at), 1.0);
+        assert_eq!(m.body_opacity(at), 1.0);
+        assert_eq!(m.content_blur_px(at), 0.0);
+        assert!(m.old_content(at).is_none());
+        assert!(!m.wants_frame(at));
     }
 }

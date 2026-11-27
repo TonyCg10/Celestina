@@ -508,7 +508,11 @@ fn a_piece_asking_for_its_page_again_closes_the_sheet_and_another_switches_it() 
     let at = centre(bar_rect(&island, bluetooth));
     assert!(click_at(&mut island, at, BTN_LEFT, t).is_empty());
     assert_eq!(island.sheets.page(), Some(PageId::BLUETOOTH));
-    assert!(island.sheets.is_leaving(), "one morph, the old body fading");
+    assert!(
+        island.sheets.is_swapping(),
+        "one window, the old body fading"
+    );
+    assert!(!island.sheets.is_leaving());
     // The same piece asking again closes it (it stays in its row while its
     // sheet is open).
     let t = t + ms(400);
@@ -1167,4 +1171,77 @@ fn the_system_load_and_clock_windows_are_360_wide_and_their_parts_fit() {
     }
     assert_eq!(page_view(PageId::SYSMON).sheet_width(), Some(360.0));
     assert_eq!(page_view(PageId::CLOCK).sheet_width(), Some(360.0));
+}
+
+#[test]
+fn only_the_new_body_takes_input_during_a_travel() {
+    let (mut island, t, network, bluetooth) = network_open();
+    let cafe = network_page::row_key("cafe");
+    let headset = bluetooth_page::row_key("AA:BB:CC:DD:EE:01");
+    // Where the network body has its row, in the surface.
+    let old_row = node_at(&island, cafe, t);
+    assert!(island.sheets.body_node_rect(cafe).is_some());
+    let at = centre(bar_rect(&island, bluetooth));
+    assert!(click_at(&mut island, at, BTN_LEFT, t).is_empty());
+    assert_eq!(island.sheets.piece(), Some(bluetooth));
+    assert_ne!(island.sheets.piece(), Some(network));
+    let soon = t + ms(30);
+    step(&mut island, soon);
+    assert!(island.sheets.is_swapping());
+    // The network body is gone from the input: its row's place acts as the
+    // bluetooth body has it, never as the network's.
+    assert!(island.sheets.body_node_rect(cafe).is_none());
+    let rect = shown_rect(&island, soon);
+    assert!(rect.contains(old_row.0, old_row.1), "inside the window");
+    let actions = click_at(&mut island, old_row, BTN_LEFT, soon);
+    assert!(
+        !actions.contains(&IslandAction::Connectivity(Action::JoinSaved(
+            connectivity_sample::id("cafe")
+        ))),
+        "the old body takes no input: {actions:?}"
+    );
+    assert!(island.sheets.is_open(), "the window stays");
+    // A row of the new body acts at once, at its target's coordinates, when
+    // the travelling rect already covers it.
+    let anchor = island.sheet_anchor(soon);
+    let row = anchor
+        .as_ref()
+        .and_then(|a| island.sheets.body_rect(headset, a));
+    let Some(row) = row else {
+        panic!("no bluetooth row");
+    };
+    let (x, y) = (row.x + row.w / 2.0, row.y + row.h / 2.0);
+    assert!(shown_rect(&island, soon).contains(x, y), "inside the rect");
+    let leave = IslandAction::Connectivity(Action::DisconnectDevice(connectivity_sample::address(
+        "AA:BB:CC:DD:EE:01",
+    )));
+    assert_eq!(click_at(&mut island, (x, y), BTN_LEFT, soon), [leave]);
+    // A press outside the window closes it.
+    assert!(click_at(&mut island, (30.0, 400.0), BTN_LEFT, soon).is_empty());
+    assert!(!island.sheets.is_open());
+}
+
+#[test]
+fn a_body_that_changes_size_during_a_travel_ends_on_its_size() {
+    let (mut island, t, _network, bluetooth) = network_open();
+    island.set_connectivity(&bluetooth_with(2));
+    step(&mut island, t);
+    let at = centre(bar_rect(&island, bluetooth));
+    assert!(click_at(&mut island, at, BTN_LEFT, t).is_empty());
+    step(&mut island, t);
+    let before = island.sheets.body_size().unwrap_or_default().1;
+    // Taller at +100, in the middle of the travel.
+    let mid = t + ms(100);
+    step(&mut island, mid);
+    island.set_connectivity(&bluetooth_with(7));
+    step(&mut island, mid + ms(1));
+    let after = island.sheets.body_size().unwrap_or_default().1;
+    assert!(after > before, "{after} > {before}");
+    let end = t + ms(300);
+    step(&mut island, end);
+    let at_end = shown_rect(&island, end);
+    let rest = t + ms(900);
+    step(&mut island, rest);
+    assert!(near(at_end, shown_rect(&island, rest)), "the new target");
+    assert!(!island.sheets.wants_frame(t + ms(301)));
 }

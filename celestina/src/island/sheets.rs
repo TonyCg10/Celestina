@@ -1,9 +1,11 @@
 //! The Island's side of the capsule menus (CEL-D-002, CEL-D-009): the
 //! open-window owner [`Sheets`] wired to the bar, the page and the input. At
-//! most one of three things is shown: nothing, the Island's page, or one
-//! capsule window (and, for 260 ms of a switch, the one it closes towards its
-//! piece); a closing one still counts as shown, so a request that comes while
-//! another thing is shown closes it and waits for it to go (`Sheets::queue`).
+//! most one of three things is open: nothing, the Island's page, or one
+//! capsule window. A menu of the same capsule switches in place (the window
+//! travels to its shape, CEL-D-015); a menu of another capsule opens at once
+//! while the old window closes towards its own piece. Only a menu and the
+//! Island's page wait for each other: a request that comes while one is shown
+//! closes it and waits for it to go (`Sheets::queue`).
 //! The piece a window is open on stays in its slot in the bar (CEL-D-014):
 //! its gestures are its own, through the bar's input, and the window's header
 //! row is only a title.
@@ -69,8 +71,10 @@ impl Island {
     }
 
     /// Opens `body` as the sheet of `kind` on `piece`'s capsule: it grows
-    /// from it, switches the sheet already open on that capsule, or waits for
-    /// what else is shown to close. `false` when the bar has no such piece.
+    /// from it, takes the place of the sheet already open (the window travels
+    /// to its shape when it is on the same capsule; another capsule's window
+    /// closes meanwhile), or waits for the Island's page to close. `false`
+    /// when the bar has no such piece.
     pub(super) fn open_sheet_at(
         &mut self,
         piece: Key,
@@ -96,17 +100,20 @@ impl Island {
             body,
         };
         let page_shown = self.state.is_open() || self.state.progress(now) > 0.0;
-        let switchable = self.sheets.is_open() && self.sheets.zone(now) == Some(zone);
-        if page_shown || (self.sheets.is_shown(now) && !switchable) {
-            // One thing at a time: what is shown closes, the sheet waits.
+        if page_shown {
+            // The Island's page and a sheet never show together: the page
+            // closes and the sheet waits for it.
             if self.state.is_open() {
                 self.close(now);
             }
             self.close_sheet(now);
             self.sheets.queue(Next::Sheet(request));
         } else {
-            // A page sheet switched away from takes its state with it.
+            // A page sheet switched away from takes its state with it. The
+            // newer request wins: a page that waited behind a closing sheet
+            // is given up, or it would open unasked when this one closes.
             self.page_sheet_ends();
+            self.sheets.drop_queue();
             self.sheets
                 .open(request, &anchor, &self.theme, now, self.reduced);
         }
@@ -573,8 +580,9 @@ impl Island {
     }
 
     /// The frame's part after the layout: the window follows its capsule and
-    /// piece, and closes on its exit motion when either is gone; the window
-    /// being left closes towards its piece's pill as the bar has it.
+    /// piece, and closes on its exit motion when either is gone; a window
+    /// closing on another capsule goes towards its piece's pill as the bar
+    /// has it.
     pub(super) fn sheets_after_layout(&mut self, now: Instant) {
         for piece in self.sheets.leaving_pieces(now) {
             if let Some(pill) = self.bar.as_ref().and_then(|bar| bar.pill_of(piece, now)) {
@@ -721,8 +729,8 @@ impl Island {
                     }
                     Hit::Outside => {
                         self.sheets.leave_body(now, measure);
-                        // A window still painted as it closes in a switch
-                        // takes nothing and closes nothing.
+                        // A window still painted as it closes on another
+                        // capsule takes nothing and closes nothing.
                         if press && self.sheets.on_leaving(anchor.surface, now, x, y) {
                             return Some(Vec::new());
                         }

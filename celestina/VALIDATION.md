@@ -1727,6 +1727,9 @@ None has been run and none is closed by an agent.
 - **Requires:** the deployed shell after the landing of CEL-D-009 and a layout
   whose end capsule holds the energy (power profile), Bluetooth, brightness
   and system load pieces, and whose start capsule holds the notifications piece
+- **Note:** since CEL-D-015 a switch inside one capsule is one window that travels
+  to the new menu's shape; the "exactly two windows" step is superseded by
+  `VAL-CEL-D-015`
 - **Procedure:** open the energy menu, then the Bluetooth, brightness and
   system load menus one by one, and read each window's edges and the space
   under its last row. Open a menu on the start capsule (notifications). Open
@@ -1914,6 +1917,9 @@ None has been run and none is closed by an agent.
   whose end capsule holds the energy (power profile) and system load pieces
 - **Note:** since CEL-D-014 the piece stays in its slot; the slot, subtitle-gesture
   and crossfade parts of this procedure no longer apply
+- **Note:** since CEL-D-015 a switch inside one capsule is one window that travels,
+  not an old window blurring out while a new one grows; that switch step is
+  superseded by `VAL-CEL-D-015`
 - **Procedure:** open the energy menu and close it by pressing outside it;
   open the system load menu and close it with Escape; with one of them open,
   press another piece of the same capsule (a switch); open and close a menu
@@ -2042,3 +2048,33 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-014](docs/evidence/2026-11-27-cel-d-014-piece-in-slot.md)
+
+## VAL-CEL-D-015 — A menu switch is one window that travels
+
+- **Status:** pending
+- **Related implementation:** CEL-D-015 (a switch between two menus of one
+  capsule is one window that travels to the new menu's shape in 300 ms while
+  the old content blurs out and the new one sharpens in; the pill slides to the
+  new piece; a menu opened on another capsule opens at once while the old
+  window closes; a request on the capsule of a closing window travels from the
+  shape shown instead of opening a second window)
+- **Requires:** the deployed shell after the landing of CEL-D-015 and a layout
+  whose end capsule holds network, Bluetooth, volume and brightness, and whose
+  start capsule holds the notifications bell
+- **Procedure:** (1) open the network menu and switch to Bluetooth, volume and
+  brightness one by one, fast and slowly; (2) with a menu open in the end
+  capsule, press the bell, then press the end capsule's piece again; (3) press
+  outside to close a menu and press its piece again before the close ends;
+  (4) press volume, the bell and volume again within a quarter of a second;
+  (5) repeat (1) once with reduced motion on
+- **Pass condition:** during a switch there is one box on the capsule, which
+  moves and resizes to the new menu while the old content blurs out and the new
+  one sharpens in, and the pill is on the new piece; a menu on the other
+  capsule opens while the old one closes, and no window is left on the first
+  capsule; a press during a close brings the same window back from the shape it
+  had, with no second window; a quick back and forth ends with the last menu
+  alone; with reduced motion the window takes the new menu's size and
+  content at once and nothing fades; at rest nothing moves
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-015](docs/evidence/2026-11-27-cel-d-015-travelling-switch.md)

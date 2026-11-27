@@ -491,12 +491,17 @@ fn the_leaving_window_keeps_its_own_pill() {
     let t = t0 + ms(400);
     step(&mut island, t);
     let before = island.sheet_anchor(t).map(|a| a.pill);
-    let core = brightness_core(&island.theme);
-    assert!(island.open_level_sheet_at(brightness_key(), core, t));
+    // A menu of another capsule: the volume's window closes where it was.
+    let bell = Key::named("bell");
+    let at = centre(bar_rect(&island, bell));
+    assert!(click_at(&mut island, at, BTN_LEFT, t).is_empty());
     let leaving = island.sheets.leaving_pill();
     assert_eq!(leaving, before, "the old window folds into the pill it had");
     let now = island.sheet_anchor(t).map(|a| a.pill);
     assert_ne!(leaving, now, "the new window grows from the new piece's");
+    // The pill it folds into follows its piece while it closes.
+    step(&mut island, t + ms(100));
+    assert_eq!(island.sheets.leaving_pieces(t + ms(100)), [volume()]);
 }
 
 #[test]

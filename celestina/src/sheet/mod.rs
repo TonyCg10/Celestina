@@ -3,9 +3,11 @@
 //! under the grey open pill (CEL-D-014), and the window hangs from it. The
 //! pure rules ([`geometry`]) and clocks ([`motion`]) hold no painter and no
 //! GL; [`Sheets`] owns what is open on one output: the window's rect, its
-//! body, the window being left in a switch (it closes towards its piece on
-//! its own clock), the open that waits for another thing to close and the
-//! scroll. The Island wires it to the bar (`island::sheets`).
+//! body, the body it is leaving when another menu of the same capsule takes
+//! its place (the window stays and travels to the new menu's shape,
+//! CEL-D-015), the window of another capsule that closes towards its own
+//! piece on its own clock, the open that waits for the Island's page to close
+//! and the scroll. The Island wires it to the bar (`island::sheets`).
 //!
 //! Nothing here stores a measure: whatever cuts or measures text takes the
 //! caller's `Measure` for the length of the call, because the painter is
@@ -90,14 +92,32 @@ struct OpenSheet {
     target: Rect,
     /// The body's size at the last look.
     size: (f32, f32),
+    /// The content a travel is leaving, until it has gone (90 ms in).
+    old: Option<OldBody>,
+    /// The window the content left sat in: with the live target it sizes the
+    /// travel's blur layer, so the layer keeps its size through the travel.
+    left: Rect,
 }
 
-/// The window being left in a switch: its body with the scroll it had, on
-/// its own clock, closing towards the pill of its own piece.
+/// The body a travel leaves: it shows (fading and blurring out) where it was
+/// laid out, at its own scroll, and takes no input.
+#[derive(Debug)]
+struct OldBody {
+    body: SheetBody,
+    scroll: f32,
+    /// The window it had.
+    target: Rect,
+}
+
+/// The window of another capsule left when a menu opens: its body with the
+/// scroll it had, on its own clock, closing towards the pill of its own
+/// piece.
 #[derive(Debug)]
 struct Leaving {
     body: SheetBody,
     scroll: f32,
+    /// The bar zone whose capsule it hung from.
+    zone: usize,
     /// The piece it was open on.
     piece: Key,
     /// The close's clock.
@@ -162,13 +182,14 @@ fn translated(ev: &InputEvent, dx: f32, dy: f32) -> InputEvent {
     }
 }
 
-/// The owner of what is open on one output's bar: at most one sheet, plus
-/// the one thing that waits for it to close.
+/// The owner of what is open on one output's bar: at most one sheet (and the
+/// ones still closing on other capsules), plus the one thing that waits for
+/// the Island's page to close.
 #[derive(Debug, Default)]
 pub struct Sheets {
     open: Option<OpenSheet>,
-    /// The windows being left in switches, each closing towards its own
-    /// piece's pill on its own clock until it has closed.
+    /// The windows of other capsules left when a menu opened, each closing
+    /// towards its own piece's pill on its own clock until it has closed.
     leaving: Vec<Leaving>,
     queued: Option<Next>,
     scroll: Scroll,
@@ -356,9 +377,10 @@ impl Sheets {
         Some(o.motion.rect(now, to, anchor.surface))
     }
 
-    /// The windows painted at `now`, each with its corner radius: the one
-    /// open (or closing, under `anchor`) and the one being left in a switch.
-    /// What the glass, the blur and the input regions cover; a closing
+    /// The windows painted at `now`, each with its corner radius: the ones
+    /// closing on other capsules and the one open (or closing, under
+    /// `anchor`), which travels in place when the menu switches. What the
+    /// glass, the blur and the input regions cover; a closing
     /// window leaves once its glass is below 35 % (the backdrop blur cannot
     /// fade).
     #[must_use]
@@ -386,7 +408,7 @@ impl Sheets {
         out
     }
 
-    /// Whether (`x`, `y`) is on a window being left in a switch, which is
+    /// Whether (`x`, `y`) is on a window closing on another capsule, which is
     /// still painted for a moment but takes nothing.
     #[must_use]
     pub fn on_leaving(&self, surface: (f32, f32), now: Instant, x: f32, y: f32) -> bool {
@@ -396,15 +418,16 @@ impl Sheets {
         })
     }
 
-    /// The pill of the piece the window being left closes towards, as the bar
-    /// has it now.
+    /// The pill of the piece the window closing on another capsule closes
+    /// towards, as the bar has it now.
     pub fn follow_leaving(&mut self, piece: Key, pill: Rect) {
         for l in self.leaving.iter_mut().filter(|l| l.piece == piece) {
             l.pill = pill;
         }
     }
 
-    /// The pieces whose windows are being left, while they close.
+    /// The pieces whose windows are closing on other capsules, while they
+    /// close.
     #[must_use]
     pub fn leaving_pieces(&self, now: Instant) -> Vec<Key> {
         self.leaving
@@ -414,14 +437,22 @@ impl Sheets {
             .collect()
     }
 
-    /// Drops what has finished: a window whose close ended, a window
-    /// that has closed.
+    /// Drops what has finished: a window whose close ended, a window that
+    /// has closed, the content a travel has left.
     fn reap(&mut self, now: Instant) {
         if self.open.as_ref().is_some_and(|o| o.motion.closed(now)) {
             self.open = None;
             self.scroll = Scroll::default();
             self.hovering = false;
             self.bump();
+        }
+        if let Some(o) = self.open.as_mut() {
+            if o.old.is_some() && o.motion.old_content(now).is_none() {
+                if let Some(mut old) = o.old.take() {
+                    old.body.flush(now);
+                }
+                self.bump();
+            }
         }
         let folding = self.leaving.len();
         self.leaving.retain(|l| !l.motion.closed(now));
@@ -437,10 +468,17 @@ impl Sheets {
         }
     }
 
-    /// Opens `request` from `anchor`, or, with a sheet already open (not
-    /// closing), switches it to the request's body: the old window closes towards
-    /// into its own piece's pill while the new one grows out of its piece's.
-    /// What the old body held goes out first.
+    /// Opens `request` from `anchor`. In this order:
+    /// - a window on the request's capsule (open or closing) stays and
+    ///   travels to the new menu's shape from the one it shows; the content it
+    ///   leaves fades and blurs out on it, and the one it holds longer wins
+    ///   when it was already leaving one;
+    /// - a window of that capsule still closing in `leaving` is taken back
+    ///   and travels from its shape;
+    /// - a window open on another capsule goes to `leaving` and closes
+    ///   towards its own piece (what its body held goes out first), and the
+    ///   new window opens from its piece's pill at once;
+    /// - with nothing open, a fresh window grows from the pill.
     pub fn open(
         &mut self,
         request: Request,
@@ -463,47 +501,44 @@ impl Sheets {
         } = request;
         let size = body.size();
         let target = Sheets::target_of(anchor, size);
-        if let Some(o) = self.open.as_mut().filter(|o| !o.motion.is_closing()) {
-            // The window being left closes towards its own piece's pill on its
-            // own clock; the new one grows out of its piece's.
-            let shown = o.motion.rect(now, o.target, anchor.surface);
-            let mut folding = std::mem::replace(
-                &mut o.motion,
-                SheetMotion::open(anchor.pill, theme, now, reduced),
-            );
-            folding.close(shown, o.anchor.pill, now);
-            let mut old = std::mem::replace(&mut o.body, body);
-            old.flush(now);
-            self.leaving.push(Leaving {
-                body: old,
-                scroll: self.scroll.offset(),
-                piece: o.piece,
-                motion: folding,
-                target: o.target,
-                pill: o.anchor.pill,
-                capsule: o.anchor.capsule,
-            });
-            o.zone = zone;
-            o.piece = piece;
-            o.kind = kind;
-            o.anchor = *anchor;
-            o.target = target;
-            o.size = size;
-            self.scroll = Scroll::default();
-        } else {
-            if let Some(mut old) = self.open.take() {
-                old.body.flush(now);
-            }
-            self.open = Some(OpenSheet {
+        let fresh =
+            |motion: SheetMotion, body: SheetBody, old: Option<OldBody>, left: Rect| OpenSheet {
                 zone,
                 piece,
                 kind,
                 body,
-                motion: SheetMotion::open(anchor.pill, theme, now, reduced),
+                motion,
                 anchor: *anchor,
                 target,
                 size,
-            });
+                old,
+                left,
+            };
+        if self.open.as_ref().is_some_and(|o| o.zone == zone) {
+            self.travel_in_place(fresh, body, theme, now, reduced);
+        } else {
+            let back = self
+                .leaving
+                .iter()
+                .position(|l| l.zone == zone)
+                .map(|i| self.leaving.remove(i));
+            self.park_open(now, anchor.surface);
+            if let Some(l) = back {
+                let mut motion = l.motion;
+                let shown = motion.rect(now, l.pill, anchor.surface);
+                let content = motion.content_shown(now);
+                motion.set_reduced(reduced);
+                motion.travel(shown, content, theme, now);
+                let old = motion.old_content(now).is_some().then_some(OldBody {
+                    body: l.body,
+                    scroll: l.scroll,
+                    target: l.target,
+                });
+                self.open = Some(fresh(motion, body, old, l.target));
+            } else {
+                let motion = SheetMotion::open(anchor.pill, theme, now, reduced);
+                self.open = Some(fresh(motion, body, None, target));
+            }
             self.scroll = Scroll::default();
         }
         self.hovering = false;
@@ -511,8 +546,123 @@ impl Sheets {
         self.bump();
     }
 
+    /// The open window, on the request's capsule, travels to the request's
+    /// shape. `make` builds the window's new state around `body`.
+    fn travel_in_place(
+        &mut self,
+        make: impl FnOnce(SheetMotion, SheetBody, Option<OldBody>, Rect) -> OpenSheet,
+        body: SheetBody,
+        theme: &Theme,
+        now: Instant,
+        reduced: bool,
+    ) {
+        let Some(o) = self.open.take() else {
+            return;
+        };
+        let surface = o.anchor.surface;
+        let OpenSheet {
+            body: previous,
+            mut motion,
+            anchor,
+            target,
+            old,
+            ..
+        } = o;
+        let end = if motion.is_closing() {
+            anchor.pill
+        } else {
+            target
+        };
+        let shown = motion.rect(now, end, surface);
+        let previous_shown = motion.content_shown(now);
+        // The content still on its way out, when the window was already
+        // leaving one.
+        let left = old.and_then(|mut old| match motion.old_content(now) {
+            Some(s) => Some((old, s)),
+            None => {
+                old.body.flush(now);
+                None
+            }
+        });
+        // What the body left holds goes out now, as it did when a switch
+        // closed it: only its painting stays for the travel's first 90 ms.
+        let mut previous = previous;
+        previous.flush(now);
+        let previous = OldBody {
+            body: previous,
+            scroll: self.scroll.offset(),
+            target,
+        };
+        // One old content at a time: whichever shows more now (ties: the
+        // body that was open); the other is flushed and dropped.
+        let (kept, content) = match left {
+            Some((old, s)) if s.alpha > previous_shown.alpha => {
+                let mut gone = previous;
+                gone.body.flush(now);
+                (old, s)
+            }
+            left => {
+                if let Some((mut old, _)) = left {
+                    old.body.flush(now);
+                }
+                (previous, previous_shown)
+            }
+        };
+        motion.set_reduced(reduced);
+        motion.travel(shown, content, theme, now);
+        let left = kept.target;
+        let held = if motion.old_content(now).is_some() {
+            Some(kept)
+        } else {
+            let mut kept = kept;
+            kept.body.flush(now);
+            None
+        };
+        self.open = Some(make(motion, body, held, left));
+        self.scroll = Scroll::default();
+    }
+
+    /// Sends the open window, if any, to `leaving` on its close towards its
+    /// own piece (the close it already runs, if it was closing). What its
+    /// body held goes out first; a content it was leaving is dropped.
+    fn park_open(&mut self, now: Instant, surface: (f32, f32)) {
+        let Some(o) = self.open.take() else {
+            return;
+        };
+        let OpenSheet {
+            zone,
+            piece,
+            mut body,
+            mut motion,
+            anchor,
+            target,
+            old,
+            ..
+        } = o;
+        if let Some(mut old) = old {
+            old.body.flush(now);
+        }
+        if !motion.is_closing() {
+            let shown = motion.rect(now, target, surface);
+            body.flush(now);
+            motion.close(shown, anchor.pill, now);
+        }
+        self.leaving.push(Leaving {
+            body,
+            scroll: self.scroll.offset(),
+            zone,
+            piece,
+            motion,
+            target,
+            pill: anchor.pill,
+            capsule: anchor.capsule,
+        });
+    }
+
     /// Starts the close: the window goes towards the pill of its piece. What
-    /// its body holds goes out first. Does nothing without an open window.
+    /// its body holds goes out first; a close that cuts a travel short fades
+    /// from the content and glass shown then, and drops the content the
+    /// travel was leaving. Does nothing without an open window.
     /// The piece gives back its pill and opacity at the restore moment
     /// ([`motion::PIECE_RESTORE_AT`], the bar's clock).
     pub fn close(&mut self, anchor: &Anchor, now: Instant) {
@@ -526,6 +676,9 @@ impl Sheets {
             return;
         };
         o.body.flush(now);
+        if let Some(mut old) = o.old.take() {
+            old.body.flush(now);
+        }
         o.motion.close(shown, anchor.pill, now);
         self.hovering = false;
         self.bump();
@@ -537,6 +690,9 @@ impl Sheets {
     pub fn drop_open(&mut self, now: Instant) {
         if let Some(mut old) = self.open.take() {
             old.body.flush(now);
+            if let Some(mut left) = old.old.take() {
+                left.body.flush(now);
+            }
             self.leaving.clear();
             self.scroll = Scroll::default();
             self.hovering = false;
@@ -733,23 +889,29 @@ impl Sheets {
         changed
     }
 
-    /// Lays the bodies out (the open one and the one being left).
+    /// Lays the bodies out (the open one, the content a travel leaves and
+    /// the windows closing on other capsules).
     pub fn layout(&mut self, lay: &mut dyn FnMut(&mut Tree, (f32, f32))) {
         if let Some(o) = self.open.as_mut() {
             o.body.layout(lay);
+            if let Some(old) = o.old.as_mut() {
+                old.body.layout(lay);
+            }
         }
         for l in &mut self.leaving {
             l.body.layout(lay);
         }
     }
 
-    /// Paints the windows: the one being left (closing towards its pill)
-    /// under the open one. Each is its Haze at its rect and corner radius,
-    /// sharp, then its body under one rounded clip of that rect. A window that
-    /// closes draws its body through the blur and shrunk with its rect
-    /// towards the pill, as the preview does, while its glass keeps a sharp
-    /// edge. The body sits at its window's target, so the rect reveals it
-    /// rather than carrying it.
+    /// Paints the windows: the ones closing on other capsules (towards their
+    /// pills) under the open one. Each is its Haze at its rect and corner
+    /// radius, sharp, then its body under one rounded clip of that rect. A
+    /// window that closes draws its body through the blur and shrunk with its
+    /// rect towards the pill, as the preview does, while its glass keeps a
+    /// sharp edge. An open window draws its glass once at its rect (it
+    /// travels when the menu switches), then the content it is leaving and
+    /// the new body, each at its own opacity and blur, sitting at its own
+    /// window's target: the rect reveals them rather than carrying them.
     pub fn paint(&mut self, painter: &mut Painter, anchor: &Anchor, now: Instant) {
         let surface = anchor.surface;
         for l in &mut self.leaving {
@@ -783,17 +945,44 @@ impl Sheets {
             return;
         };
         let target = Sheets::target_of(anchor, o.body.size());
-        let look = Look {
+        let radius = o.motion.radius(now);
+        if o.motion.is_closing() {
+            let look = Look {
+                rect,
+                radius,
+                glass: o.motion.glass_opacity(now),
+                alpha: o.motion.body_opacity(now),
+                target,
+                at: (target.x, target.y - offset),
+                layer: blur_layer(&o.motion, anchor.capsule, anchor.pill, surface, now),
+                start_radius: o.motion.start_radius(),
+            };
+            paint_window(painter, &look, &mut |p| o.body.paint(p, now));
+            return;
+        }
+        haze_at(painter, rect, radius, o.motion.glass_opacity(now));
+        let layer = cover(&[o.left, target], surface);
+        if let (Some(old), Some(shown)) = (o.old.as_mut(), o.motion.old_content(now)) {
+            let at = (old.target.x, old.target.y - old.scroll);
+            paint_content(
+                painter,
+                rect,
+                radius,
+                at,
+                shown.alpha,
+                (layer, shown.blur),
+                &mut |p| old.body.paint(p, now),
+            );
+        }
+        paint_content(
+            painter,
             rect,
-            radius: o.motion.radius(now),
-            glass: o.motion.glass_opacity(now),
-            alpha: o.motion.body_opacity(now),
-            target,
-            at: (target.x, target.y - offset),
-            layer: blur_layer(&o.motion, anchor.capsule, anchor.pill, anchor.surface, now),
-            start_radius: o.motion.start_radius(),
-        };
-        paint_window(painter, &look, &mut |p| o.body.paint(p, now));
+            radius,
+            (target.x, target.y - offset),
+            o.motion.body_opacity(now),
+            (layer, o.motion.content_blur_px(now)),
+            &mut |p| o.body.paint(p, now),
+        );
     }
 
     /// Whether the capsule's changes at `now` are the bar's slide (tests).
@@ -803,7 +992,8 @@ impl Sheets {
         slide_follows(self.slide_until, now)
     }
 
-    /// The pill the window being left closes towards (tests).
+    /// The pill the window closing on another capsule closes towards
+    /// (tests).
     #[cfg(test)]
     #[must_use]
     pub fn leaving_pill(&self) -> Option<Rect> {
@@ -831,11 +1021,34 @@ impl Sheets {
         self.open.as_ref().map(|o| o.body.size())
     }
 
-    /// Whether a body is being left in a switch (tests).
+    /// Whether a window is closing on another capsule (tests).
     #[cfg(test)]
     #[must_use]
     pub fn is_leaving(&self) -> bool {
         !self.leaving.is_empty()
+    }
+
+    /// Whether an old content is held (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn is_swapping(&self) -> bool {
+        self.open.as_ref().is_some_and(|o| o.old.is_some())
+    }
+
+    /// The opacity of the old content at `now` (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn swap_alpha(&self, now: Instant) -> Option<f32> {
+        let o = self.open.as_ref()?;
+        o.old.as_ref()?;
+        o.motion.old_content(now).map(|s| s.alpha)
+    }
+
+    /// The open window's glass opacity at `now` (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn glass(&self, now: Instant) -> Option<f32> {
+        self.open.as_ref().map(|o| o.motion.glass_opacity(now))
     }
 
     /// Whether a clock runs and the surface needs a frame. A sheet at rest
@@ -843,7 +1056,10 @@ impl Sheets {
     #[must_use]
     pub fn wants_frame(&self, now: Instant) -> bool {
         let open = self.open.as_ref().is_some_and(|o| {
-            o.motion.wants_frame(now) || o.motion.closed(now) || o.body.is_animating(now)
+            o.motion.wants_frame(now)
+                || o.motion.closed(now)
+                || o.old.is_some()
+                || o.body.is_animating(now)
         });
         let folding = !self.leaving.is_empty();
         open || folding
@@ -883,13 +1099,27 @@ fn blur_layer(
     if sigma <= 0.0 {
         return (pill, 0.0);
     }
-    let from = motion.start_rect();
-    let low = |a: f32, b: f32, c: f32| a.min(b).min(c) - BLUR_REACH;
-    let high = |a: f32, b: f32, c: f32| a.max(b).max(c) + BLUR_REACH;
-    let x0 = low(from.x, pill.x, capsule.x);
-    let y0 = low(from.y, pill.y, capsule.y);
-    let x1 = high(from.x + from.w, pill.x + pill.w, capsule.x + capsule.w);
-    let y1 = high(from.y + from.h, pill.y + pill.h, capsule.y + capsule.h);
+    (cover(&[motion.start_rect(), pill, capsule], surface), sigma)
+}
+
+/// The room a blurred layer needs for `rects`: their union plus
+/// [`BLUR_REACH`], its edges cut to [`LAYER_GRID`] and to the surface.
+fn cover(rects: &[Rect], surface: (f32, f32)) -> Rect {
+    let low = |edge: fn(&Rect) -> f32| rects.iter().map(edge).fold(f32::INFINITY, f32::min);
+    let high = |edge: fn(&Rect) -> f32| rects.iter().map(edge).fold(f32::NEG_INFINITY, f32::max);
+    let (x0, y0) = (low(|r| r.x) - BLUR_REACH, low(|r| r.y) - BLUR_REACH);
+    let (x1, y1) = (
+        high(|r| r.x + r.w) + BLUR_REACH,
+        high(|r| r.y + r.h) + BLUR_REACH,
+    );
+    if !(x0.is_finite() && y0.is_finite() && x1.is_finite() && y1.is_finite()) {
+        return Rect {
+            x: 0.0,
+            y: 0.0,
+            w: 0.0,
+            h: 0.0,
+        };
+    }
     let down = |v: f32| (v / LAYER_GRID).floor() * LAYER_GRID;
     let up = |v: f32| (v / LAYER_GRID).ceil() * LAYER_GRID;
     let (x1, y1) = (
@@ -897,14 +1127,16 @@ fn blur_layer(
         up(y1).min(surface.1).max(0.0),
     );
     let (x0, y0) = (down(x0).max(0.0).min(x1), down(y0).max(0.0).min(y1));
-    let layer = Rect {
+    Rect {
         x: x0,
         y: y0,
         w: (x1 - x0).max(0.0),
         h: (y1 - y0).max(0.0),
-    };
-    (layer, sigma)
+    }
 }
+
+/// A content's blur under this (logical px) is drawn plain.
+const MIN_CONTENT_BLUR_PX: f32 = 0.05;
 
 /// What one window is painted with at a frame.
 struct Look {
@@ -993,6 +1225,40 @@ fn paint_body(
     painter.translate(at.0, at.1);
     painter.opacity(alpha);
     paint(painter);
+    painter.pop_state();
+    painter.pop_clip();
+}
+
+/// Paints one content of a travelling window: under one rounded clip of
+/// `rect`, at `at`, at `alpha`. Below 0.05 px of blur it is plain; otherwise
+/// the clip is set outside the blur's layer (the composite honours it) and the
+/// content goes through [`Painter::blurred`] over `blur.0`.
+fn paint_content(
+    painter: &mut Painter,
+    rect: Rect,
+    radius: f32,
+    at: (f32, f32),
+    alpha: f32,
+    blur: (Rect, f32),
+    body: &mut dyn FnMut(&mut Painter),
+) {
+    if alpha <= 0.0 {
+        return;
+    }
+    let (layer, sigma) = blur;
+    if sigma < MIN_CONTENT_BLUR_PX {
+        paint_body(painter, rect, radius, at, alpha, body);
+        return;
+    }
+    painter.push_clip(rect, radius);
+    painter.push_state();
+    painter.opacity(alpha);
+    painter.blurred(layer, sigma, &mut |p| {
+        p.push_state();
+        p.translate(at.0, at.1);
+        body(p);
+        p.pop_state();
+    });
     painter.pop_state();
     painter.pop_clip();
 }
@@ -1122,5 +1388,29 @@ mod tests {
         // A window with no size shrinks nothing and never goes negative.
         assert_eq!(follow(r(0.0, 0.0, 0.0, 0.0), target), (1.0, 1.0));
         assert_eq!(follow(target, r(0.0, 0.0, -5.0, 10.0)).0, 0.0);
+    }
+
+    #[test]
+    fn the_travel_layer_covers_both_bodies_on_the_grid() {
+        let surface = (1920.0, 1080.0);
+        let old = r(930.0, 56.0, 240.0, 236.0);
+        let new = r(800.0, 56.0, 360.0, 300.0);
+        let layer = cover(&[old, new], surface);
+        for body in [old, new] {
+            assert!(layer.x <= body.x - BLUR_REACH);
+            assert!(layer.y <= body.y - BLUR_REACH);
+            assert!(layer.x + layer.w >= body.x + body.w + BLUR_REACH);
+            assert!(layer.y + layer.h >= body.y + body.h + BLUR_REACH);
+        }
+        for edge in [layer.x, layer.y, layer.x + layer.w, layer.y + layer.h] {
+            assert_eq!(edge % LAYER_GRID, 0.0, "{layer:?}");
+        }
+        assert!(layer.x >= 0.0 && layer.y >= 0.0);
+        assert!(layer.x + layer.w <= surface.0 && layer.y + layer.h <= surface.1);
+        // The order does not matter, and a body beside the surface's edge is
+        // cut to it.
+        assert_eq!(cover(&[new, old], surface), layer);
+        let cut = cover(&[old, new], (1000.0, 200.0));
+        assert!(cut.x + cut.w <= 1000.0 && cut.y + cut.h <= 200.0);
     }
 }

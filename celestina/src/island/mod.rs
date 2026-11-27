@@ -5739,9 +5739,11 @@ mod tests {
         let core = brightness_core(&island.theme);
         assert!(island.open_level_sheet_at(brightness_key(), core, t));
         step(&mut island, t);
-        // One sheet, switched: it never closed and nothing waits.
+        // One sheet, switched: it never closed and nothing waits, and no
+        // second window is left behind.
         assert!(island.sheets.is_open());
         assert!(!island.sheets.has_queued());
+        assert!(!island.sheets.is_leaving());
         assert_eq!(
             island.sheets.kind(),
             Some(crate::pieces::SheetKind::Brightness)
@@ -5997,9 +5999,9 @@ mod tests {
             step(&mut island, now);
             assert!(island.sheets.is_open(), "open at +{t} ms");
             assert!(!island.state.is_open());
-            // The old window closes towards its piece in 260 ms while the
-            // new one grows.
-            assert_eq!(island.sheets.is_leaving(), t < 260, "leaving at +{t} ms");
+            // One window travels; the old content is held for 90 ms.
+            assert!(!island.sheets.is_leaving(), "leaving at +{t} ms");
+            assert_eq!(island.sheets.is_swapping(), t < 90, "swapping at +{t} ms");
         }
         assert_eq!(island.sheets.piece(), Some(brightness_key()));
         // The rect started from where it was.
@@ -6808,6 +6810,16 @@ mod tests {
         assert!(!(island.state.is_open() && island.sheets.is_open()));
         step(&mut island, t + ms(400));
         assert!(island.sheets.is_open() && !island.state.is_open());
+        // The newer request wins: the page that waited is given up, so it
+        // does not open on its own when that sheet closes.
+        assert!(!island.sheets.has_queued(), "the page no longer waits");
+        let later = t + ms(400);
+        island.close_sheet(later);
+        step(&mut island, later + ms(1));
+        step(&mut island, later + ms(400));
+        assert!(!island.sheets.is_shown(later + ms(400)));
+        assert!(!island.state.is_open(), "the page stays closed");
+        assert!(!island.anything_open());
     }
 
     mod lent;

@@ -1,0 +1,49 @@
+# CEL-D-015 exact change inventory
+
+Base revision	0f7e4cd1f6897629129df536bc469e66400f8d25
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/rest-after-each.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/s1-bt-vol.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/s1-net-bt.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/s2-vol-bell.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/s3-bell-vol-bell.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/s4-vol-bell-vol.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/s5-close-reopen.jpg
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-015.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/sheets.rs
+Pathspec	celestina/src/island/tests/open_piece.rs
+Pathspec	celestina/src/island/tests/page_sheets.rs
+Pathspec	celestina/src/island/tests/window.rs
+Pathspec	celestina/src/sheet/mod.rs
+Pathspec	celestina/src/sheet/motion.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	cc5001ebbeb6d4150dad5a52eaa4944502bbfe9e38754fd2086b2db862a9f63a	celestina/Cargo.lock
+1	1	d17fb6abc95eaab49966eca5a4df9aeb8765ee119ac505610d5c51da643655d4	celestina/Cargo.toml
+36	0	f56de242cfc4623bbfab878158a6c2f49f8f02e5f724d817532fce4778cf4a0d	celestina/VALIDATION.md
+61	0	ec25beea95378e4273733681fa92c7b767145f451ffdfa07941ae10bc747ed1d	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch.md
+-	-	b1140befc67e2c335b1012d6907e3bd1fb561a49227a408d37cae0c758ad8c4e	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/rest-after-each.jpg
+-	-	052cfeafdc29dd6205fbf4918f5642b44cc099691c4a4c978c71f49f81206018	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/s1-bt-vol.jpg
+-	-	4c2a7442c23b4231a7626adb9b137711bb2b14ebd68968f59465065980593545	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/s1-net-bt.jpg
+-	-	b0bb0b70494b5f5c589d6aa66189ee083efbabb94380ca6da5345d37f294530e	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/s2-vol-bell.jpg
+-	-	fb52d2891e3f2b4106d5c5779e4a3198d040c6e01fb83c823fd5aa07ceed5a72	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/s3-bell-vol-bell.jpg
+-	-	4e0e5b77d62e3e31efbf60aa034f0b4a1d49234f9290c4b19960552603d88a63	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/s4-vol-bell-vol.jpg
+-	-	feafcce68633795300b82eb32f45fc0f8a20762f90ad0e48eb55c562cace80ae	celestina/docs/evidence/2026-11-27-cel-d-015-travelling-switch/s5-close-reopen.jpg
+49	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-015.numstat.tsv
+1	0	170018aed35154d01b4f4d87407881303e7588f5ef57659eba3645edde5a7440	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+16	4	592da633769df7b62c37334d608f42ab76aec9f2ef03232dbfe18254f3be420a	celestina/src/island/mod.rs
+22	14	b50af652d01c13621770540eaacbc81a4a8d5742a00991a6524cfb7109ed3fde	celestina/src/island/sheets.rs
+7	2	240ba74ead740b09b1ad01902e8a29a35fa1ffc607abf781982afad215b71659	celestina/src/island/tests/open_piece.rs
+78	1	cc1a4594ca038204d6fce24a1cde39d4cfd012faab48ebfc793aba01162e15bc	celestina/src/island/tests/page_sheets.rs
+222	94	8934334d42048ca3ecb9888f058e9d8365e276d2cbaff8bc9b1ac8beea6aee0d	celestina/src/island/tests/window.rs
+378	88	9f865f3a60eeec5cc554cfbd2f4aeebe1510c6f22beda8f3b22ff6478a33707a	celestina/src/sheet/mod.rs
+381	15	b836ad5e15fc0d8f0869fa8452bc2ac9c4c1a8459bfea2aba7fe17aa2d567083	celestina/src/sheet/motion.rs
+1	0	42c254f36b8b20fa68f40a607776548b3a9b2911ecb91fb2162f4224ab52446e	docs/version-history.tsv
