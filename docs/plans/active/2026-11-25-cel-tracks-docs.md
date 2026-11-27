@@ -12,7 +12,7 @@
   2026-11-25; on 2026-11-25 too, the previews of the session menu,
   the icon tabs and the per-app mute button (variant A of each); on
   2026-11-25 as well, the capsule sheets preview (version 7) and design for
-  CEL-D-002 to CEL-D-005; on 2026-11-26, the preview of CEL-D-007 (O1 and P1); on 2026-11-26 too, the notifications and tray preview and design for CEL-I-010 to CEL-I-012 (variant A, list G2)
+  CEL-D-002 to CEL-D-005; on 2026-11-26, the preview of CEL-D-007 (O1 and P1); on 2026-11-26 too, the notifications and tray preview and design for CEL-I-010 to CEL-I-012 (variant A, list G2); on 2026-11-26 as well, the launcher preview (tabs variant A, hold Backspace with the clear button, localized names), its approaches and its design for CEL-I-014 to CEL-I-017, STYLE-ICONS-2 and CEL-D-012
 - **Scope:** suite
 - **Implementation checkpoint:** TRK-1
 - **Author-validation checkpoint:** none
@@ -65,5 +65,6 @@ tracks.
 | CEL-TRACKS-DOCS-6 | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-6.numstat.tsv) | 5 files, +184/-35 | Update the capsule sheets design to the menu as its own window the author approved on 2026-11-26 (CEL-D-009) and add the CEL-D-009 plan | [evidence](../../evidence/2026-11-26-cel-tracks-docs-6.md) | None |
 | CEL-TRACKS-DOCS-7 | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-7.numstat.tsv) | 5 files, +131/-9 | Update the capsule sheets design to the menu close the author approved on 2026-11-26 (CEL-D-010) and add the CEL-D-010 plan | [evidence](../../evidence/2026-11-26-cel-tracks-docs-7.md) | None |
 | CEL-TRACKS-DOCS-8 | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-8.numstat.tsv) | 7 files, +509/-1 | Add the notifications and tray design the author approved on 2026-11-26 and the CEL-I-010, CEL-I-011 and CEL-I-012 plans | [evidence](../../evidence/2026-11-26-cel-tracks-docs-8.md) | None |
+| CEL-TRACKS-DOCS-10 | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-10.numstat.tsv) | 9 files, +1232/-1 | Add the launcher design the author approved on 2026-11-26 (tabs, grid, scrolling, search, quick clear, calculator) and the CEL-I-014 to CEL-I-017 and CEL-D-012 plans | [evidence](../../evidence/2026-11-26-cel-tracks-docs-10.md) | None |
 
 This plan records intent; it grants no authority.
