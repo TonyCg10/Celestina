@@ -1,0 +1,35 @@
+# STYLE-ICONS-2 exact change inventory
+
+Base revision	ccf142d8c4f3a11d8b4b9aebeda5b1fa419195f7
+Pathspec	celestina-style/CMakeLists.txt
+Pathspec	celestina-style/CelestinaIcons.qml
+Pathspec	celestina-style/ROADMAP.md
+Pathspec	celestina-style/STATUS.md
+Pathspec	celestina-style/docs/evidence/2026-11-26-launcher-icons.md
+Pathspec	celestina-style/docs/inventories/2026-11-25-shell-track-icons/STYLE-ICONS-2.numstat.tsv
+Pathspec	celestina-style/docs/plans/active/2026-11-25-shell-track-icons.md
+Pathspec	celestina-style/icons.qrc
+Pathspec	celestina-style/icons/arrow-down-a-z.svg
+Pathspec	celestina-style/icons/calculator.svg
+Pathspec	celestina-style/icons/globe.svg
+Pathspec	celestina-style/icons/rotate-ccw-clock.svg
+Pathspec	celestina-style/tests/tst_iconcatalog.qml
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+5	1	e6ac46ddec8097d05b865212c497ef83b1a0bd2d8fba0a02cf52a061b97f3e63	celestina-style/CMakeLists.txt
+4	0	9c76104acb7108486518f1fd389aa2e8e7605921779a36c2ff32c132fd174374	celestina-style/CelestinaIcons.qml
+3	1	ef63d781de8422c1c548c9575075efb1bbcd9d27245a73c99c573260db8aa077	celestina-style/ROADMAP.md
+2	1	708eccdc476ebe48a2ea4c9869ab3232e81f9523e577447908bb140cac9d18e2	celestina-style/STATUS.md
+57	0	92f857cc3042e003d9b61c29957203426a9163933f3236323c477c486264e9f0	celestina-style/docs/evidence/2026-11-26-launcher-icons.md
+35	0	self	celestina-style/docs/inventories/2026-11-25-shell-track-icons/STYLE-ICONS-2.numstat.tsv
+1	0	74424b3bad3adfcefc764ffd8145d2f8faf839043f747a5ce321b998be90467b	celestina-style/docs/plans/active/2026-11-25-shell-track-icons.md
+4	0	3a985d0538e10f6c1841f8a6e7bb67b8f5bcb26f26d15132c830db8175652028	celestina-style/icons.qrc
+17	0	d8cb32e25ad76c7a1d769ebfde46de753703b0265642e20ae8b128e51ddc2e70	celestina-style/icons/arrow-down-a-z.svg
+22	0	30e4b93e764217fd8ae4f4188d4c14640ad827bb9f86fff85cef0be2ac6b4bf0	celestina-style/icons/calculator.svg
+15	0	57320421f9d5958f943ac8afe7b08d4dc439c880422e3e0dc1d05ed7fb6ed9ab	celestina-style/icons/globe.svg
+15	0	55bc9816ecf689d11f782c4ee1d5d76deed64842dec82766d3a02f2051d47cf3	celestina-style/icons/rotate-ccw-clock.svg
+2	1	305394d72979639aa32bacd821dc35615cbe22cb8bc3f2a127173521aa90d423	celestina-style/tests/tst_iconcatalog.qml
+1	0	6d21f89d77d695f9a416e93977822fb992001aeb9989a09b8141b5ca9708c5ff	docs/version-history.tsv

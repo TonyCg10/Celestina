@@ -40,12 +40,14 @@
     <file alias="power.svg">icons/power.svg</file>
     <file alias="app-window.svg">icons/app-window.svg</file>
     <file alias="arrow-down.svg">icons/arrow-down.svg</file>
+    <file alias="arrow-down-a-z.svg">icons/arrow-down-a-z.svg</file>
     <file alias="arrow-right.svg">icons/arrow-right.svg</file>
     <file alias="bell.svg">icons/bell.svg</file>
     <file alias="bell-off.svg">icons/bell-off.svg</file>
     <file alias="binary.svg">icons/binary.svg</file>
     <file alias="bluetooth.svg">icons/bluetooth.svg</file>
     <file alias="bookmark-plus.svg">icons/bookmark-plus.svg</file>
+    <file alias="calculator.svg">icons/calculator.svg</file>
     <file alias="calendar.svg">icons/calendar.svg</file>
     <file alias="check.svg">icons/check.svg</file>
     <file alias="chevron-down.svg">icons/chevron-down.svg</file>
@@ -78,6 +80,7 @@
     <file alias="folder-sync.svg">icons/folder-sync.svg</file>
     <file alias="gamepad-2.svg">icons/gamepad-2.svg</file>
     <file alias="gauge.svg">icons/gauge.svg</file>
+    <file alias="globe.svg">icons/globe.svg</file>
     <file alias="hard-drive.svg">icons/hard-drive.svg</file>
     <file alias="image.svg">icons/image.svg</file>
     <file alias="info.svg">icons/info.svg</file>
@@ -94,6 +97,7 @@
     <file alias="pin.svg">icons/pin.svg</file>
     <file alias="printer.svg">icons/printer.svg</file>
     <file alias="rotate-ccw.svg">icons/rotate-ccw.svg</file>
+    <file alias="rotate-ccw-clock.svg">icons/rotate-ccw-clock.svg</file>
     <file alias="scissors.svg">icons/scissors.svg</file>
     <file alias="share-2.svg">icons/share-2.svg</file>
     <file alias="system-tray.svg">icons/system-tray.svg</file>

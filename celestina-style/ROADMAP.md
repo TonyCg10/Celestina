@@ -13,7 +13,9 @@ and has no active execution plan.
 The shell's standing tracks need a new glyph now and then. Each batch is one
 unit of [the STYLE-T1 plan](docs/plans/active/2026-11-25-shell-track-icons.md),
 vendored from Lucide with the catalogue's recipe. The first batch,
-`STYLE-ICONS-1`, adds `calendar`, `lock`, `log-out` and `moon`.
+`STYLE-ICONS-1`, adds `calendar`, `lock`, `log-out` and `moon`. The second
+batch, `STYLE-ICONS-2`, adds `rotate-ccw-clock`, `arrow-down-a-z`, `globe`
+and `calculator` for the launcher tabs and the calculator.
 
 ## STYLE-G7 — Shared reading controls and demonstrated visual primitives (closed 2026-11-25)
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(celestina-style VERSION 1.14.0 LANGUAGES CXX)
+project(celestina-style VERSION 1.15.0 LANGUAGES CXX)
 
 include(CTest)
 
@@ -109,12 +109,14 @@ qt_add_qml_module(celestina-style
         icons/power.svg
         icons/app-window.svg
         icons/arrow-down.svg
+        icons/arrow-down-a-z.svg
         icons/arrow-right.svg
         icons/bell.svg
         icons/bell-off.svg
         icons/binary.svg
         icons/bluetooth.svg
         icons/bookmark-plus.svg
+        icons/calculator.svg
         icons/calendar.svg
         icons/check.svg
         icons/chevron-down.svg
@@ -147,6 +149,7 @@ qt_add_qml_module(celestina-style
         icons/folder-sync.svg
         icons/gamepad-2.svg
         icons/gauge.svg
+        icons/globe.svg
         icons/hard-drive.svg
         icons/image.svg
         icons/info.svg
@@ -163,6 +166,7 @@ qt_add_qml_module(celestina-style
         icons/pin.svg
         icons/printer.svg
         icons/rotate-ccw.svg
+        icons/rotate-ccw-clock.svg
         icons/scissors.svg
         icons/share-2.svg
         icons/system-tray.svg

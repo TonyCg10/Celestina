@@ -8,7 +8,8 @@
   `STYLE-G7-J` obsolete with the Qt shell); `STYLE-M1` remains planned with
   no execution plan; the standing plan `STYLE-T1` (2026-11-25) adds the
   glyphs the shell's track entries need, starting with `calendar`, `lock`,
-  `log-out` and `moon` (`STYLE-ICONS-1`)
+  `log-out` and `moon` (`STYLE-ICONS-1`), then `rotate-ccw-clock`,
+  `arrow-down-a-z`, `globe` and `calculator` (`STYLE-ICONS-2`)
 - **Author validation:** previous real-session review exists, with focused
   follow-ups pending in [VALIDATION.md](VALIDATION.md)
 

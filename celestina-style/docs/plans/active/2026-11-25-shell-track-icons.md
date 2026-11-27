@@ -49,5 +49,6 @@ author ends the tracks.
 | Unit | Commit prefix | Status | Files / areas | Diffstat | Intended change | Automated evidence | Author validation |
 |---|---|---|---|---|---|---|---|
 | STYLE-ICONS-1 | `celestina-style:` | done | [inventory](../../inventories/2026-11-25-shell-track-icons/STYLE-ICONS-1.numstat.tsv) | 15 files, +231/-8 | Add the calendar, lock, log-out and moon glyphs for the shell's session menu and Island tabs | [evidence](../../evidence/2026-11-25-shell-track-icons.md) | None |
+| STYLE-ICONS-2 | `celestina-style:` | done | [inventory](../../inventories/2026-11-25-shell-track-icons/STYLE-ICONS-2.numstat.tsv) | 14 files, +183/-4 | Add the rotate-ccw-clock, arrow-down-a-z, globe and calculator glyphs for the shell's launcher tabs and calculator | [evidence](../../evidence/2026-11-26-launcher-icons.md) | None |
 
 This plan records intent; it grants no authority.
