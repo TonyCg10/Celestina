@@ -89,6 +89,16 @@ pub enum InputEvent {
         pressed: bool,
         serial: u32,
     },
+    /// A held key repeating: the toolkit repeats it at the compositor's delay
+    /// and rate while it stays down, with the serial of its press. Only code
+    /// that wants repeats (a text field, a slider, a list's cursor) matches
+    /// it, so a key that acts on its press acts once.
+    KeyRepeat {
+        keysym: u32,
+        utf8: Option<String>,
+        modifiers: Modifiers,
+        serial: u32,
+    },
     /// The modifier state changed with no key event behind it (the
     /// compositor reports it when the keyboard enters a surface, and when a
     /// lock key latches). Delivered to the surface holding the keyboard focus
@@ -196,21 +206,13 @@ impl fmt::Debug for InputEvent {
                 modifiers,
                 pressed,
                 serial,
-            } => {
-                let mut key = f.debug_struct("Key");
-                if names_a_character(*keysym, utf8.as_deref()) {
-                    key.field("keysym", &Redacted);
-                } else {
-                    key.field("keysym", keysym);
-                }
-                // Not even whether the key produced text.
-                let _ = utf8;
-                key.field("utf8", &Redacted);
-                key.field("modifiers", modifiers)
-                    .field("pressed", pressed)
-                    .field("serial", serial)
-                    .finish()
-            }
+            } => debug_key(f, "Key", *keysym, utf8, modifiers, Some(pressed), serial),
+            InputEvent::KeyRepeat {
+                keysym,
+                utf8,
+                modifiers,
+                serial,
+            } => debug_key(f, "KeyRepeat", *keysym, utf8, modifiers, None, serial),
             InputEvent::Modifiers(modifiers) => {
                 f.debug_tuple("Modifiers").field(modifiers).finish()
             }
@@ -249,6 +251,41 @@ pub(crate) fn key_input(
         utf8: event.utf8,
         modifiers,
         pressed,
+        serial,
+    }
+}
+
+/// A key event's `Debug`: the keysym only when it names no character, and
+/// never the text, not even whether the key produced any.
+fn debug_key(
+    f: &mut fmt::Formatter<'_>,
+    name: &str,
+    keysym: u32,
+    utf8: &Option<String>,
+    modifiers: &Modifiers,
+    pressed: Option<&bool>,
+    serial: &u32,
+) -> fmt::Result {
+    let mut key = f.debug_struct(name);
+    if names_a_character(keysym, utf8.as_deref()) {
+        key.field("keysym", &Redacted);
+    } else {
+        key.field("keysym", &keysym);
+    }
+    key.field("utf8", &Redacted).field("modifiers", modifiers);
+    if let Some(pressed) = pressed {
+        key.field("pressed", pressed);
+    }
+    key.field("serial", serial).finish()
+}
+
+/// The repeat event of a held key, in the toolkit's own type; `serial` is the
+/// one of the key's press.
+pub(crate) fn key_repeat_input(event: KeyEvent, modifiers: Modifiers, serial: u32) -> InputEvent {
+    InputEvent::KeyRepeat {
+        keysym: event.keysym.raw(),
+        utf8: event.utf8,
+        modifiers,
         serial,
     }
 }
@@ -405,6 +442,15 @@ mod tests {
         }
     }
 
+    fn key_repeat(keysym: u32, utf8: Option<&str>) -> InputEvent {
+        InputEvent::KeyRepeat {
+            keysym,
+            utf8: utf8.map(str::to_owned),
+            modifiers: Modifiers::default(),
+            serial: 4242,
+        }
+    }
+
     #[test]
     fn input_event_debug_redacts_typed_text() {
         // Every variant that can carry typed text, with text that must not
@@ -417,6 +463,10 @@ mod tests {
             key(0x68, None),
             // Keypad digits are typed text too (KP_5).
             key(0xffb5, Some("5")),
+            // A repeat of a typed key is as secret as the press.
+            key_repeat(0x68, Some("h")),
+            key_repeat(0x68, Some(secret)),
+            key_repeat(0x68, None),
             InputEvent::Preedit {
                 text: secret.to_owned(),
                 cursor: 7,
@@ -454,6 +504,11 @@ mod tests {
         assert!(text.contains(&0xff0d.to_string()), "{text}");
         let text = format!("{:?}", key(0xff1b, None));
         assert!(text.contains(&0xff1b.to_string()), "{text}");
+        let text = format!("{:?}", key_repeat(0xff08, None));
+        assert!(
+            text.contains("KeyRepeat") && text.contains(&0xff08.to_string()),
+            "{text}"
+        );
         assert_eq!(format!("{:?}", InputEvent::FocusLost), "FocusLost");
         assert_eq!(format!("{:?}", InputEvent::PointerLeave), "PointerLeave");
         let motion = format!("{:?}", InputEvent::PointerMotion { x: 1.5, y: 2.5 });

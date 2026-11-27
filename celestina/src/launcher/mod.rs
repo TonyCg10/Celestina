@@ -74,9 +74,9 @@ const XKB_KEY_UPPER_V: u32 = 0x56;
 pub const SWEEP: Duration = Duration::from_millis(450);
 
 /// How long Backspace must stay down before the sweep starts: niri's default
-/// key-repeat delay, so the hold feels like the start of a repeat. The shell's
-/// keyboard asks for no key repeat, so the launcher times the hold itself; a
-/// repeat that does arrive earlier starts the sweep at once.
+/// key-repeat delay, so the hold feels like the start of a repeat. The
+/// launcher times the hold itself so the sweep does not wait on the
+/// compositor's delay; a repeat that arrives first starts it at once.
 pub const HOLD_DELAY: Duration = Duration::from_millis(600);
 
 /// The state of a Backspace press (design §5.3): the first press deletes one
@@ -472,6 +472,10 @@ impl Launcher {
                 keysym: keysym @ (XKB_KEY_UP | XKB_KEY_DOWN),
                 pressed: true,
                 ..
+            }
+            | InputEvent::KeyRepeat {
+                keysym: keysym @ (XKB_KEY_UP | XKB_KEY_DOWN),
+                ..
             } => {
                 self.state
                     .move_selection(if *keysym == XKB_KEY_UP { -1 } else { 1 });
@@ -577,10 +581,33 @@ impl Launcher {
                 }
                 Hold::Sweeping { .. } => return outcome,
             },
+            // A repeated Backspace does what a press does while the key is
+            // held: it starts the sweep, or is swallowed by one that runs.
+            // With no hold it deletes as the field does and starts none.
+            InputEvent::KeyRepeat {
+                keysym: XKB_KEY_BACKSPACE,
+                modifiers:
+                    Modifiers {
+                        ctrl: false,
+                        alt: false,
+                        logo: false,
+                        ..
+                    },
+                ..
+            } if !self.state.is_selector() => match self.hold {
+                Hold::Pressed { .. } => {
+                    self.start_sweep(now);
+                    outcome.changed = true;
+                    return outcome;
+                }
+                Hold::Sweeping { .. } => return outcome,
+                Hold::Blocked | Hold::Idle => self.input.key(&mut self.tree, ev),
+            },
             // Another key's release (a letter let go after Backspace went
             // down) leaves the hold alone.
             InputEvent::Key { pressed: false, .. } => self.input.key(&mut self.tree, ev),
             InputEvent::Key { .. }
+            | InputEvent::KeyRepeat { .. }
             | InputEvent::Preedit { .. }
             | InputEvent::CommitText(_)
             | InputEvent::Paste(_) => {
@@ -1057,6 +1084,86 @@ mod tests {
         assert!(delete.changed);
         let text = l.tree.field(view::FIELD).map(|f| f.text().to_owned());
         assert_eq!(text.as_deref(), Some("Windo"));
+    }
+
+    fn repeat(keysym: u32, text: Option<&str>) -> InputEvent {
+        InputEvent::KeyRepeat {
+            keysym,
+            utf8: text.map(str::to_owned),
+            modifiers: Modifiers::default(),
+            serial: 1,
+        }
+    }
+
+    #[test]
+    fn a_repeated_down_moves_the_selection() {
+        let index = [entry("aa", "Aa"), entry("ab", "Ab"), entry("ac", "Ac")];
+        let mut l = launcher(&index);
+        let now = Instant::now();
+        let o = l.handle(&repeat(XKB_KEY_DOWN, None), &index, now);
+        assert!(o.changed && o.action.is_none());
+        assert_eq!(l.state().selected, 1);
+        l.handle(&repeat(XKB_KEY_DOWN, None), &index, now);
+        assert_eq!(l.state().selected, 2);
+        l.handle(&repeat(XKB_KEY_UP, None), &index, now);
+        assert_eq!(l.state().selected, 1);
+    }
+
+    #[test]
+    fn a_repeated_letter_types() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        let now = Instant::now();
+        l.handle(&repeat(0x61, Some("a")), &index, now);
+        l.handle(&repeat(0x61, Some("a")), &index, now);
+        assert_eq!(text(&l), "aa");
+    }
+
+    #[test]
+    fn a_repeated_delete_in_the_selector_closes_no_window() {
+        let mut l = selector(&bubbles(&[1, 2, 3]));
+        let now = Instant::now();
+        assert_eq!(
+            l.handle(&repeat(XKB_KEY_DELETE, None), &[], now).action,
+            None
+        );
+        // A repeated Tab does not move the selection either.
+        l.handle(&repeat(XKB_KEY_TAB, None), &[], now);
+        assert_eq!(l.state().selected, 0);
+        // The press still asks for the close.
+        assert_eq!(
+            l.handle(&key(XKB_KEY_DELETE, None, false), &[], now).action,
+            Some(LauncherAction::RequestClose(1))
+        );
+    }
+
+    #[test]
+    fn a_repeated_backspace_starts_the_sweep_then_is_swallowed() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "steam", &index);
+        let t0 = Instant::now();
+        l.handle(&backspace(true, false, false), &index, t0);
+        assert_eq!(text(&l), "stea");
+        assert!(matches!(l.hold, Hold::Pressed { .. }));
+        let o = l.handle(&repeat(XKB_KEY_BACKSPACE, None), &index, t0 + MS(10));
+        assert!(o.changed && o.action.is_none());
+        assert!(sweeping(&l));
+        assert_eq!(text(&l), "stea", "the repeat deletes nothing");
+        l.handle(&repeat(XKB_KEY_BACKSPACE, None), &index, t0 + MS(40));
+        assert!(sweeping(&l));
+        assert_eq!(text(&l), "stea", "later repeats are swallowed");
+    }
+
+    #[test]
+    fn a_repeated_backspace_with_no_hold_deletes_as_the_field_does() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "steam", &index);
+        let t0 = Instant::now();
+        l.handle(&repeat(XKB_KEY_BACKSPACE, None), &index, t0);
+        assert_eq!(text(&l), "stea");
+        assert!(matches!(l.hold, Hold::Idle), "a repeat starts no hold");
     }
 
     #[test]

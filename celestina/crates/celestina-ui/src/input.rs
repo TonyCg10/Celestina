@@ -179,6 +179,11 @@ impl Interaction {
     /// [`Interaction::slider_consumes`]): the arrows, Page Up, Page Down,
     /// Home and End move its level, emitting `SliderChanged` when it
     /// changes.
+    ///
+    /// A `KeyRepeat` is a held key repeating: only a focused field's edits and
+    /// a focused slider's moves take it, so a held Space types spaces in a
+    /// field. Tab, Enter, Escape and Space on anything else act on their press
+    /// only, so their repeats do nothing.
     pub fn key(&mut self, tree: &mut Tree, ev: &InputEvent) -> Vec<UiEvent> {
         self.sync(tree);
         let mut out = Vec::new();
@@ -363,12 +368,15 @@ fn slider_key(tree: &Tree, focused: Option<NodeId>, ev: &InputEvent) -> Option<(
     let ViewKind::Slider(slider) = tree.slot(id)?.kind else {
         return None;
     };
-    let InputEvent::Key {
+    let (InputEvent::Key {
         keysym,
         modifiers,
         pressed: true,
         ..
-    } = ev
+    }
+    | InputEvent::KeyRepeat {
+        keysym, modifiers, ..
+    }) = ev
     else {
         return None;
     };
@@ -395,6 +403,12 @@ fn field_edit(tree: &Tree, focused: Option<NodeId>, ev: &InputEvent) -> Option<(
             utf8,
             modifiers,
             pressed: true,
+            ..
+        }
+        | InputEvent::KeyRepeat {
+            keysym,
+            utf8,
+            modifiers,
             ..
         } => key_to_edit(*keysym, utf8.as_deref(), *modifiers)?,
         InputEvent::Preedit { text, cursor } => EditOp::Preedit {

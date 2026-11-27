@@ -1591,6 +1591,36 @@ fn text_input_and_the_clipboard_never_reach_the_field() {
 }
 
 #[test]
+fn a_repeated_key_reaches_nothing() {
+    let mut fx = Fx::new();
+    fx.ready();
+    fx.typed(11, "x", 700);
+    assert_eq!(fx.state.field_state(), Some(SecretFieldState::HasContent));
+    let card = fx.card();
+    // Past the guard window, in any shape: letters, Backspace, Enter, Escape.
+    for (keysym, text) in [
+        (0x78, Some("x")),
+        (0xff08, None),
+        (RETURN, None),
+        (0xff1b, None),
+    ] {
+        let ev = InputEvent::KeyRepeat {
+            keysym,
+            utf8: text.map(str::to_owned),
+            modifiers: Modifiers::default(),
+            serial: 12,
+        };
+        assert_eq!(
+            fx.state.input(card, ev, fx.at(800)),
+            InputOutcome::default(),
+            "{keysym:#x}"
+        );
+    }
+    assert_eq!(fx.state.field_state(), Some(SecretFieldState::HasContent));
+    assert!(fx.answers().is_empty());
+}
+
+#[test]
 fn the_wake_up_follows_the_prompts_deadlines() {
     let mut fx = Fx::new();
     assert_eq!(fx.state.next_wake(fx.at(0)), None);

@@ -291,6 +291,15 @@ mod tests {
         }
     }
 
+    fn repeat_of(keysym: u32) -> InputEvent {
+        InputEvent::KeyRepeat {
+            keysym,
+            utf8: None,
+            modifiers: Modifiers::default(),
+            serial: 3,
+        }
+    }
+
     fn press(x: f32, y: f32) -> InputEvent {
         InputEvent::PointerPress {
             x,
@@ -579,6 +588,27 @@ mod tests {
             tree.highlight().focused,
             tree.node_by_key(Key::named("after"))
         );
+    }
+
+    #[test]
+    fn a_repeated_key_moves_the_focused_slider() {
+        let (mut tree, mut ia, node) = setup(Slider::new(50).with_step(5));
+        assert!(!ia.slider_consumes(&tree, &repeat_of(XKB_KEY_RIGHT)));
+        ia.key(&mut tree, &key_of(XKB_KEY_TAB));
+        assert_eq!(tree.highlight().focused, Some(node));
+        assert!(ia.slider_consumes(&tree, &repeat_of(XKB_KEY_RIGHT)));
+        assert_eq!(
+            ia.key(&mut tree, &repeat_of(XKB_KEY_RIGHT)),
+            vec![changed(55)]
+        );
+        assert_eq!(
+            ia.key(&mut tree, &repeat_of(XKB_KEY_RIGHT)),
+            vec![changed(60)]
+        );
+        // A repeated Tab moves nothing.
+        assert!(!ia.slider_consumes(&tree, &repeat_of(XKB_KEY_TAB)));
+        assert!(ia.key(&mut tree, &repeat_of(XKB_KEY_TAB)).is_empty());
+        assert_eq!(tree.highlight().focused, Some(node));
     }
 
     #[test]

@@ -1891,3 +1891,26 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-010](docs/evidence/2026-11-26-cel-d-010-menu-close.md)
+
+## VAL-CEL-I-018 — A held key repeats
+
+- **Status:** pending
+- **Related implementation:** CEL-I-018 (a held key repeats at the
+  compositor's delay and rate in text fields, sliders, the launcher's rows
+  and the menus' Up and Down; keys that act on their press act once; polkit's
+  and the session lock's password fields do not repeat)
+- **Requires:** the deployed shell after the landing of CEL-I-018
+- **Procedure:** (1) open the launcher and hold a letter, then tap and hold
+  Backspace. (2) Hold Down, then Up, over the launcher's rows. (3) Focus a
+  slider in a menu window (volume or brightness) with Tab and hold an arrow.
+  (4) In a bar menu, hold Down. (5) Hold Return on a launcher row; hold
+  Escape with a menu open over a menu window; in the overview hold Tab
+- **Pass condition:** (1) after the usual delay the letter keeps typing at
+  the rate of the other applications; a tap deletes one letter and a hold
+  sweeps the query empty as before. (2) the selection keeps walking and wraps
+  at the ends. (3) the slider keeps stepping. (4) the focus keeps moving down
+  the entries. (5) Return launches the application once; Escape closes one
+  level only; the overview switches once
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-I-018](docs/evidence/2026-11-27-cel-i-018-key-repeat.md)

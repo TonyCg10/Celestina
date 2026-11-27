@@ -658,11 +658,18 @@ impl LevelCore {
                     _ => Outcome::Keep { changed: false },
                 };
             }
+            // A repeat is a press: a held Up or Down keeps moving the focus.
             InputEvent::Key {
                 keysym: keysym @ (XKB_KEY_UP | XKB_KEY_DOWN),
-                pressed,
-                modifiers,
                 utf8,
+                modifiers,
+                serial,
+                ..
+            }
+            | InputEvent::KeyRepeat {
+                keysym: keysym @ (XKB_KEY_UP | XKB_KEY_DOWN),
+                utf8,
+                modifiers,
                 serial,
             } => {
                 let tab = InputEvent::Key {
@@ -672,12 +679,14 @@ impl LevelCore {
                         shift: *keysym == XKB_KEY_UP,
                         ..*modifiers
                     },
-                    pressed: *pressed,
+                    pressed: !matches!(ev, InputEvent::Key { pressed: false, .. }),
                     serial: *serial,
                 };
                 self.input.key(&mut self.tree, &tab)
             }
-            InputEvent::Key { .. } | InputEvent::FocusLost => self.input.key(&mut self.tree, ev),
+            InputEvent::Key { .. } | InputEvent::KeyRepeat { .. } | InputEvent::FocusLost => {
+                self.input.key(&mut self.tree, ev)
+            }
             InputEvent::PopupClosed { .. } | InputEvent::FocusEnter { .. } => Vec::new(),
             _ => self.input.pointer(&mut self.tree, ev, now),
         };

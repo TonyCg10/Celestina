@@ -390,3 +390,61 @@ fn an_empty_field_measures_one_line_of_its_style() {
     assert_eq!(rect.w, 200.0);
     assert!(rect.h >= 14.0 && rect.h < 40.0, "{}", rect.h);
 }
+
+fn repeat(keysym: u32, utf8: Option<&str>) -> InputEvent {
+    InputEvent::KeyRepeat {
+        keysym,
+        utf8: utf8.map(str::to_owned),
+        modifiers: Modifiers::default(),
+        serial: 1,
+    }
+}
+
+#[test]
+fn a_repeated_letter_types_in_the_focused_field() {
+    let (mut tree, mut ia) = focused_field();
+    let ev = repeat(0x61, Some("a"));
+    assert!(ia.field_consumes(&tree, &ev));
+    assert_eq!(ia.key(&mut tree, &ev), vec![UiEvent::FieldChanged(SEARCH)]);
+    ia.key(&mut tree, &ev);
+    assert_eq!(text(&tree), "aa");
+}
+
+#[test]
+fn a_repeated_backspace_deletes_in_the_focused_field() {
+    let (mut tree, mut ia) = focused_field();
+    ia.key(&mut tree, &typed("abc"));
+    assert_eq!(
+        ia.key(&mut tree, &repeat(XKB_KEY_BACKSPACE, None)),
+        vec![UiEvent::FieldChanged(SEARCH)]
+    );
+    assert_eq!(text(&tree), "ab");
+}
+
+#[test]
+fn a_repeat_of_a_key_that_acts_on_its_press_does_nothing() {
+    // In a field, and on a focusable row: no Activate, no Escape, no focus
+    // move. A held Space types in the field, as its press does.
+    let (mut tree, mut ia) = focused_field();
+    let field = tree.node_by_key(search_key());
+    for (keysym, text) in [
+        (XKB_KEY_RETURN, "\r"),
+        (XKB_KEY_ESCAPE, "\u{1b}"),
+        (XKB_KEY_TAB, "\t"),
+    ] {
+        assert!(ia.key(&mut tree, &repeat(keysym, Some(text))).is_empty());
+        assert_eq!(tree.highlight().focused, field);
+    }
+    assert_eq!(
+        ia.key(&mut tree, &repeat(XKB_KEY_SPACE, Some(" "))),
+        vec![UiEvent::FieldChanged(SEARCH)]
+    );
+    assert_eq!(text(&tree), " ");
+    ia.key(&mut tree, &plain(XKB_KEY_TAB));
+    let row = tree.node_by_key(row_key());
+    assert_eq!(tree.highlight().focused, row);
+    for keysym in [XKB_KEY_RETURN, XKB_KEY_SPACE, XKB_KEY_ESCAPE, XKB_KEY_TAB] {
+        assert!(ia.key(&mut tree, &repeat(keysym, None)).is_empty());
+        assert_eq!(tree.highlight().focused, row);
+    }
+}

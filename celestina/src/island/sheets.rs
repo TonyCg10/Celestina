@@ -687,6 +687,13 @@ impl Island {
                 let outcome = self.sheets.input(ev, &anchor, now, measure);
                 Some(self.apply_outcome(outcome, now))
             }
+            // A held key's repeat goes to the body, whose fields, sliders and
+            // lists take it; Escape, the menu keys and the clipboard page's
+            // Delete act on their press only.
+            InputEvent::KeyRepeat { .. } => {
+                let outcome = self.sheets.input(ev, &anchor, now, measure);
+                Some(self.apply_outcome(outcome, now))
+            }
             InputEvent::PointerLeave => {
                 self.sheets.leave_body(now, measure);
                 None

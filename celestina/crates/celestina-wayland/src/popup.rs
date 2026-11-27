@@ -385,6 +385,12 @@ impl GrabSerial {
         }
     }
 
+    /// The serial of the last key press; `None` before any.
+    #[must_use]
+    pub fn key(&self) -> Option<u32> {
+        self.key.map(|k| k.serial)
+    }
+
     /// The serial a popup opened now grabs with; `None` before any press.
     #[must_use]
     pub fn current(&self) -> Option<u32> {

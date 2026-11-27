@@ -172,6 +172,28 @@ fn field_takes_characters_backspace_enter_and_escape_only() {
 }
 
 #[test]
+fn field_takes_no_repeat_of_a_held_key() {
+    let mut field = SecretField::new();
+    let mut secret = Secret::new();
+    assert_eq!(field.handle(&mut secret, typed_key('a')), SecretKey::Edited);
+    let repeat = |keysym: u32, utf8: Option<&str>| InputEvent::KeyRepeat {
+        keysym,
+        utf8: utf8.map(str::to_owned),
+        modifiers: plain(),
+        serial: 7,
+    };
+    for ev in [
+        repeat('a' as u32, Some("a")),
+        repeat(XKB_KEY_BACKSPACE, Some("\u{8}")),
+        repeat(XKB_KEY_RETURN, Some("\r")),
+        repeat(XKB_KEY_ESCAPE, Some("\u{1b}")),
+    ] {
+        assert_eq!(field.handle(&mut secret, ev), SecretKey::Ignored);
+    }
+    assert_eq!(line_of(&secret), b"a\n");
+}
+
+#[test]
 fn field_ignores_enter_on_an_empty_secret() {
     let mut field = SecretField::new();
     let mut secret = Secret::new();

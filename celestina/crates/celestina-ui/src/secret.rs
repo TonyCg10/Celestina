@@ -207,7 +207,9 @@ impl SecretField {
                 wipe(utf8);
                 outcome
             }
-            InputEvent::Key { utf8, .. } => {
+            // A release, and a held key's repeat: a secret never repeats, and
+            // the repeat's text is wiped like a press's.
+            InputEvent::Key { utf8, .. } | InputEvent::KeyRepeat { utf8, .. } => {
                 wipe(utf8);
                 SecretKey::Ignored
             }

@@ -1,0 +1,63 @@
+# CEL-I-018 exact change inventory
+
+Base revision	8be8690a801a8225b6a4826314de2f062f0633a4
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-ui/src/input.rs
+Pathspec	celestina/crates/celestina-ui/src/secret.rs
+Pathspec	celestina/crates/celestina-ui/src/slider.rs
+Pathspec	celestina/crates/celestina-ui/tests/field.rs
+Pathspec	celestina/crates/celestina-ui/tests/secret.rs
+Pathspec	celestina/crates/celestina-wayland/src/handlers.rs
+Pathspec	celestina/crates/celestina-wayland/src/input.rs
+Pathspec	celestina/crates/celestina-wayland/src/popup.rs
+Pathspec	celestina/crates/celestina-wayland/src/runtime.rs
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-018-key-repeat.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-018-key-repeat/field-held-keys.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-018-key-repeat/launcher-held-down.png
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-018.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/island/menu.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/sheets.rs
+Pathspec	celestina/src/launcher/mod.rs
+Pathspec	celestina/src/osd/popup.rs
+Pathspec	celestina/src/overview/mod.rs
+Pathspec	celestina/src/polkit/state/tests.rs
+Pathspec	celestina/src/sheet/body.rs
+Pathspec	celestina/src/sheet/mod.rs
+Pathspec	celestina/src/tray/menu.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	19d78ba57259f621dea214ffb6d41764fb08f7eaa13affd3546989f276339964	celestina/Cargo.lock
+1	1	4ea3f682af2ca53b77115e2e2ec3b4845d55058924b81f1510a2486e4c41374a	celestina/Cargo.toml
+23	0	60920629ea197d7a346f1ed747c768508a2036bbe1fe57f7e36120ec2039a755	celestina/VALIDATION.md
+16	2	b11bd015f1af3ad99d6b4552c7420404d1cc6fc5940b0a3f78c809e0cbb91103	celestina/crates/celestina-ui/src/input.rs
+3	1	051207a14ad1c4af2e0f028bf4217b8060600d90fdff4e890d469e121ff4d683	celestina/crates/celestina-ui/src/secret.rs
+30	0	137905b0cda98b7de6e51f9c15ec01e23b623c0f48cb688a3aa4679a53f577c0	celestina/crates/celestina-ui/src/slider.rs
+58	0	ca29f4500d0f67e6de83dcb55f3097c69976f3dc092a9867d9c453b86f234d82	celestina/crates/celestina-ui/tests/field.rs
+22	0	fde8c5ed0635c88228336d3b01c26ea5c11e3453638e193cb6205563a8009c3c	celestina/crates/celestina-ui/tests/secret.rs
+38	6	a708b9ea860b0e323b2f3a4e6dc2292ea8c889a4c7f29ba203ffce1e50f4e241	celestina/crates/celestina-wayland/src/handlers.rs
+70	15	38c7c20eb9efb4382e1e1ac2434866db3daca6fa773a1defb5b2fd0b0a587bd7	celestina/crates/celestina-wayland/src/input.rs
+6	0	2cf340988e1cf6b2dd8b68bf7a2875afeac2164784db047cd58b314ea8984c13	celestina/crates/celestina-wayland/src/popup.rs
+1	1	92d12a6d903f8763e5770e12ca77e7794f3e590d64c09ae252c692a08c7d046b	celestina/crates/celestina-wayland/src/runtime.rs
+76	0	01734da1cf59df471910a38918df3aeb07c21e8fde89968d996a233eddc2cfa5	celestina/docs/evidence/2026-11-27-cel-i-018-key-repeat.md
+-	-	dcbc82d9f134a7011d2aa80ca7a9ec1330289fb5cef05b6a5c3a665b91af1776	celestina/docs/evidence/2026-11-27-cel-i-018-key-repeat/field-held-keys.png
+-	-	a7b3be64885bd9df1d34565c403896725f833e6492da85b5a239d24a904c6625	celestina/docs/evidence/2026-11-27-cel-i-018-key-repeat/launcher-held-down.png
+63	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-018.numstat.tsv
+1	0	11c03e9002152ed2caa2fe18d7799cb87a66bd0667ebb392bc5bc6aead473bdc	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+39	3	53f46172a0bd6f4a74413d2b718121eafac091ff26f8b840a42da9532cd5c2b1	celestina/src/island/menu.rs
+58	4	ba575a53d36c0b959ebb0dce1f19857fd69f0095d38bf6425cdae4816abc86ef	celestina/src/island/mod.rs
+7	0	92e2cc55a9614f7a854d904511adaecc158cf73bd3b810db7a77c8b4f43407dc	celestina/src/island/sheets.rs
+110	3	c3ac5212ba8b00a8f580f0296559bbb0399a64f9bbdddec22affb2df478f4963	celestina/src/launcher/mod.rs
+3	1	2cad1f5897c4a3422d71a31beccf9ad35b27cb55092956902eb55926059873be	celestina/src/osd/popup.rs
+23	0	a6ef3130850ea705829c3cccc942ab51531682db4d8a88b4f8d6d1210b412b69	celestina/src/overview/mod.rs
+30	0	7135d2aac9c3686b459347e3e7b8c96f82e5c3c158a7bedb07da3c705440c57d	celestina/src/polkit/state/tests.rs
+9	3	b49b5526ec45a85b5294399946a9243023717b07b4c8fcb9eee2602477ec26bd	celestina/src/sheet/body.rs
+4	1	e9cef6e1a32d5bdfdf76a3ca3e5e5ca64a39019bec0228f8e73f15c61c607320	celestina/src/sheet/mod.rs
+12	3	16ec95617ef13574fc01af90b35d29bce84098a2cbc860fdabd32518d87c4b8e	celestina/src/tray/menu.rs
+1	0	bcaa60e5567ddcec5889f5a10dd539afcd8dc5f9fdc42f27890e631980be3ba6	docs/version-history.tsv

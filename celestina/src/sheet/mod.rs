@@ -659,7 +659,10 @@ impl Sheets {
         let Some(o) = self.open.as_mut().filter(|o| !o.motion.is_closing()) else {
             return BodyOutcome::Keep { changed: false };
         };
-        let pointer = !matches!(ev, InputEvent::Key { .. } | InputEvent::FocusLost);
+        let pointer = !matches!(
+            ev,
+            InputEvent::Key { .. } | InputEvent::KeyRepeat { .. } | InputEvent::FocusLost
+        );
         if pointer {
             self.hovering = !matches!(ev, InputEvent::PointerLeave);
         }

@@ -594,6 +594,29 @@ mod tests {
     }
 
     #[test]
+    fn a_repeated_key_never_switches_the_mode_or_acts() {
+        let mut o = overview();
+        for keysym in [
+            XKB_KEY_TAB,
+            XKB_KEY_ISO_LEFT_TAB,
+            XKB_KEY_1,
+            XKB_KEY_2,
+            XKB_KEY_RETURN,
+            XKB_KEY_ESCAPE,
+            XKB_KEY_DOWN,
+        ] {
+            let ev = InputEvent::KeyRepeat {
+                keysym,
+                utf8: None,
+                modifiers: Modifiers::default(),
+                serial: 1,
+            };
+            assert_eq!(act(&mut o, &ev), None, "{keysym:#x}");
+            assert_eq!(o.state().mode, Mode::Desktop, "{keysym:#x}");
+        }
+    }
+
+    #[test]
     fn tab_one_and_two_switch_the_mode_without_closing() {
         let mut o = overview();
         assert_eq!(

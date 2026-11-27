@@ -229,11 +229,18 @@ pub(crate) fn menu_events(
     now: Instant,
 ) -> Vec<UiEvent> {
     match ev {
+        // A repeat is a press: a held Up or Down keeps moving the focus.
         InputEvent::Key {
             keysym: keysym @ (XKB_KEY_UP | XKB_KEY_DOWN),
             utf8,
             modifiers,
-            pressed,
+            serial,
+            ..
+        }
+        | InputEvent::KeyRepeat {
+            keysym: keysym @ (XKB_KEY_UP | XKB_KEY_DOWN),
+            utf8,
+            modifiers,
             serial,
         } => {
             let tab = InputEvent::Key {
@@ -243,12 +250,14 @@ pub(crate) fn menu_events(
                     shift: *keysym == XKB_KEY_UP,
                     ..*modifiers
                 },
-                pressed: *pressed,
+                pressed: !matches!(ev, InputEvent::Key { pressed: false, .. }),
                 serial: *serial,
             };
             input.key(tree, &tab)
         }
-        InputEvent::Key { .. } | InputEvent::FocusLost => input.key(tree, ev),
+        InputEvent::Key { .. } | InputEvent::KeyRepeat { .. } | InputEvent::FocusLost => {
+            input.key(tree, ev)
+        }
         InputEvent::PopupClosed { .. } | InputEvent::FocusEnter { .. } => Vec::new(),
         _ => input.pointer(tree, ev, now),
     }
@@ -538,6 +547,33 @@ mod tests {
             Outcome::Close(Some(MenuChoice::DoNotDisturb(true))),
             "the switch is off: choosing it turns it on"
         );
+    }
+
+    #[test]
+    fn a_repeated_arrow_keeps_moving_the_focus_and_other_repeats_do_nothing() {
+        let repeat = |keysym| InputEvent::KeyRepeat {
+            keysym,
+            utf8: None,
+            modifiers: Modifiers::default(),
+            serial: 1,
+        };
+        let mut core = core(MenuState::default());
+        assert_eq!(
+            core.input(&repeat(DOWN), Instant::now()),
+            Outcome::Keep { changed: true }
+        );
+        assert_eq!(focused(&core), Some(reopen_key()));
+        core.input(&repeat(DOWN), Instant::now());
+        assert_eq!(focused(&core), Some(dnd_key()));
+        core.input(&repeat(UP), Instant::now());
+        assert_eq!(focused(&core), Some(reopen_key()));
+        // A repeated Enter chooses nothing, a repeated Escape closes nothing.
+        for keysym in [RETURN, ESCAPE] {
+            assert_eq!(
+                core.input(&repeat(keysym), Instant::now()),
+                Outcome::Keep { changed: false }
+            );
+        }
     }
 
     #[test]

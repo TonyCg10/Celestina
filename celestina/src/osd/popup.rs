@@ -982,7 +982,9 @@ impl LevelCore {
     ) -> Outcome {
         let before = self.tree.highlight();
         let events = match ev {
-            InputEvent::Key { .. } | InputEvent::FocusLost => self.input.key(&mut self.tree, ev),
+            InputEvent::Key { .. } | InputEvent::KeyRepeat { .. } | InputEvent::FocusLost => {
+                self.input.key(&mut self.tree, ev)
+            }
             InputEvent::PopupClosed { .. } | InputEvent::FocusEnter { .. } => Vec::new(),
             _ => self.input.pointer(&mut self.tree, ev, now),
         };

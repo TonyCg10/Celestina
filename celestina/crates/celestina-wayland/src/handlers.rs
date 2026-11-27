@@ -31,7 +31,7 @@ use wayland_client::{
 use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_v3;
 
 use crate::{
-    input::{key_input, pointer_input, FocusTarget, Modifiers},
+    input::{key_input, key_repeat_input, pointer_input, FocusTarget, InputEvent, Modifiers},
     runtime::{OutputEvent, Runtime, Shell, SurfaceId, Target},
     surface::PreferredScaleSink,
     text_input::TextInputSink,
@@ -219,7 +219,23 @@ impl<S: Shell> SeatHandler for Runtime<S> {
     ) {
         match capability {
             Capability::Keyboard if self.core.keyboard.is_none() => {
-                match self.core.seat_state.get_keyboard(qh, &seat, None) {
+                // Repeat goes through the toolkit with the compositor's
+                // `repeat_info`; it calls this callback, not `repeat_key`.
+                let handle = self.core.handle.clone();
+                let on_repeat = Box::new(
+                    |rt: &mut Runtime<S>, kbd: &wl_keyboard::WlKeyboard, event| {
+                        // The timer outlives `release()` (its closure holds
+                        // the keyboard): a released keyboard repeats nothing.
+                        if rt.core.keyboard.as_ref() == Some(kbd) {
+                            rt.key_repeat(event);
+                        }
+                    },
+                );
+                match self
+                    .core
+                    .seat_state
+                    .get_keyboard_with_repeat(qh, &seat, None, handle, on_repeat)
+                {
                     Ok(keyboard) => self.core.keyboard = Some(keyboard),
                     Err(err) => tracing::warn!(%err, "cannot create the keyboard"),
                 }
@@ -332,10 +348,13 @@ impl<S: Shell> KeyboardHandler for Runtime<S> {
         _: &Connection,
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
-        serial: u32,
+        _: u32,
         event: KeyEvent,
     ) {
-        self.key_event(event, true, serial);
+        // On a `wl_seat` v10 compositor-side repeat the toolkit calls this;
+        // otherwise the repeat reaches the callback given to
+        // `get_keyboard_with_repeat`. Both end in `key_repeat`.
+        self.key_repeat(event);
     }
 
     fn release_key(
@@ -372,13 +391,26 @@ impl<S: Shell> Runtime<S> {
         }
     }
 
+    /// A repeat of the held key: the last press's serial (the toolkit gives
+    /// the repeat none) and no new grab serial (the compositor sent no
+    /// press). It is its own event, so only code that wants repeats acts.
+    fn key_repeat(&mut self, event: KeyEvent) {
+        let serial = self.core.grab_serial.key().unwrap_or(0);
+        let ev = key_repeat_input(event, self.core.modifiers, serial);
+        self.route_key(ev);
+    }
+
+    fn key_event(&mut self, event: KeyEvent, pressed: bool, serial: u32) {
+        let ev = key_input(event, self.core.modifiers, pressed, serial);
+        self.route_key(ev);
+    }
+
     /// Keys go to the open popup first (whether the keyboard is on the
     /// popup or still on its parent), else to the focused surface.
-    fn key_event(&mut self, event: KeyEvent, pressed: bool, serial: u32) {
+    fn route_key(&mut self, ev: InputEvent) {
         let Some(id) = self.core.keyboard_focus.surface() else {
             return;
         };
-        let ev = key_input(event, self.core.modifiers, pressed, serial);
         match self.core.popup_for_focus(id) {
             Some(idx) => self.dispatch_popup_input(idx, ev),
             None => self.dispatch_input(id, ev),

@@ -480,7 +480,7 @@ pub(crate) struct Core<S: Shell> {
     pub(crate) config: Config,
     conn: Connection,
     pub(crate) qh: QueueHandle<Runtime<S>>,
-    handle: LoopHandle<'static, Runtime<S>>,
+    pub(crate) handle: LoopHandle<'static, Runtime<S>>,
     pub(crate) signal: LoopSignal,
     pub(crate) registry_state: RegistryState,
     pub(crate) output_state: OutputState,

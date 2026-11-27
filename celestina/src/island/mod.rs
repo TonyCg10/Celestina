@@ -1482,9 +1482,9 @@ impl Island {
                 && (*keysym == XKB_KEY_DELETE || *keysym == XKB_KEY_KP_DELETE)
                 && self.shows_clipboard_page() =>
             {
-                // The keyboard repeats a held key as more presses and the
-                // toolkit does not say which is which: one press removes
-                // one entry, the next needs the key released in between.
+                // A held key repeats as `KeyRepeat`, which this arm ignores:
+                // one press removes one entry, the next needs the key
+                // released in between.
                 if !std::mem::replace(&mut self.delete_held, true) {
                     actions.extend(self.delete_key());
                 }
@@ -1498,7 +1498,9 @@ impl Island {
                 self.delete_held = false;
                 self.page_input.key(&mut self.page, &ev)
             }
-            InputEvent::Key { .. } if open => self.page_input.key(&mut self.page, &ev),
+            InputEvent::Key { .. } | InputEvent::KeyRepeat { .. } if open => {
+                self.page_input.key(&mut self.page, &ev)
+            }
             InputEvent::PointerPress { x, y, .. }
                 if open && !self.state.rect(now, self.size.0).contains(*x, *y) =>
             {
@@ -6366,6 +6368,58 @@ mod tests {
         assert!(
             sent.borrow().len() > sent_so_far,
             "what the throttle held went out"
+        );
+    }
+
+    #[test]
+    fn a_held_arrow_keeps_stepping_a_level_sheets_focused_slider() {
+        use crate::osd::popup::Control;
+        const TAB: u32 = 0xff09;
+        const RIGHT: u32 = 0xff53;
+        let (mut island, t0) = level_island();
+        let sent = Rc::new(RefCell::new(Vec::new()));
+        let core = sent_core(&island.theme, &sent, AudioGraph::default());
+        assert!(island.open_level_sheet_at(volume(), core, t0));
+        let mut t = t0 + ms(400);
+        step(&mut island, t);
+        let output_level = |sent: &Rc<RefCell<Vec<LevelRequest>>>| {
+            sent.borrow().iter().rev().find_map(|r| match r {
+                LevelRequest::Set(Control::Output, v) => Some(*v),
+                _ => None,
+            })
+        };
+        // Tab until a pressed Right steps the output slider.
+        for _ in 0..20 {
+            feed(&mut island, key_event(TAB), t);
+            feed(&mut island, key_event(RIGHT), t);
+            t += ms(200);
+            island
+                .sheets
+                .sync(&island.theme.clone(), t, &mut fake_measure);
+            if output_level(&sent).is_some() {
+                break;
+            }
+        }
+        let Some(pressed) = output_level(&sent) else {
+            panic!("no Tab reached the output slider: {:?}", sent.borrow());
+        };
+        // The held key's repeats keep stepping it.
+        let repeat = InputEvent::KeyRepeat {
+            keysym: RIGHT,
+            utf8: None,
+            modifiers: celestina_wayland::Modifiers::default(),
+            serial: 0,
+        };
+        feed(&mut island, repeat.clone(), t);
+        feed(&mut island, repeat, t);
+        t += ms(200);
+        island
+            .sheets
+            .sync(&island.theme.clone(), t, &mut fake_measure);
+        assert!(
+            output_level(&sent).is_some_and(|held| held > pressed),
+            "the repeats stepped nothing: {:?}",
+            sent.borrow()
         );
     }
 
