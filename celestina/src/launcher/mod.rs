@@ -52,7 +52,7 @@ use celestina_ui::{focus_ring, Interaction, Scroll, Tree, UiEvent, FOCUS_WIDTH, 
 use celestina_wayland::{FrameCx, InputEvent, Modifiers, OutputId, SurfaceCtl, SurfaceId};
 
 pub use commands::{commands_for, Switch};
-pub use state::{AppRow, LauncherState, Row, Source};
+pub use state::{AppRow, LauncherState, ListView, Row, Source, Tab};
 
 use scrolling::THUMB_LINGER;
 
@@ -68,8 +68,10 @@ const XKB_KEY_ISO_LEFT_TAB: u32 = 0xfe20;
 const XKB_KEY_DELETE: u32 = 0xffff;
 const XKB_KEY_UP: u32 = 0xff52;
 const XKB_KEY_DOWN: u32 = 0xff54;
-#[cfg(test)]
 const XKB_KEY_LEFT: u32 = 0xff51;
+const XKB_KEY_RIGHT: u32 = 0xff53;
+const XKB_KEY_LOWER_G: u32 = 0x67;
+const XKB_KEY_UPPER_G: u32 = 0x47;
 const XKB_KEY_LOWER_V: u32 = 0x76;
 const XKB_KEY_UPPER_V: u32 = 0x56;
 
@@ -105,8 +107,12 @@ enum Hold {
 /// so the row can say "Copied" before it closes.
 pub const COPY_CLOSE: Duration = Duration::from_millis(350);
 
+/// The most cut names [`Launcher`] keeps: a few screens of grid cells.
+const NAMES_KEPT: usize = 512;
+
 /// What the launcher asks the app to do; each one closes it except
-/// [`LauncherAction::RequestClose`] and [`LauncherAction::Copy`].
+/// [`LauncherAction::RequestClose`], [`LauncherAction::Copy`] and
+/// [`LauncherAction::SetView`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LauncherAction {
     /// Start this application.
@@ -121,6 +127,9 @@ pub enum LauncherAction {
     /// Copy this text (the calculator's result) to the clipboard; the
     /// launcher stays open for [`COPY_CLOSE`] to say so, then finishes.
     Copy(String),
+    /// The author switched between the list and the grid: the app keeps the
+    /// choice; the launcher stays open.
+    SetView(ListView),
     /// Close without acting.
     Close,
 }
@@ -131,9 +140,20 @@ impl LauncherAction {
     pub fn closes(&self) -> bool {
         !matches!(
             self,
-            LauncherAction::RequestClose(_) | LauncherAction::Copy(_)
+            LauncherAction::RequestClose(_) | LauncherAction::Copy(_) | LauncherAction::SetView(_)
         )
     }
+}
+
+/// A key chord of the launcher of applications.
+#[derive(Clone, Copy)]
+enum Chord {
+    /// Ctrl+Tab and Ctrl+Shift+Tab: the next or previous tab.
+    Step(i32),
+    /// Alt+1..Alt+9: the tab at this position.
+    Open(usize),
+    /// Ctrl+G: the list or the grid.
+    ToggleView,
 }
 
 /// One open launcher.
@@ -170,12 +190,16 @@ pub struct Launcher {
     /// The next layout moves the column at once (the wheel, a new answer)
     /// instead of sliding it.
     jump_next: bool,
+    /// The grid's names cut to their cells, by name and width, so a rebuild
+    /// (each frame of the sweep) measures none twice. Emptied when the theme
+    /// changes and when it outgrows [`NAMES_KEPT`].
+    names: HashMap<(String, u32), String>,
 }
 
 impl Launcher {
     /// The launcher on `surface` of `output`, in `theme` under `reduced`
     /// motion, over `index` with the use `scores` and the names' `locale`,
-    /// its field empty and focused.
+    /// its field empty and focused, on the Recent tab in `view`.
     #[must_use]
     pub fn new(
         surface: SurfaceId,
@@ -185,9 +209,11 @@ impl Launcher {
         scores: HashMap<String, u64>,
         locale: Option<Locale>,
         can_copy: bool,
+        view: ListView,
         index: &[DesktopEntry],
     ) -> Launcher {
         let mut state = LauncherState::new(scores, locale);
+        state.view = view;
         state.update(index);
         let mut launcher = Self::with_state(surface, output, theme, reduced, state);
         launcher.can_copy = can_copy;
@@ -219,6 +245,7 @@ impl Launcher {
         let mut tree = Tree::new(reduced, theme);
         tree.apply(
             view::launcher(
+                &mut |s, _, _| s.to_owned(),
                 theme,
                 &state,
                 (0.0, 0.0),
@@ -257,6 +284,7 @@ impl Launcher {
             scroll: Scroll::default(),
             thumb_until: None,
             jump_next: false,
+            names: HashMap::new(),
         }
     }
 
@@ -306,7 +334,7 @@ impl Launcher {
     /// The card's rect in the surface.
     #[must_use]
     pub fn card(&self) -> Rect {
-        view::card_rect(self.size, view::card_size(&self.theme))
+        view::card_rect(self.size, view::card_size(&self.theme, &self.state.source))
     }
 
     /// The surface is about to go: no more text input for it.
@@ -320,7 +348,14 @@ impl Launcher {
     pub fn set_index(&mut self, index: &[DesktopEntry]) -> bool {
         let before = self.state.rows.clone();
         let selected = self.state.selected;
+        let tab = self.state.tab;
         self.state.update(index);
+        if self.state.tab != tab {
+            // The open group emptied: All shows from its top.
+            self.keyboard_moved = false;
+            self.scroll_to_top();
+            self.stale = true;
+        }
         self.sync_extent();
         if self.state.selected != selected {
             // The selection fell back to the first row: show it.
@@ -345,6 +380,7 @@ impl Launcher {
         if painter.theme() != &self.theme {
             self.theme = painter.theme().clone();
             self.tree.set_theme(&self.theme);
+            self.names.clear();
             self.stale = true;
         }
         if cx.size != self.size {
@@ -363,7 +399,7 @@ impl Launcher {
             painter.pop_clip();
         }
         painter.end();
-        let (input, blur) = regions(self.size, &self.theme);
+        let (input, blur) = regions(self.size, &self.theme, &self.state.source);
         cx.ctl.set_blur_region(&blur);
         cx.ctl.set_input_region(&input);
         if let Some(caret) = self.caret() {
@@ -417,7 +453,7 @@ impl Launcher {
     fn sync_extent(&mut self) {
         let row = self.theme.row_height;
         self.scroll.set_extent(
-            self.state.rows.len() as f32 * row,
+            view::content_height(&self.theme, &self.state),
             view::AREA_ROWS as f32 * row,
         );
     }
@@ -434,12 +470,12 @@ impl Launcher {
     /// sliding it. Returns whether the offset moved.
     fn reveal_selected(&mut self, now: Instant, jump: bool) -> bool {
         self.sync_extent();
-        let row = self.theme.row_height;
+        let (top, height) = view::item_span(&self.theme, &self.state, self.state.selected);
         let want = scrolling::reveal(
             self.scroll.offset(),
-            self.state.selected as f32 * row,
-            row,
-            view::AREA_ROWS as f32 * row,
+            top,
+            height,
+            view::AREA_ROWS as f32 * self.theme.row_height,
         );
         let moved = self.scroll.wheel(want - self.scroll.offset());
         if moved {
@@ -541,20 +577,35 @@ impl Launcher {
         if !self.sized() {
             return;
         }
-        self.apply(now);
+        let dpr = self.dpr;
+        let text = painter.text();
+        let mut names = std::mem::take(&mut self.names);
+        if names.len() > NAMES_KEPT {
+            names.clear();
+        }
+        self.apply(now, &mut |name, style, width| {
+            names
+                .entry((name.to_owned(), width.to_bits()))
+                .or_insert_with(|| {
+                    view::fit_end(name, width, |t| text.measure(t, style, None, dpr).0)
+                })
+                .clone()
+        });
+        self.names = names;
         self.tree.layout(self.size, painter.text(), self.dpr);
         if let Some(fault) = self.tree.take_fault() {
             tracing::warn!(%fault, "launcher: layout fault");
         }
     }
 
-    fn apply(&mut self, now: Instant) {
+    /// Builds the view when it is stale; `fit` cuts the grid's names.
+    fn apply(&mut self, now: Instant, fit: view::Fit<'_>) {
         if self.stale {
             let sweep = self.sweep(now);
             self.sync_extent();
             let scroll = view::ListScroll::new(
                 &self.theme,
-                self.state.rows.len(),
+                &self.state,
                 self.scroll.offset(),
                 self.thumb_until.is_some(),
             );
@@ -565,7 +616,7 @@ impl Launcher {
                 self.tree.slide_with(Duration::ZERO, ONE_UI.into(), &[]);
             }
             self.tree.apply(
-                view::launcher(&self.theme, &self.state, self.size, sweep, &scroll),
+                view::launcher(fit, &self.theme, &self.state, self.size, sweep, &scroll),
                 now,
             );
             self.stale = false;
@@ -589,15 +640,7 @@ impl Launcher {
         };
         // A row beyond the built ones may still be fading out in the tree,
         // where it was: it is not on screen.
-        let row_h = self.theme.row_height;
-        let viewport = view::AREA_ROWS as f32 * row_h;
-        let built = scrolling::built(
-            self.scroll.offset(),
-            row_h,
-            viewport,
-            self.state.rows.len(),
-            view::BUILD_MARGIN,
-        );
+        let built = view::built_items(&self.theme, &self.state, self.scroll.offset());
         if !built.contains(&self.state.selected) {
             return None;
         }
@@ -698,12 +741,85 @@ impl Launcher {
                 keysym: keysym @ (XKB_KEY_UP | XKB_KEY_DOWN),
                 ..
             } => {
-                self.state
-                    .move_selection(if *keysym == XKB_KEY_UP { -1 } else { 1 });
+                let delta = if *keysym == XKB_KEY_UP { -1 } else { 1 };
+                if view::use_grid(&self.state) {
+                    self.state.move_grid(0, delta);
+                } else {
+                    self.state.move_selection(delta);
+                }
                 self.keyboard_moved = true;
                 self.reveal_selected(now, false);
                 self.stale = true;
                 outcome.changed = true;
+                return outcome;
+            }
+            // The grid's Left and Right move the selection while the field
+            // is empty; with text they are the caret's.
+            InputEvent::Key {
+                keysym: keysym @ (XKB_KEY_LEFT | XKB_KEY_RIGHT),
+                modifiers:
+                    Modifiers {
+                        ctrl: false,
+                        alt: false,
+                        logo: false,
+                        shift: false,
+                        ..
+                    },
+                pressed: true,
+                ..
+            }
+            | InputEvent::KeyRepeat {
+                keysym: keysym @ (XKB_KEY_LEFT | XKB_KEY_RIGHT),
+                modifiers:
+                    Modifiers {
+                        ctrl: false,
+                        alt: false,
+                        logo: false,
+                        shift: false,
+                        ..
+                    },
+                ..
+            } if view::use_grid(&self.state) && self.field_is_empty() => {
+                self.state
+                    .move_grid(if *keysym == XKB_KEY_LEFT { -1 } else { 1 }, 0);
+                self.keyboard_moved = true;
+                self.reveal_selected(now, false);
+                self.stale = true;
+                outcome.changed = true;
+                return outcome;
+            }
+            // The launcher's chords (the selector keeps today's keys): they
+            // act on a press, and their repeats are swallowed.
+            InputEvent::Key {
+                keysym,
+                modifiers,
+                pressed: true,
+                ..
+            }
+            | InputEvent::KeyRepeat {
+                keysym, modifiers, ..
+            } if !self.state.is_selector() && Self::chord_of(*keysym, *modifiers).is_some() => {
+                let is_press = matches!(ev, InputEvent::Key { .. });
+                let chord = Self::chord_of(*keysym, *modifiers);
+                if is_press {
+                    match chord {
+                        Some(Chord::Step(delta)) => {
+                            self.step_tab(delta, index);
+                            outcome.changed = true;
+                        }
+                        Some(Chord::Open(n)) => {
+                            if let Some(tab) = self.state.visible_tabs().get(n).copied() {
+                                self.show_tab(tab, index);
+                                outcome.changed = true;
+                            }
+                        }
+                        Some(Chord::ToggleView) => {
+                            outcome.action = Some(self.toggle_view());
+                            outcome.changed = true;
+                        }
+                        None => {}
+                    }
+                }
                 return outcome;
             }
             InputEvent::Key {
@@ -879,7 +995,17 @@ impl Launcher {
                 UiEvent::Click(key) if key == view::clear_key() => {
                     self.clear_query(index);
                 }
+                UiEvent::Click(key) if key == view::view_button_key() => {
+                    outcome.action = Some(self.toggle_view());
+                    outcome.changed = true;
+                    return outcome;
+                }
                 UiEvent::Click(key) => {
+                    let tabs = self.state.visible_tabs();
+                    if let Some(i) = view::tab_of(key, tabs.len()) {
+                        self.show_tab(tabs[i], index);
+                        continue;
+                    }
                     if let Some(row) = view::row_of(key, self.state.rows.len()) {
                         self.state.selected = row;
                         if let Some(action) = self.chosen(now) {
@@ -906,6 +1032,71 @@ impl Launcher {
         }
         outcome.changed |= self.stale;
         outcome
+    }
+
+    /// What the launcher's chord `keysym` with `modifiers` means, if it is
+    /// one: Ctrl+Tab and Ctrl+Shift+Tab step the tabs, Alt+1..Alt+9 open
+    /// the n-th, Ctrl+G toggles the view.
+    fn chord_of(keysym: u32, modifiers: Modifiers) -> Option<Chord> {
+        let Modifiers {
+            ctrl,
+            alt,
+            logo,
+            shift,
+            ..
+        } = modifiers;
+        match keysym {
+            XKB_KEY_TAB | XKB_KEY_ISO_LEFT_TAB if ctrl && !alt && !logo => {
+                let back = shift || keysym == XKB_KEY_ISO_LEFT_TAB;
+                Some(Chord::Step(if back { -1 } else { 1 }))
+            }
+            0x31..=0x39 if alt && !ctrl && !logo => Some(Chord::Open((keysym - 0x31) as usize)),
+            XKB_KEY_LOWER_G | XKB_KEY_UPPER_G if ctrl && !alt && !logo => Some(Chord::ToggleView),
+            _ => None,
+        }
+    }
+
+    /// The search field holds no text.
+    fn field_is_empty(&self) -> bool {
+        self.tree
+            .field(view::FIELD)
+            .is_none_or(|f| f.text().is_empty())
+    }
+
+    /// Opens the tab `delta` places from the open one, wrapping.
+    fn step_tab(&mut self, delta: i32, index: &[DesktopEntry]) {
+        let tabs = self.state.visible_tabs();
+        let next = state::wrapped(self.state.tab_position(), delta, tabs.len());
+        if let Some(tab) = tabs.get(next) {
+            self.show_tab(*tab, index);
+        }
+    }
+
+    /// Shows `tab` with an empty query and field, from its top.
+    fn show_tab(&mut self, tab: Tab, index: &[DesktopEntry]) {
+        self.state.set_tab(tab, index);
+        if let Some(field) = self.tree.field_mut(view::FIELD) {
+            field.set_text("");
+        }
+        self.keyboard_moved = false;
+        self.copied_at = None;
+        self.hold = Hold::Idle;
+        self.scroll_to_top();
+        self.stale = true;
+    }
+
+    /// Flips between the list and the grid, from the first row; the app
+    /// is asked to keep the choice.
+    fn toggle_view(&mut self) -> LauncherAction {
+        self.state.view = match self.state.view {
+            ListView::List => ListView::Grid,
+            ListView::Grid => ListView::List,
+        };
+        self.state.selected = 0;
+        self.keyboard_moved = false;
+        self.scroll_to_top();
+        self.stale = true;
+        LauncherAction::SetView(self.state.view)
     }
 
     /// Empties the search field and answers the empty query: the clear
@@ -973,8 +1164,8 @@ impl Launcher {
 /// reaches the launcher and not the window under it; the blur region is the
 /// card's silhouette, so the compositor blurs nothing outside it.
 #[must_use]
-pub fn regions(size: (f32, f32), theme: &Theme) -> (Vec<Rect>, Vec<Rect>) {
-    let card = view::card_rect(size, view::card_size(theme));
+pub fn regions(size: (f32, f32), theme: &Theme, source: &Source) -> (Vec<Rect>, Vec<Rect>) {
+    let card = view::card_rect(size, view::card_size(theme, source));
     (
         vec![Rect::whole(size)],
         silhouette_slices(card, theme.radius_lg, SILHOUETTE_STEP),
@@ -1026,7 +1217,7 @@ mod tests {
     }
 
     fn launcher_copying(index: &[DesktopEntry], can_copy: bool) -> Launcher {
-        Launcher::new(
+        let mut l = Launcher::new(
             SurfaceId(5),
             OutputId(1),
             &Theme::dark(),
@@ -1034,8 +1225,12 @@ mod tests {
             HashMap::new(),
             None,
             can_copy,
+            ListView::List,
             index,
-        )
+        );
+        // The default tab is Recent and these tests list every entry.
+        l.state.set_tab(state::Tab::All, index);
+        l
     }
 
     fn typed(l: &mut Launcher, text: &str, index: &[DesktopEntry]) {
@@ -1113,7 +1308,7 @@ mod tests {
     fn sized(l: &mut Launcher, size: (f32, f32)) {
         l.size = size;
         l.stale = true;
-        l.apply(Instant::now());
+        l.apply(Instant::now(), &mut |s, _, _| s.to_owned());
         l.tree
             .layout_measured(size, |s, _, _| (7.0 * s.len() as f32, 16.0));
     }
@@ -1131,9 +1326,10 @@ mod tests {
     fn the_input_region_is_the_surface_and_the_blur_the_card() {
         let theme = Theme::dark();
         let surface = (2560.0, 1440.0);
-        let (input, blur) = regions(surface, &theme);
+        let source = Source::Apps;
+        let (input, blur) = regions(surface, &theme, &source);
         assert_eq!(input, [Rect::whole(surface)]);
-        let card = view::card_rect(surface, view::card_size(&theme));
+        let card = view::card_rect(surface, view::card_size(&theme, &source));
         assert_eq!(
             blur,
             silhouette_slices(card, theme.radius_lg, SILHOUETTE_STEP)
@@ -1154,7 +1350,7 @@ mod tests {
         let mut l = launcher(&index);
         sized(&mut l, (2560.0, 1440.0));
         let card = l.card();
-        assert_eq!((card.x, card.y), (1000.0, 520.0));
+        assert_eq!((card.x, card.y), (1000.0, 498.0));
         for (x, y) in [
             (10.0, 10.0),
             (card.x - 1.0, card.y + 10.0),
@@ -1562,7 +1758,7 @@ mod tests {
         let mut l = launcher(&index);
         sized(&mut l, (2560.0, 1440.0));
         typed(&mut l, "ab", &index);
-        l.apply(Instant::now());
+        l.apply(Instant::now(), &mut |s, _, _| s.to_owned());
         l.tree
             .layout_measured((2560.0, 1440.0), |s, _, _| (7.0 * s.len() as f32, 16.0));
         assert_eq!(l.state().query.text(), "ab");
@@ -1980,7 +2176,7 @@ mod tests {
 
     /// What a frame does at `now`: builds the view when stale and lays out.
     fn relayout(l: &mut Launcher, now: Instant) {
-        l.apply(now);
+        l.apply(now, &mut |s, _, _| s.to_owned());
         l.tree
             .layout_measured(l.size, |s, _, _| (7.0 * s.len() as f32, 16.0));
     }
@@ -2286,5 +2482,267 @@ mod tests {
             );
         }
         assert_eq!(l.scroll.offset(), 300.0 * 40.0 - 8.0 * 40.0);
+    }
+
+    fn chord(keysym: u32, ctrl: bool, alt: bool, shift: bool) -> InputEvent {
+        InputEvent::Key {
+            keysym,
+            utf8: None,
+            modifiers: Modifiers {
+                ctrl,
+                alt,
+                shift,
+                ..Modifiers::default()
+            },
+            pressed: true,
+            serial: 1,
+        }
+    }
+
+    fn grouped() -> Vec<DesktopEntry> {
+        let with = |id: &str, cats: &str| DesktopEntry {
+            categories: vec![cats.to_owned()],
+            ..entry(id, id)
+        };
+        vec![
+            with("zed", "Development"),
+            with("fox", "Network"),
+            with("chess", "Game"),
+        ]
+    }
+
+    /// A launcher on the Recent tab (the way the app opens it), sized.
+    fn opened(index: &[DesktopEntry], view: ListView) -> Launcher {
+        let mut l = Launcher::new(
+            SurfaceId(5),
+            OutputId(1),
+            &Theme::dark(),
+            false,
+            HashMap::new(),
+            None,
+            true,
+            view,
+            index,
+        );
+        sized(&mut l, (2560.0, 1440.0));
+        l
+    }
+
+    fn open_tab(l: &Launcher) -> usize {
+        let tabs = l.state.visible_tabs();
+        tabs.iter().position(|t| *t == l.state.tab).expect("open")
+    }
+
+    #[test]
+    fn the_launcher_opens_on_recent_with_the_view_it_is_given() {
+        let index = grouped();
+        let l = opened(&index, ListView::Grid);
+        assert_eq!(l.state.tab, state::Tab::Recent);
+        assert_eq!(l.state.view, ListView::Grid);
+    }
+
+    #[test]
+    fn ctrl_tab_steps_the_tabs_and_wraps_and_the_shifted_chord_goes_back() {
+        let index = grouped();
+        let mut l = opened(&index, ListView::List);
+        let count = l.state.visible_tabs().len();
+        assert_eq!(count, 5);
+        let now = Instant::now();
+        let o = l.handle(&chord(XKB_KEY_TAB, true, false, false), &index, now);
+        assert_eq!(o.action, None);
+        assert_eq!(open_tab(&l), 1);
+        for _ in 0..count - 1 {
+            l.handle(&chord(XKB_KEY_TAB, true, false, false), &index, now);
+        }
+        assert_eq!(open_tab(&l), 0, "wrapped");
+        l.handle(&chord(XKB_KEY_TAB, true, false, true), &index, now);
+        assert_eq!(open_tab(&l), count - 1, "Ctrl+Shift+Tab wraps backwards");
+        l.handle(
+            &chord(XKB_KEY_ISO_LEFT_TAB, true, false, false),
+            &index,
+            now,
+        );
+        assert_eq!(open_tab(&l), count - 2);
+        // A repeat is swallowed.
+        let rep = InputEvent::KeyRepeat {
+            keysym: XKB_KEY_TAB,
+            utf8: None,
+            modifiers: Modifiers {
+                ctrl: true,
+                ..Modifiers::default()
+            },
+            serial: 1,
+        };
+        l.handle(&rep, &index, now);
+        assert_eq!(open_tab(&l), count - 2);
+    }
+
+    #[test]
+    fn alt_digits_open_the_nth_tab_and_beyond_the_count_do_nothing() {
+        let index = grouped();
+        let mut l = opened(&index, ListView::List);
+        let now = Instant::now();
+        l.handle(&chord(0x33, false, true, false), &index, now);
+        assert_eq!(l.state.tab, l.state.visible_tabs()[2]);
+        l.handle(&chord(0x39, false, true, false), &index, now);
+        assert_eq!(l.state.tab, l.state.visible_tabs()[2]);
+        assert_eq!(text(&l), "");
+        // Alt with a letter reaches the field as before: it inserts nothing.
+        let mut a = chord(u32::from('a'), false, true, false);
+        if let InputEvent::Key { utf8, .. } = &mut a {
+            *utf8 = Some("a".to_owned());
+        }
+        let o = l.handle(&a, &index, now);
+        assert_eq!(o.action, None);
+        assert_eq!(text(&l), "");
+        assert_eq!(l.state.tab, l.state.visible_tabs()[2]);
+    }
+
+    #[test]
+    fn ctrl_g_toggles_the_view_without_closing() {
+        let index = grouped();
+        let mut l = opened(&index, ListView::List);
+        let now = Instant::now();
+        let o = l.handle(&chord(0x67, true, false, false), &index, now);
+        assert_eq!(o.action, Some(LauncherAction::SetView(ListView::Grid)));
+        assert!(!LauncherAction::SetView(ListView::Grid).closes());
+        assert_eq!(l.state.view, ListView::Grid);
+        assert_eq!(l.state.selected, 0);
+        let o = l.handle(&chord(0x47, true, false, true), &index, now);
+        assert_eq!(o.action, Some(LauncherAction::SetView(ListView::List)));
+        assert_eq!(l.state.view, ListView::List);
+    }
+
+    #[test]
+    fn a_click_on_the_view_button_toggles_the_view() {
+        let index = grouped();
+        let mut l = opened(&index, ListView::List);
+        let o = click_on(&mut l, view::view_button_key(), &index);
+        assert_eq!(o.action, Some(LauncherAction::SetView(ListView::Grid)));
+    }
+
+    #[test]
+    fn grid_right_moves_the_selection_only_while_the_field_is_empty() {
+        let index = tools(14);
+        let mut l = opened(&index, ListView::Grid);
+        let now = Instant::now();
+        l.handle(&key(XKB_KEY_TAB, None, true), &index, now); // Ctrl+Tab: All
+        assert_eq!(l.state.tab, state::Tab::All);
+        l.handle(&key(XKB_KEY_RIGHT, None, false), &index, now);
+        assert_eq!(l.state.selected, 1);
+        l.handle(&key(XKB_KEY_DOWN, None, false), &index, now);
+        assert_eq!(l.state.selected, 7, "a line of six down");
+        let rep = InputEvent::KeyRepeat {
+            keysym: XKB_KEY_RIGHT,
+            utf8: None,
+            modifiers: Modifiers::default(),
+            serial: 1,
+        };
+        l.handle(&rep, &index, now);
+        assert_eq!(l.state.selected, 8);
+        typed(&mut l, "tool", &index);
+        l.handle(&key(XKB_KEY_RIGHT, None, false), &index, now);
+        assert_eq!(l.state.selected, 0, "the caret moves, not the selection");
+    }
+
+    #[test]
+    fn the_list_leaves_left_and_right_to_the_field() {
+        let index = tools(14);
+        let mut l = listing(&index);
+        l.handle(&key(XKB_KEY_RIGHT, None, false), &index, Instant::now());
+        assert_eq!(l.state.selected, 0);
+    }
+
+    fn calc_grid(n: usize) -> (Vec<DesktopEntry>, Launcher) {
+        let index: Vec<_> = (0..n)
+            .map(|i| entry(&format!("t{i:03}"), &format!("2+2 Tool {i:03}")))
+            .collect();
+        let mut l = opened(&index, ListView::Grid);
+        l.state.set_tab(state::Tab::All, &index);
+        typed(&mut l, "2+2", &index);
+        relayout(&mut l, Instant::now());
+        (index, l)
+    }
+
+    #[test]
+    fn grid_down_from_the_calculator_row_reaches_cell_zero_and_the_scroll_counts_80_px_lines() {
+        let (index, mut l) = calc_grid(60);
+        let now = Instant::now();
+        assert!(matches!(l.state.rows[0], Row::Calc { .. }));
+        l.handle(&key(XKB_KEY_DOWN, None, false), &index, now);
+        assert_eq!(l.state.selected, 1);
+        l.handle(&key(XKB_KEY_UP, None, false), &index, now);
+        assert_eq!(l.state.selected, 0);
+        // Up from the calculator row wraps to the last line: its top is
+        // 40 + 9 * 80, the extent 40 + 10 * 80.
+        l.handle(&key(XKB_KEY_UP, None, false), &index, now);
+        assert!(l.state.selected >= 55);
+        assert_eq!(l.scroll.offset(), 40.0 + 10.0 * 80.0 - 320.0);
+        l.scroll.wheel(10_000.0);
+        assert_eq!(l.scroll.offset(), 520.0);
+    }
+
+    #[test]
+    fn a_click_on_a_tab_while_typing_empties_the_query_and_the_field() {
+        let index = grouped();
+        let mut l = opened(&index, ListView::List);
+        let now = Instant::now();
+        l.handle(&key(XKB_KEY_TAB, None, true), &index, now);
+        typed(&mut l, "zed", &index);
+        assert!(l.state.searching());
+        relayout(&mut l, now);
+        // The open tab, All, is clickable while a query is typed.
+        click_on(&mut l, view::tab_key(1), &index);
+        assert_eq!(text(&l), "");
+        assert_eq!(l.state.query.text(), "");
+        assert_eq!(l.state.tab, state::Tab::All);
+        assert_eq!(l.state.rows.len(), 3);
+        relayout(&mut l, now);
+        click_on(&mut l, view::tab_key(2), &index);
+        assert_eq!(l.state.tab, l.state.visible_tabs()[2]);
+    }
+
+    #[test]
+    fn a_group_that_empties_falls_back_to_all_with_the_scroll_at_the_top() {
+        let mut index: Vec<_> = (0..30)
+            .map(|i| DesktopEntry {
+                categories: vec!["Game".to_owned()],
+                ..entry(&format!("g{i:02}"), &format!("Game {i:02}"))
+            })
+            .collect();
+        index.push(entry("plain", "Plain"));
+        let mut l = opened(&index, ListView::List);
+        let now = Instant::now();
+        let games = state::Tab::Group(groups::Group::Games);
+        let n = l.state.visible_tabs().iter().position(|t| *t == games);
+        let digit = 0x31 + u32::try_from(n.expect("a Games tab")).expect("small");
+        l.handle(&chord(digit, false, true, false), &index, now);
+        assert_eq!(l.state.tab, games);
+        down(&mut l, 12, &index, now);
+        assert!(l.scroll.offset() > 0.0);
+        let rest = [entry("plain", "Plain")];
+        assert!(l.set_index(&rest));
+        assert_eq!(l.state.tab, state::Tab::All);
+        assert_eq!(l.state.selected, 0);
+        assert_eq!(l.scroll.offset(), 0.0);
+        assert!(!l.keyboard_moved);
+    }
+
+    #[test]
+    fn the_selector_ignores_the_tab_and_view_chords() {
+        let windows = bubbles(&[1, 2]);
+        let mut l = selector(&windows);
+        let now = Instant::now();
+        for ev in [
+            chord(XKB_KEY_TAB, true, false, false),
+            chord(0x32, false, true, false),
+            chord(0x67, true, false, false),
+        ] {
+            let o = l.handle(&ev, &[], now);
+            assert_eq!(o.action, None);
+        }
+        assert_eq!(l.state.view, ListView::List);
+        assert_eq!(l.state.tab, state::Tab::Recent);
+        assert_eq!(l.state.selected, 0);
     }
 }

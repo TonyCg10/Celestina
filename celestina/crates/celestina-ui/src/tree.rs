@@ -380,23 +380,26 @@ impl Tree {
     }
 
     /// The first node in paint order (hidden ones included) with `key`
-    /// that is not leaving, else the first leaving one. Keys are matched
-    /// among siblings; a product that wants events to name one node keeps
-    /// its keys unique across the view.
+    /// that is not leaving, else the first leaving one. A node under a
+    /// leaving one is leaving too: it fades with its ancestor and is out of
+    /// layout. Keys are matched among siblings; a product that wants events
+    /// to name one node keeps its keys unique across the view.
     pub fn node_by_key(&self, key: Key) -> Option<NodeId> {
         let mut leaving = None;
-        let mut stack: Vec<NodeId> = self.roots.iter().rev().copied().collect();
-        while let Some(id) = stack.pop() {
+        let mut stack: Vec<(NodeId, bool)> =
+            self.roots.iter().rev().map(|&id| (id, false)).collect();
+        while let Some((id, under)) = stack.pop() {
             let Some(slot) = self.slot(id) else {
                 continue;
             };
+            let gone = under || slot.leaving;
             if slot.key == key {
-                if !slot.leaving {
+                if !gone {
                     return Some(id);
                 }
                 leaving = leaving.or(Some(id));
             }
-            stack.extend(slot.children.iter().rev());
+            stack.extend(slot.children.iter().rev().map(|&c| (c, gone)));
         }
         leaving
     }

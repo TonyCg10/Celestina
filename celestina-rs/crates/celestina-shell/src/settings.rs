@@ -758,6 +758,12 @@ pub struct Settings {
     /// How the on-screen display looks and which changes it shows.
     #[serde(deserialize_with = "lenient")]
     pub osd: OsdSettings,
+    /// How the launcher lists its apps. Written only once the grid is chosen.
+    #[serde(
+        deserialize_with = "lenient",
+        skip_serializing_if = "LauncherChoice::is_unset"
+    )]
+    pub launcher: LauncherChoice,
 }
 
 impl Default for Settings {
@@ -771,7 +777,37 @@ impl Default for Settings {
             wallpaper: WallpaperSettings::default(),
             weather: None,
             osd: OsdSettings::default(),
+            launcher: LauncherChoice::default(),
         }
+    }
+}
+
+/// How the launcher shows its apps.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LauncherView {
+    /// One row per app.
+    #[default]
+    #[serde(rename = "list")]
+    List,
+    /// A grid of icons.
+    #[serde(rename = "grid")]
+    Grid,
+}
+
+/// The launcher's own choices.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LauncherChoice {
+    /// List or grid; an unknown value or a wrong type reads as the list.
+    #[serde(deserialize_with = "lenient")]
+    pub view: LauncherView,
+}
+
+impl LauncherChoice {
+    /// Nothing was chosen.
+    #[must_use]
+    pub fn is_unset(&self) -> bool {
+        *self == Self::default()
     }
 }
 
@@ -2344,6 +2380,40 @@ mod tests {
         assert_eq!(written, "\"island\"");
         let unknown = Settings::from_bytes(br#"{"osd":{"position":"top"}}"#).expect("read");
         assert_eq!(unknown.osd.position, OsdPosition::Bottom);
+    }
+
+    #[test]
+    fn the_launcher_view_defaults_to_list_and_is_not_written() {
+        let read = Settings::from_bytes(br#"{"duties":{"idle":"on"}}"#).expect("read");
+        assert_eq!(read.launcher.view, LauncherView::List);
+        let text = String::from_utf8(read.to_bytes().expect("write")).expect("utf8");
+        assert!(!text.contains("launcher"), "{text}");
+    }
+
+    #[test]
+    fn the_launcher_view_reads_grid_and_ignores_the_unknown() {
+        let grid = Settings::from_bytes(br#"{"launcher":{"view":"grid"}}"#).expect("read");
+        assert_eq!(grid.launcher.view, LauncherView::Grid);
+        let seven = Settings::from_bytes(br#"{"launcher":{"view":7}}"#).expect("read");
+        assert_eq!(seven.launcher.view, LauncherView::List);
+        let word = Settings::from_bytes(br#"{"launcher":{"view":"tiles"}}"#).expect("read");
+        assert_eq!(word.launcher.view, LauncherView::List);
+        let shape = Settings::from_bytes(br#"{"launcher":3}"#).expect("read");
+        assert_eq!(shape.launcher, LauncherChoice::default());
+    }
+
+    #[test]
+    fn the_launcher_grid_survives_a_round_trip() {
+        let settings = Settings {
+            launcher: LauncherChoice {
+                view: LauncherView::Grid,
+            },
+            ..Settings::default()
+        };
+        let bytes = settings.to_bytes().expect("write");
+        let text = String::from_utf8(bytes.clone()).expect("utf8");
+        assert!(text.contains(r#""view": "grid""#), "{text}");
+        assert_eq!(Settings::from_bytes(&bytes), Some(settings));
     }
 
     #[test]

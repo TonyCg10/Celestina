@@ -146,6 +146,16 @@ pub const LAUNCHER_PLACEHOLDER: &str = "Buscar aplicaciones o escribir /";
 /// The launcher's only line while nothing answers the query ("No results").
 pub const LAUNCHER_EMPTY: &str = "Sin resultados";
 
+/// The launcher's Recent tab ("Recents").
+pub const LAUNCHER_TAB_RECENT: &str = "Recientes";
+
+/// The launcher's All tab, every application by name ("All").
+pub const LAUNCHER_TAB_ALL: &str = "Todas";
+
+/// The launcher's only line in the Recent tab before any application was
+/// opened ("You have not opened any application yet").
+pub const LAUNCHER_RECENT_EMPTY: &str = "Aún no has abierto ninguna aplicación";
+
 /// The calculator row's action word ("Copy"), shown beside the Enter key.
 pub const LAUNCHER_CALC_COPY: &str = "Copiar";
 

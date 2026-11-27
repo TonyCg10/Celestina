@@ -1,0 +1,87 @@
+# CEL-D-012 exact change inventory
+
+Base revision	dd28ad85c2c648176d97383cfffd1f3e727ec7e3
+Pathspec	celestina-rs/crates/celestina-shell/src/settings.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-ui/src/tree.rs
+Pathspec	celestina/crates/celestina-ui/tests/reconcile.rs
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-01-open.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-02-all-scrolled.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-03-arrows.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-04-hover.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-05-navegador.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-06-krtia.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-07-sum.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-08-copied.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-09-none.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-10-clearing.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-11-switch-mid.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-12-ctrl-tab.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-01-open.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-02-all-scrolled.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-03-arrows.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-04-hover.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-05-navegador.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-06-krtia.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-07-sum.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-08-copied.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-09-none.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-10-clearing.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-11-switch-mid.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-12-ctrl-tab.png
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-012.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/launcher/mod.rs
+Pathspec	celestina/src/launcher/state.rs
+Pathspec	celestina/src/launcher/view.rs
+Pathspec	celestina/src/providers/settings.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+70	0	654f901b32f95c5906cb105d1633d64cdc2bdf95407145a78093c620aa0b4dea	celestina-rs/crates/celestina-shell/src/settings.rs
+1	1	980802029eb61ec19c321e1ee43d7659b71cc4ef627307dca1a21884908e2f34	celestina/Cargo.lock
+1	1	9ea06e802612718eca0f8f17fc55d83c7248c0120f29dee4bf0fcb2a832351d2	celestina/Cargo.toml
+24	0	043c72401c769ba60feaa0119e6b40aaafaf26c569a4115bf707a16c9671e6c1	celestina/VALIDATION.md
+10	7	be378d6879144d7ac14e2752dfc8153642d79e663bb3622f6c06465586866a3d	celestina/crates/celestina-ui/src/tree.rs
+24	0	a105ea50bdcb4cd0c0a608c16b25ab39181c0195fcc7b65017539bd7fe11aa0b	celestina/crates/celestina-ui/tests/reconcile.rs
+90	0	f06dbadc9be4e080638b477c9bb0dab1454421146d974234c30d80533cda606e	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid.md
+-	-	1afb794b7b927baea97572aaad97794e806a1bc3bbf00044a8dc7f1ede5fabd2	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-01-open.png
+-	-	516f0446da6a1a1ed6003a12a5c703cb999c50e65218c0f4c11568b09bbb628a	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-02-all-scrolled.png
+-	-	6d785dd80bc9903513db4d4d883afc416bb34b5cfe454d69befa57f0a4a602fb	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-03-arrows.png
+-	-	bb69e709ad209ba3d9188eac790b058826c41b7fb12a270a479fa0637e5b43d8	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-04-hover.png
+-	-	200c70052ba68d222e589a993d0cf52ba73643631b251d1474666fa636461d13	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-05-navegador.png
+-	-	c5ef2dd67a50c0c3ecf18b43f2b9efe95d3d64a4d2774d5ac08c812acda49fb6	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-06-krtia.png
+-	-	603eb2ae897e4b15f86f1c0e3db714cb1d1315fd4990a0f5852e8d43e44ee560	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-07-sum.png
+-	-	dbd6f4efb11b8faa7aeb516864d1ebf2a187f2ce25036cbaabdd8052fde9d83c	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-08-copied.png
+-	-	3834cf8bdd161edf22691fabef966bad82974738bf15fc2fbe543bea37716660	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-09-none.png
+-	-	6fc5ee853fbee649e96b45db2b6a03c12f5474073d6a5f08b0fa75fad8fb13fe	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-10-clearing.png
+-	-	b0c55f10e86d6b432c3ee57b6d94bada9b0dbcb924e9d60933acad4b57e12638	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-11-switch-mid.png
+-	-	3b2bb338c3c68f3fce71247e54d85263cda0dafaebda2f4e973fbb464a52506e	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/grid-12-ctrl-tab.png
+-	-	6d6c3505f63d174b31e30a44cd60e55839f131817674160dd39dc8640569defc	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-01-open.png
+-	-	f72b137e4a576067b3c96c730791def8d158ac20848952e121667e83ccd1646c	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-02-all-scrolled.png
+-	-	a53b8d3b051dde436aa1af70cfef1fb026481080ebed6fc5eb56ba40efd48121	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-03-arrows.png
+-	-	dfc5ac0cb24e05f28cc0eed2d3fbd3cfa9ab2f204491c50e61823f957bb89a34	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-04-hover.png
+-	-	48865d8af708a91717e08a7acb89900a9c04156a3ba3e9231977512885cc73db	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-05-navegador.png
+-	-	e902d337050a570f1e4face7b036b496c3eba17199e49ceb71310bcde301af8f	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-06-krtia.png
+-	-	438b1c9cdc2198ef304812a297e4a7c718c618f93483e9e1cfe982f1d400d6f8	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-07-sum.png
+-	-	f43b6e1f38ce29a5ff6f36c6e4fc1fb63ccbe324d2460f6caeff3d23081609ad	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-08-copied.png
+-	-	0c63e20d4199de9b3aa37faf5ace5bbbfbc14f227a0a50037082535930f8e5e1	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-09-none.png
+-	-	2261228ae5f4c64b0300f64edb9add473fcdf4902dea3c0605836bc6be9fa6f4	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-10-clearing.png
+-	-	1c0d7c9dab22a5a7cc0650449149a54a8f89dd7d645df8f6de8787f59bd4e833	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-11-switch-mid.png
+-	-	f93d4c91539fe3c91b1a9a4a8f993576bbcca8454d0ff8f6c74e7b45cf1435e8	celestina/docs/evidence/2026-11-27-cel-d-012-tabs-grid/list-12-ctrl-tab.png
+87	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-012.numstat.tsv
+1	0	da328cc22e5b9c46f4276268d762e64f48e2cf6a22bcd18c243a06c85448324a	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+9	1	96bebef1090a9b9dd279c45c4b29b71de06e02d3883db5f63849ea0ed803c0cb	celestina/src/app.rs
+10	0	d7496a63ec2ee029c4beb9f32342077d590973be9ad2ed65e24fda81b496a518	celestina/src/copy.rs
+494	36	afa4d9305b05a1bc7ea890b771f9b11dc989f83e7b0de546890dafc0900941c7	celestina/src/launcher/mod.rs
+391	21	dc6e6d5c8cad95b55f183263f19a3c6f5370bb994f4f33345d42977d3091dd02	celestina/src/launcher/state.rs
+831	62	84f2e7bcc73a848ff584bf81a3fcdb7f2f851c554d30cec51981fb5aeb2bdb73	celestina/src/launcher/view.rs
+44	1	63ba6e1a9013855dd5512b8d577c22bd0488793d905c2b30d56b09162cd832fc	celestina/src/providers/settings.rs
+1	0	4aec60b52ae8d06fc1e56518e69beb5f72bc4f5a11533fa953633afae4e8e7ff	docs/version-history.tsv

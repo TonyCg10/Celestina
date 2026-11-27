@@ -2005,6 +2005,7 @@ impl App {
             self.usage.scores(launcher::usage::unix_now()),
             Locale::from_env(),
             self.clipboard.get().is_some_and(ClipboardDuty::running),
+            self.settings.current().launcher.view,
             &self.index,
         );
         if let Some(mut s) = ctl.surface(surface) {
@@ -2144,7 +2145,7 @@ impl App {
                 None
             }
             // Not a closing action; `launcher_input` keeps it out.
-            LauncherAction::Copy(_) | LauncherAction::Close => None,
+            LauncherAction::Copy(_) | LauncherAction::SetView(_) | LauncherAction::Close => None,
         };
         let closed = Message::LauncherClosed {
             surface: open.surface(),
@@ -2748,6 +2749,13 @@ impl App {
         };
         match action {
             Some(LauncherAction::RequestClose(window_id)) => self.close_window(window_id),
+            Some(LauncherAction::SetView(view)) => {
+                // The open launcher already shows the view; a refused write
+                // (a protected file) only means it is not kept.
+                if let Err(err) = self.settings.set_launcher_view(view) {
+                    tracing::warn!("launcher view not kept: {}", error_chain(&err));
+                }
+            }
             Some(LauncherAction::Copy(text)) => {
                 if !self.copy_to_clipboard(text) {
                     // The worker took nothing: the row must not say copied

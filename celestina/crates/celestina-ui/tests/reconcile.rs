@@ -352,3 +352,27 @@ fn escape_bubbles_as_an_event() {
     );
     assert_eq!(tree.highlight().focused, focused);
 }
+
+#[test]
+fn a_node_under_a_leaving_one_is_not_found_before_its_replacement() {
+    let t0 = Instant::now();
+    let page = |page: u64| {
+        view::col(Key::named("card")).child(
+            view::col(Key::indexed("page", page)).child(
+                view::col(Key::named("inner"))
+                    .size(100.0, 50.0)
+                    .child(row(0)),
+            ),
+        )
+    };
+    let mut tree = Tree::new(false, &Theme::dark());
+    tree.apply(page(0), t0);
+    tree.apply(page(1), t0);
+    tree.layout_measured(AVAILABLE, measure);
+    let found = id(&tree, Key::named("inner"));
+    let rect = tree.rect(found);
+    assert!(
+        rect.w > 0.0,
+        "the new page's node, laid out, not the old one"
+    );
+}

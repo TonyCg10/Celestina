@@ -23,7 +23,8 @@ use std::time::Duration;
 use celestina_core::atomic_file::{self, Published, WriteError};
 use celestina_settings::Follower;
 use celestina_shell::settings::{
-    self, Duties, Energy, Pending, Settings, Store, WallpaperSettings, WriteOutcome, MAX_FILE_BYTES,
+    self, Duties, Energy, LauncherView, Pending, Settings, Store, WallpaperSettings, WriteOutcome,
+    MAX_FILE_BYTES,
 };
 use celestina_wayland::Sender;
 use notify_debouncer_full::notify::{self, EventKind, RecommendedWatcher, RecursiveMode};
@@ -430,6 +431,16 @@ impl ShellSettings {
             let ids = settings.bar_layout().tray_hidden_with(id, hide);
             settings.bar.set_tray_hidden(ids);
         })
+    }
+
+    /// Keeps the launcher's list or grid `view` durably, over the file as it
+    /// is now. Returns whether anything changed.
+    ///
+    /// # Errors
+    ///
+    /// As [`ShellSettings::set_do_not_disturb`].
+    pub fn set_launcher_view(&mut self, view: LauncherView) -> Result<bool, ShellSettingsError> {
+        self.set_merged(move |settings| settings.launcher.view = view)
     }
 
     /// Stages `change` over the values in force and writes it over the file
@@ -1104,6 +1115,38 @@ mod tests {
             !shell.set_tray_hidden("b", true).expect("nothing to write"),
             "hiding a hidden id changes nothing"
         );
+    }
+
+    #[test]
+    fn set_launcher_view_writes_the_key_and_keeps_others() {
+        let scratch = Scratch::new("launcher-view");
+        let mut shell = ShellSettings::load_from(Some(scratch.file()));
+        let mut edit = Settings::default();
+        edit.bar.end = Some(ids(&["tray", "clipboard"]));
+        edit.do_not_disturb = true;
+        publish(&scratch, &edit);
+
+        assert!(shell
+            .set_launcher_view(LauncherView::Grid)
+            .expect("the write succeeds"));
+        let written = std::fs::read(scratch.file()).expect("the file");
+        let on_disk = Settings::from_bytes(&written).expect("the shell's own bytes");
+        assert_eq!(on_disk.launcher.view, LauncherView::Grid);
+        assert_eq!(on_disk.bar.end, edit.bar.end, "the other keys survive");
+        assert!(on_disk.do_not_disturb);
+        assert_eq!(shell.current().launcher.view, LauncherView::Grid);
+        assert!(
+            !shell
+                .set_launcher_view(LauncherView::Grid)
+                .expect("nothing to write"),
+            "choosing the grid again changes nothing"
+        );
+        assert!(shell
+            .set_launcher_view(LauncherView::List)
+            .expect("back to the list"));
+        let back = std::fs::read(scratch.file()).expect("the file");
+        let text = String::from_utf8(back).expect("utf8");
+        assert!(!text.contains("launcher"), "{text}");
     }
 
     #[test]

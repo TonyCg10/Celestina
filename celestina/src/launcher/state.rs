@@ -6,8 +6,9 @@
 //! index with `celestina_shell::launcher_search` (words in any order, one
 //! typo, aliases), and within equal scores the application used more comes
 //! first ([`super::usage`]). An empty query, or one of only separators,
-//! lists the whole index by use, then by name. Every answer is a row: the
-//! view scrolls the list ([`super::scrolling`]).
+//! answers from the [`Tab`]: the recent applications, the whole index by
+//! name, or one group. Every answer is a row: the view scrolls the list
+//! ([`super::scrolling`]) or lays it out as a grid.
 //!
 //! The `Mod+K` selector is the same state over the bubbles [`Source`]: its
 //! rows are Melibea's minimised windows ([`super::selector`]), and no query
@@ -22,7 +23,8 @@ use celestina_shell::launcher_search::{search, Prepared};
 use celestina_ui::Field;
 
 use super::commands::{commands_for, Switch};
-use super::{groups, selector};
+use super::groups::{self, Group};
+use super::selector;
 use crate::bubbles::Bubbles;
 
 /// An application row: the entry and the texts the row shows (the localized
@@ -65,6 +67,27 @@ pub enum Source {
     Bubbles(Bubbles),
 }
 
+/// What an empty query lists (design §5.2).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Tab {
+    /// The applications launched before, the most used first.
+    #[default]
+    Recent,
+    /// Every application, by name.
+    All,
+    /// The applications of one group, by name.
+    Group(Group),
+}
+
+/// How the rows are laid out (design §5.5): the choice `shell.json` keeps.
+pub use celestina_shell::settings::LauncherView as ListView;
+
+/// The most applications the Recent tab lists.
+pub const RECENT_LIMIT: usize = 50;
+
+/// The cells of a grid line.
+pub const GRID_COLUMNS: usize = 6;
+
 /// The query, the rows it answers and the selected row.
 #[derive(Debug, Default)]
 pub struct LauncherState {
@@ -83,6 +106,12 @@ pub struct LauncherState {
     pub source: Source,
     /// The calculator row's result was just copied: the row says so.
     pub copied: bool,
+    /// What an empty query lists.
+    pub tab: Tab,
+    /// How the rows are laid out.
+    pub view: ListView,
+    /// The group of each prepared entry, built with `prepared`.
+    entry_groups: Vec<Group>,
 }
 
 impl LauncherState {
@@ -152,13 +181,68 @@ impl LauncherState {
         // A new index may keep every id and change what an entry says (a
         // rename, a translation added), so it is prepared again whole.
         self.prepared.clear();
+        self.entry_groups.clear();
+        let mut fell_back = false;
+        if matches!(self.source, Source::Apps) {
+            self.sync(index);
+            if let Tab::Group(group) = self.tab {
+                if !self.visible_tabs().contains(&Tab::Group(group)) {
+                    self.tab = Tab::All;
+                    fell_back = true;
+                }
+            }
+        }
         let rows = self.answer(index);
         self.selected = match self.source {
+            Source::Apps if fell_back => 0,
             Source::Apps if self.selected < rows.len() => self.selected,
             Source::Apps => 0,
             Source::Bubbles(_) => selector::relocate(&self.rows, self.selected, &rows),
         };
         self.rows = rows;
+    }
+
+    /// Whether the search or the `/` commands answer the query, not the
+    /// tab: the view dims the tab row meanwhile.
+    #[must_use]
+    pub fn searching(&self) -> bool {
+        matches!(self.source, Source::Apps) && {
+            let query = self.query.text();
+            commands_for(query).is_some() || has_match_chars(query)
+        }
+    }
+
+    /// The tabs to show: Recent, All, then each group with an application
+    /// in the last index.
+    #[must_use]
+    pub fn visible_tabs(&self) -> Vec<Tab> {
+        let mut tabs = vec![Tab::Recent, Tab::All];
+        tabs.extend(
+            Group::ALL
+                .into_iter()
+                .filter(|group| self.entry_groups.contains(group))
+                .map(Tab::Group),
+        );
+        tabs
+    }
+
+    /// Where the open tab sits among [`LauncherState::visible_tabs`].
+    #[must_use]
+    pub fn tab_position(&self) -> usize {
+        self.visible_tabs()
+            .iter()
+            .position(|t| *t == self.tab)
+            .unwrap_or(0)
+    }
+
+    /// Shows `tab`: the query is emptied and the selection goes to the
+    /// first row.
+    pub fn set_tab(&mut self, tab: Tab, index: &[DesktopEntry]) {
+        self.tab = tab;
+        self.query.set_text("");
+        self.copied = false;
+        self.rows = self.answer(index);
+        self.selected = 0;
     }
 
     /// The rows the current query names.
@@ -190,6 +274,10 @@ impl LauncherState {
         if same {
             return;
         }
+        self.entry_groups = index
+            .iter()
+            .map(|entry| groups::group_of(&entry.categories))
+            .collect();
         self.prepared = index
             .iter()
             .map(|entry| {
@@ -202,18 +290,10 @@ impl LauncherState {
     /// The rows of `query` over the prepared `index`: every answer.
     fn ranked(&self, index: &[DesktopEntry], query: &str) -> Vec<Row> {
         let score = |id: &str| self.scores.get(id).copied().unwrap_or(0);
-        let hits: Vec<usize> = if query.chars().any(|c| c.is_alphanumeric() || c == '+') {
+        let hits: Vec<usize> = if has_match_chars(query) {
             search(&self.prepared, query, &score)
         } else {
-            // Nothing to match: every entry, the most used first.
-            let mut all: Vec<(std::cmp::Reverse<u64>, String, usize)> = self
-                .prepared
-                .iter()
-                .enumerate()
-                .map(|(i, p)| (std::cmp::Reverse(score(&p.id)), fold(&p.display), i))
-                .collect();
-            all.sort();
-            all.into_iter().map(|(_, _, i)| i).collect()
+            self.listed_by_tab(&score)
         };
         hits.into_iter()
             .map(|i| {
@@ -226,6 +306,78 @@ impl LauncherState {
             .collect()
     }
 
+    /// The prepared entries the current tab lists, in order.
+    fn listed_by_tab(&self, score: &dyn Fn(&str) -> u64) -> Vec<usize> {
+        let mut listed: Vec<(std::cmp::Reverse<u64>, String, &str, usize)> = self
+            .prepared
+            .iter()
+            .enumerate()
+            .filter(|&(i, p)| match self.tab {
+                Tab::Recent => score(&p.id) > 0,
+                Tab::All => true,
+                Tab::Group(group) => self.entry_groups.get(i) == Some(&group),
+            })
+            .map(|(i, p)| {
+                let used = if self.tab == Tab::Recent {
+                    score(&p.id)
+                } else {
+                    0
+                };
+                (std::cmp::Reverse(used), fold(&p.display), p.id.as_str(), i)
+            })
+            .collect();
+        listed.sort();
+        if self.tab == Tab::Recent {
+            listed.truncate(RECENT_LIMIT);
+        }
+        listed.into_iter().map(|(_, _, _, i)| i).collect()
+    }
+
+    /// The grid line and the column of row `i`: a calculator row is a line
+    /// of one, then the rows run in lines of [`GRID_COLUMNS`].
+    #[must_use]
+    pub fn grid_line(&self, i: usize) -> (usize, usize) {
+        let lead = self.grid_lead();
+        if i < lead {
+            return (0, 0);
+        }
+        let cell = i - lead;
+        (lead + cell / GRID_COLUMNS, cell % GRID_COLUMNS)
+    }
+
+    /// 1 when the first row is the calculator's, which is a grid line of
+    /// its own, else 0.
+    #[must_use]
+    pub fn grid_lead(&self) -> usize {
+        usize::from(matches!(self.rows.first(), Some(Row::Calc { .. })))
+    }
+
+    /// Moves the selection through the grid: `dx` cells along the rows,
+    /// `dy` lines down, to the same column clamped to the line, both
+    /// wrapping at the ends.
+    pub fn move_grid(&mut self, dx: i32, dy: i32) {
+        let count = self.rows.len();
+        if count == 0 {
+            self.selected = 0;
+            return;
+        }
+        let lead = self.grid_lead();
+        let mut at = wrapped(self.selected.min(count - 1), dx, count);
+        if dy != 0 {
+            let (line, column) = self.grid_line(at);
+            let lines = lead + (count - lead).div_ceil(GRID_COLUMNS);
+            let line = wrapped(line, dy, lines);
+            at = if line < lead {
+                0
+            } else {
+                let start = lead + (line - lead) * GRID_COLUMNS;
+                let len = (count - start).min(GRID_COLUMNS);
+                start + column.min(len - 1)
+            };
+        }
+        self.selected = at;
+    }
+
     /// Moves the selection `delta` rows, wrapping at both ends.
     pub fn move_selection(&mut self, delta: i32) {
         let count = self.rows.len();
@@ -233,10 +385,7 @@ impl LauncherState {
             self.selected = 0;
             return;
         }
-        let count = i64::try_from(count).unwrap_or(i64::MAX);
-        let at = i64::try_from(self.selected).unwrap_or(0);
-        let next = (at + i64::from(delta)).rem_euclid(count);
-        self.selected = usize::try_from(next).unwrap_or(0);
+        self.selected = wrapped(self.selected, delta, count);
     }
 
     /// The selected row, which Enter chooses.
@@ -244,6 +393,24 @@ impl LauncherState {
     pub fn chosen(&self) -> Option<&Row> {
         self.rows.get(self.selected)
     }
+}
+
+/// `at` moved `delta` places among `count`, wrapping at both ends; 0 when
+/// there are none.
+pub fn wrapped(at: usize, delta: i32, count: usize) -> usize {
+    let Ok(count) = i64::try_from(count) else {
+        return 0;
+    };
+    if count == 0 {
+        return 0;
+    }
+    let at = i64::try_from(at).unwrap_or(0);
+    usize::try_from((at + i64::from(delta)).rem_euclid(count)).unwrap_or(0)
+}
+
+/// Whether `query` has anything the search can match.
+fn has_match_chars(query: &str) -> bool {
+    query.chars().any(|c| c.is_alphanumeric() || c == '+')
 }
 
 #[cfg(test)]
@@ -315,7 +482,9 @@ mod tests {
             .map(|i| entry(&format!("t{i:02}"), &format!("Tool {i:02}")))
             .collect();
         assert_eq!(typed("t", &many, &[]).rows.len(), 20);
-        assert_eq!(typed("", &many, &[]).rows.len(), 20);
+        let mut all = typed("", &many, &[]);
+        all.set_tab(Tab::All, &many);
+        assert_eq!(all.rows.len(), 20);
     }
 
     #[test]
@@ -335,14 +504,14 @@ mod tests {
             ids(&typed("a", &index, &[("b.desktop", 900)])),
             ["aa.desktop", "ab.desktop", "b.desktop"]
         );
-        // With nothing typed, the most used lead, then the name.
+        // With nothing typed, Recent lists the used ones, the most used first.
         assert_eq!(
             ids(&typed(
                 "",
                 &index,
                 &[("b.desktop", 200), ("ab.desktop", 100)]
             )),
-            ["b.desktop", "ab.desktop", "aa.desktop"]
+            ["b.desktop", "ab.desktop"]
         );
     }
 
@@ -351,7 +520,7 @@ mod tests {
         let index = [entry("aa", "Aa"), entry("b", "Bb")];
         let scores = [("b.desktop", 5)];
         let empty = ids(&typed("", &index, &scores));
-        assert_eq!(empty, ["b.desktop", "aa.desktop"]);
+        assert_eq!(empty, ["b.desktop"]);
         assert_eq!(ids(&typed("  ", &index, &scores)), empty);
         assert_eq!(ids(&typed(" - . ", &index, &scores)), empty);
     }
@@ -378,6 +547,7 @@ mod tests {
         let first = [entry("aa", "Aa")];
         let second = [entry("bb", "Bb")];
         let mut state = typed("", &first, &[]);
+        state.set_tab(Tab::All, &first);
         assert_eq!(ids(&state), ["aa.desktop"]);
         state.update(&second);
         assert_eq!(ids(&state), ["bb.desktop"]);
@@ -559,5 +729,205 @@ mod tests {
         let mut state = LauncherState::selector(Bubbles::default());
         state.set_query("2+2", &[]);
         assert!(state.rows.is_empty());
+    }
+
+    fn with_cats(id: &str, name: &str, cats: &str) -> DesktopEntry {
+        DesktopEntry {
+            categories: cats.split(';').map(str::to_owned).collect(),
+            ..entry(id, name)
+        }
+    }
+
+    fn mixed() -> Vec<DesktopEntry> {
+        vec![
+            with_cats("zed", "Zed", "Development"),
+            with_cats("fox", "Firefox", "Network;WebBrowser"),
+            with_cats("chess", "Chess", "Game"),
+            with_cats("code", "Code", "Development"),
+        ]
+    }
+
+    fn scored(index: &[DesktopEntry], scores: &[(&str, u64)]) -> LauncherState {
+        typed("", index, scores)
+    }
+
+    #[test]
+    fn recent_lists_used_entries_best_first_capped_and_empty_with_no_scores() {
+        let index = mixed();
+        assert!(scored(&index, &[]).rows.is_empty());
+        let state = scored(
+            &index,
+            &[("fox.desktop", 3), ("zed.desktop", 9), ("code.desktop", 3)],
+        );
+        assert_eq!(ids(&state), ["zed.desktop", "code.desktop", "fox.desktop"]);
+        let many: Vec<_> = (0..60)
+            .map(|i| entry(&format!("t{i:02}"), &format!("T {i:02}")))
+            .collect();
+        let scores: Vec<(String, u64)> = (0..60)
+            .map(|i| (format!("t{i:02}.desktop"), 1 + i))
+            .collect();
+        let refs: Vec<(&str, u64)> = scores.iter().map(|(k, v)| (k.as_str(), *v)).collect();
+        let state = scored(&many, &refs);
+        assert_eq!(state.rows.len(), RECENT_LIMIT);
+        assert_eq!(ids(&state)[0], "t59.desktop");
+    }
+
+    #[test]
+    fn all_lists_by_folded_name_and_a_group_filters_by_group_of() {
+        let index = mixed();
+        let mut state = scored(&index, &[]);
+        state.set_tab(Tab::All, &index);
+        assert_eq!(
+            ids(&state),
+            [
+                "chess.desktop",
+                "code.desktop",
+                "fox.desktop",
+                "zed.desktop"
+            ]
+        );
+        state.set_tab(Tab::Group(Group::Development), &index);
+        assert_eq!(ids(&state), ["code.desktop", "zed.desktop"]);
+        state.set_tab(Tab::Group(Group::Games), &index);
+        assert_eq!(ids(&state), ["chess.desktop"]);
+        // Whitespace answers from the tab too; the search ignores it.
+        state.set_query("  ", &index);
+        assert_eq!(ids(&state), ["chess.desktop"]);
+        assert!(!state.searching());
+        state.set_query("zed", &index);
+        assert_eq!(ids(&state), ["zed.desktop"]);
+        assert!(state.searching());
+        state.set_query("/", &index);
+        assert!(state.searching());
+    }
+
+    #[test]
+    fn visible_tabs_hide_an_empty_group() {
+        let index = mixed();
+        let state = scored(&index, &[]);
+        assert_eq!(
+            state.visible_tabs(),
+            [
+                Tab::Recent,
+                Tab::All,
+                Tab::Group(Group::Internet),
+                Tab::Group(Group::Games),
+                Tab::Group(Group::Development),
+            ]
+        );
+    }
+
+    #[test]
+    fn an_empty_index_hides_every_group() {
+        let index = mixed();
+        let mut state = scored(&index, &[]);
+        state.update(&[]);
+        assert_eq!(state.visible_tabs(), [Tab::Recent, Tab::All]);
+    }
+
+    #[test]
+    fn set_tab_clears_the_query_and_selects_the_first_row() {
+        let index = mixed();
+        let mut state = typed("zed", &index, &[]);
+        state.move_selection(0);
+        state.copied = true;
+        state.set_tab(Tab::All, &index);
+        assert_eq!(state.query.text(), "");
+        assert_eq!(
+            (state.selected, state.copied, state.tab),
+            (0, false, Tab::All)
+        );
+        assert_eq!(state.rows.len(), 4);
+    }
+
+    #[test]
+    fn a_group_that_leaves_the_index_falls_back_to_all() {
+        let index = mixed();
+        let mut state = scored(&index, &[]);
+        state.set_tab(Tab::Group(Group::Games), &index);
+        state.update(&index);
+        assert_eq!(state.tab, Tab::Group(Group::Games));
+        let without = &index[..1];
+        state.update(without);
+        assert_eq!((state.tab, state.selected), (Tab::All, 0));
+        assert_eq!(ids(&state), ["zed.desktop"]);
+    }
+
+    fn grid(n: usize, calc: bool) -> LauncherState {
+        let index: Vec<_> = (0..n)
+            .map(|i| entry(&format!("t{i:02}"), &format!("T {i:02}")))
+            .collect();
+        let mut state = LauncherState::new(HashMap::new(), None);
+        state.update(&index);
+        state.set_tab(Tab::All, &index);
+        if calc {
+            state.rows.insert(
+                0,
+                Row::Calc {
+                    result: "4".to_owned(),
+                },
+            );
+        }
+        state
+    }
+
+    #[test]
+    fn the_grid_moves_by_lines_of_six_and_wraps() {
+        let mut state = grid(14, false); // lines of 6, 6, 2
+        state.move_grid(1, 0);
+        assert_eq!(state.selected, 1);
+        state.move_grid(0, 1);
+        assert_eq!(state.selected, 7);
+        state.move_grid(0, 1);
+        assert_eq!(state.selected, 13, "column 1 of a line of two");
+        state.move_grid(0, 1);
+        assert_eq!(state.selected, 1, "the last line wraps to the first");
+        state.move_grid(0, -1);
+        assert_eq!(state.selected, 13, "the first line wraps to the last");
+        state.move_grid(1, 0);
+        assert_eq!(state.selected, 0, "right from the last wraps");
+        state.move_grid(-1, 0);
+        assert_eq!(state.selected, 13);
+        state.move_grid(0, -1);
+        assert_eq!(state.selected, 7);
+        // Clamp to a short last line.
+        state.selected = 5;
+        state.move_grid(0, 2);
+        assert_eq!(state.selected, 13);
+        assert_eq!(state.grid_line(13), (2, 1));
+    }
+
+    #[test]
+    fn the_calculator_row_is_a_line_of_one() {
+        let mut state = grid(8, true);
+        assert_eq!(state.selected, 0);
+        state.move_grid(0, 1);
+        assert_eq!(
+            state.selected, 1,
+            "down from the calculator is the first cell"
+        );
+        state.move_grid(0, 1);
+        assert_eq!(state.selected, 7);
+        state.move_grid(0, -1);
+        assert_eq!(state.selected, 1);
+        state.selected = 4;
+        state.move_grid(0, -1);
+        assert_eq!(
+            state.selected, 0,
+            "up from the first cell line is the calculator"
+        );
+        state.move_grid(0, -1);
+        assert_eq!(state.selected, 7, "the calculator wraps to the last line");
+        state.move_grid(1, 0);
+        assert_eq!(state.selected, 8);
+        state.move_grid(1, 0);
+        assert_eq!(state.selected, 0);
+        assert_eq!(
+            (state.grid_line(0), state.grid_line(1), state.grid_line(7)),
+            ((0, 0), (1, 0), (2, 0))
+        );
+        let mut empty = grid(0, false);
+        empty.move_grid(1, 1);
+        assert_eq!(empty.selected, 0);
     }
 }

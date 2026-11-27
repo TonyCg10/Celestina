@@ -1992,3 +1992,27 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-I-018](docs/evidence/2026-11-27-cel-i-018-key-repeat.md)
+
+## VAL-CEL-D-012 — The launcher's tabs and grid
+
+- **Status:** pending
+- **Related implementation:** CEL-D-012 (the launcher opens on Recents,
+  offers All and a tab per group of applications, and shows any tab or
+  search as a list or a six-column grid whose choice it remembers)
+- **Requires:** the deployed shell after the landing of CEL-D-012
+- **Procedure:** (1) open the launcher; (2) click All, then press Ctrl+Tab
+  twice and Ctrl+Shift+Tab once, then Alt+5; (3) type a word while a group is
+  open, then click that group's tab; (4) press Ctrl+G, move with the four
+  arrows with the field empty, then type a letter and press Left; (5) close
+  and reopen the launcher; (6) click the view button
+- **Pass condition:** (1) it opens on Recents with the applications used
+  most first, and the open tab shows its label; (2) each switch shows its
+  tab's applications from the top, the label moving to the open tab, and
+  Alt+5 opens the fifth tab; (3) the tab row dims while the word is typed and
+  the click empties the field and shows the group; (4) a six-column grid
+  shows, the arrows move the selection by a cell and by a line, and with text
+  Left moves the caret; (5) it reopens on Recents in the grid; (6) it is back
+  to the list, and the card never changes size
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-012](docs/evidence/2026-11-27-cel-d-012-tabs-grid.md)
