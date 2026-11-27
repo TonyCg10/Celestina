@@ -15,7 +15,7 @@ all = { level = "warn", priority = -1 }
 
 [package]
 name = "celestina"
-version = "1.31.1"
+version = "1.32.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

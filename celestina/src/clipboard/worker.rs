@@ -36,6 +36,10 @@
 //!   read would wait on this very thread to answer it). The source answers
 //!   `send` with bounded writes and is dropped, with its data, once
 //!   cancelled;
+//! - a text the shell offers itself ([`ClipboardHandle::offer_text`]) is
+//!   owned the same way, and recorded as a copy would be: not while paused,
+//!   and never when the history could not keep it, which is refused and
+//!   offers nothing;
 //! - while paused, selections are destroyed unread; the connection stays;
 //! - the persisted history is loaded here, on this thread, through the
 //!   caller's [`Persist`]; a file that held more than it gave back (expired
@@ -255,14 +259,41 @@ impl QueueRefusal for ClipboardRefused {
 }
 
 /// What the loop can ask of the worker. Indices are rows' positions; `seen`
-/// is the snapshot the rows were shown from, `None` for the latest.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// is the snapshot the rows were shown from, `None` for the latest. `Offer`
+/// carries a text the shell itself puts on the clipboard.
+#[derive(Clone, PartialEq, Eq)]
 enum Command {
     Select { index: usize, seen: Option<u64> },
     Remove { index: usize, seen: Option<u64> },
     Clear,
     Pause,
     Resume,
+    Offer { text: String },
+}
+
+impl fmt::Debug for Command {
+    /// As derived, except that an offered text shows only its size.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Select { index, seen } => formatter
+                .debug_struct("Select")
+                .field("index", index)
+                .field("seen", seen)
+                .finish(),
+            Self::Remove { index, seen } => formatter
+                .debug_struct("Remove")
+                .field("index", index)
+                .field("seen", seen)
+                .finish(),
+            Self::Clear => formatter.write_str("Clear"),
+            Self::Pause => formatter.write_str("Pause"),
+            Self::Resume => formatter.write_str("Resume"),
+            Self::Offer { text } => formatter
+                .debug_struct("Offer")
+                .field("bytes", &text.len())
+                .finish(),
+        }
+    }
 }
 
 /// The loop's side of the clipboard worker.
@@ -323,6 +354,19 @@ impl ClipboardHandle {
     /// As [`ClipboardHandle::select`].
     pub fn resume(&self) -> Result<(), ClipboardRefused> {
         self.send(Command::Resume)
+    }
+
+    /// Makes `text` the selection, offering it to every client, and records
+    /// it in the history as a copy would be: not while reading is paused,
+    /// and an equal entry moves to the front instead of being repeated.
+    ///
+    /// # Errors
+    ///
+    /// As [`ClipboardHandle::select`]. A text the history could not keep
+    /// (empty, over [`MAX_TEXT_BYTES`], or carrying a NUL) is reported later
+    /// as [`ClipboardEvent::Refused`], and nothing is offered.
+    pub fn offer_text(&self, text: String) -> Result<(), ClipboardRefused> {
+        self.send(Command::Offer { text })
     }
 
     /// Asks the worker to stop: it releases its source and its connection
@@ -649,6 +693,11 @@ fn rows(history: &History, thumbs: &Thumbs) -> Vec<Row> {
 struct Owned {
     source: SourceId,
     content: Content,
+    /// Whether the history held the content when it was offered. Only then
+    /// does the source go once the content leaves the history; a text
+    /// offered while paused was never an entry, and no change of the
+    /// history ends it.
+    kept: bool,
 }
 
 /// Everything the duty is built from besides its transport.
@@ -759,7 +808,7 @@ where
         let gone = self
             .owned
             .as_ref()
-            .is_some_and(|owned| !self.history.holds(&owned.content));
+            .is_some_and(|owned| owned.kept && !self.history.holds(&owned.content));
         if gone {
             tracing::debug!("clipboard: the selected entry left the history; its source goes");
             self.release();
@@ -838,6 +887,7 @@ where
                 self.paused = command == Command::Pause;
                 self.say(ClipboardEvent::Paused(self.paused));
             }
+            Command::Offer { text } => return self.offer(text),
         }
         Ok(())
     }
@@ -853,6 +903,35 @@ where
             return Ok(());
         };
         let content = selected.entry.content().clone();
+        self.own(content)?;
+        self.commit(now);
+        Ok(())
+    }
+
+    /// Records `text` as a copy would be, unless paused, and becomes the
+    /// selection owner with a fresh source offering it. A text the history
+    /// could not keep is refused, and the selection stays as it was.
+    fn offer(&mut self, text: String) -> Result<(), Lost> {
+        let Some(content) = Content::text(text) else {
+            self.say(ClipboardEvent::Refused(
+                "the text offered to the clipboard is empty, too long or not text".to_owned(),
+            ));
+            return Ok(());
+        };
+        let now = (self.clock)();
+        let recorded = !self.paused && self.history.record(content.clone(), now);
+        self.own(content)?;
+        tracing::debug!(recorded, "clipboard: an offered text became the selection");
+        if recorded {
+            self.commit(now);
+        }
+        Ok(())
+    }
+
+    /// Becomes the selection owner with a fresh source offering `content`'s
+    /// MIME types plus this worker's identity type, so the compositor's echo
+    /// of it is skipped unread, and destroys the source it replaces.
+    fn own(&mut self, content: Content) -> Result<(), Lost> {
         let identity = self.identity.next();
         let mut mimes = content.mimes().to_vec();
         mimes.push(&identity);
@@ -860,14 +939,17 @@ where
         tracing::debug!(
             kind = ?content.kind(),
             bytes = content.len(),
-            "clipboard: an entry became the selection"
+            "clipboard: this worker owns the selection"
         );
-        if let Some(previous) = self.owned.replace(Owned { source, content }) {
+        let kept = self.history.holds(&content);
+        if let Some(previous) = self.owned.replace(Owned {
+            source,
+            content,
+            kept,
+        }) {
             self.transport.disown(previous.source);
         }
-        self.transport.flush()?;
-        self.commit(now);
-        Ok(())
+        self.transport.flush()
     }
 
     /// Handles one poll's signals. Of the selections among them only the
@@ -2218,6 +2300,163 @@ mod tests {
         ));
     }
 
+    // --- Offering a text. ---
+
+    fn offer(text: &str) -> Command {
+        Command::Offer {
+            text: text.to_owned(),
+        }
+    }
+
+    #[test]
+    fn an_offered_text_is_owned_recorded_and_its_echo_skipped() {
+        let mut bench = Bench::with(text_history(&["older"]));
+        bench.fake.state().echo = true;
+        assert!(bench.duty.command(offer("98")).is_ok());
+
+        let (source, offered) = bench.fake.state().sources[0].clone();
+        assert_eq!(source, 1);
+        assert_eq!(offered.len(), 3, "{offered:?}");
+        assert_eq!(offered[..2], ["text/plain;charset=utf-8", "text/plain"]);
+        assert!(offered[2].starts_with(IDENTITY_MIME), "{offered:?}");
+        assert_eq!(bench.texts(), ["98", "older"]);
+        assert_eq!(
+            bench.store.calls(),
+            [Call::Save {
+                entries: 2,
+                now: NOW
+            }]
+        );
+        assert!(matches!(
+            bench.heard().last(),
+            Some(ClipboardEvent::Changed { total: 2, .. })
+        ));
+
+        // The compositor echoes the offer back: skipped by its identity,
+        // without a read and without a second record.
+        bench.pump();
+        assert!(bench.fake.received().is_empty(), "no read against itself");
+        assert_eq!(bench.fake.state().discarded, [10_001]);
+        assert_eq!(bench.texts(), ["98", "older"]);
+        assert_eq!(bench.store.calls().len(), 1, "nothing more was persisted");
+
+        assert_eq!(paste(&mut bench, 1, "text/plain"), b"98");
+    }
+
+    #[test]
+    fn an_offered_text_already_in_the_history_moves_to_the_front_once() {
+        let mut bench = Bench::with(text_history(&["a", "98", "b"]));
+        assert!(bench.duty.command(offer("98")).is_ok());
+        assert_eq!(bench.texts(), ["98", "a", "b"]);
+        assert!(bench.duty.command(offer("98")).is_ok());
+        assert_eq!(bench.texts(), ["98", "a", "b"]);
+        assert_eq!(
+            bench.fake.state().live_sources,
+            HashSet::from([2]),
+            "the second offer replaced the first source"
+        );
+    }
+
+    #[test]
+    fn a_new_offer_replaces_a_selected_entry_and_is_served_until_cancelled() {
+        let mut bench = Bench::with(text_history(&["entry"]));
+        assert!(bench
+            .duty
+            .command(Command::Select {
+                index: 0,
+                seen: None
+            })
+            .is_ok());
+        assert!(bench.duty.command(offer("98")).is_ok());
+        assert_eq!(bench.fake.state().live_sources, HashSet::from([2]));
+        assert_eq!(paste(&mut bench, 2, "text/plain"), b"98");
+        assert!(paste(&mut bench, 1, "text/plain").is_empty(), "gone");
+
+        bench.fake.say(Signal::Cancelled { source: 2 });
+        bench.pump();
+        assert!(bench.duty.owned.is_none(), "the data is dropped");
+        assert!(bench.fake.state().live_sources.is_empty());
+        assert_eq!(bench.texts(), ["98", "entry"], "the history keeps it");
+    }
+
+    #[test]
+    fn while_paused_an_offer_owns_the_selection_and_records_nothing() {
+        let mut bench = Bench::with(text_history(&["kept", "other"]));
+        bench.fake.state().echo = true;
+        assert!(bench.duty.command(Command::Pause).is_ok());
+        assert!(bench.duty.command(offer("98")).is_ok());
+
+        assert_eq!(bench.fake.state().live_sources, HashSet::from([1]));
+        assert!(bench.fake.state().sources[0].1[2].starts_with(IDENTITY_MIME));
+        assert_eq!(bench.texts(), ["kept", "other"]);
+        assert!(bench.store.calls().is_empty(), "nothing is persisted");
+        assert_eq!(
+            bench.heard(),
+            [ClipboardEvent::Paused(true)],
+            "no change is published"
+        );
+
+        // The echo is destroyed unread, as every selection while paused.
+        bench.pump();
+        assert!(bench.fake.received().is_empty());
+        assert_eq!(bench.fake.state().discarded, [10_001]);
+        assert_eq!(paste(&mut bench, 1, "text/plain"), b"98");
+
+        // A later change of the history does not take the offer away: it
+        // was never an entry, so no entry leaving can end it.
+        assert!(bench
+            .duty
+            .command(Command::Remove {
+                index: 0,
+                seen: None
+            })
+            .is_ok());
+        assert_eq!(bench.texts(), ["other"]);
+        assert_eq!(paste(&mut bench, 1, "text/plain"), b"98");
+
+        // Clear still gives it up, as it gives up every selection.
+        assert!(bench.duty.command(Command::Clear).is_ok());
+        assert!(bench.duty.owned.is_none());
+        assert!(bench.fake.state().live_sources.is_empty());
+    }
+
+    #[test]
+    fn an_offer_that_cannot_be_kept_is_refused_and_owns_nothing() {
+        let mut bench = Bench::with(text_history(&["entry"]));
+        assert!(bench
+            .duty
+            .command(Command::Select {
+                index: 0,
+                seen: None
+            })
+            .is_ok());
+        let heard_before = bench.heard().len();
+        let too_long = "9".repeat(MAX_TEXT_BYTES + 1);
+        for text in [too_long.as_str(), "", "9\08"] {
+            assert!(bench.duty.command(offer(text)).is_ok());
+        }
+
+        assert_eq!(bench.fake.state().sources.len(), 1, "no new source");
+        assert_eq!(bench.fake.state().live_sources, HashSet::from([1]));
+        assert_eq!(paste(&mut bench, 1, "text/plain"), b"entry");
+        assert_eq!(bench.texts(), ["entry"]);
+        let heard = bench.heard();
+        assert_eq!(heard.len(), heard_before + 3);
+        for event in &heard[heard_before..] {
+            let ClipboardEvent::Refused(reason) = event else {
+                panic!("a refusal: {event:?}");
+            };
+            assert!(!reason.contains("99"), "no content in the reason");
+        }
+    }
+
+    #[test]
+    fn an_offer_command_never_prints_its_text() {
+        let printed = format!("{:?}", offer(SECRET));
+        assert!(!printed.contains("hunter"), "{printed}");
+        assert!(printed.contains(&format!("bytes: {}", SECRET.len())));
+    }
+
     // --- Commands. ---
 
     #[test]
@@ -2666,10 +2905,18 @@ mod tests {
         assert_eq!(handle.remove(0, None), Err(ClipboardRefused::Busy));
         assert_eq!(handle.clear(), Err(ClipboardRefused::Busy));
         assert_eq!(handle.resume(), Err(ClipboardRefused::Busy));
+        assert_eq!(
+            handle.offer_text("98".to_owned()),
+            Err(ClipboardRefused::Busy)
+        );
         handle.stop();
         assert!(handle.stop.load(Ordering::Acquire), "stop is never refused");
         drop(queue);
         assert_eq!(handle.select(0, None), Err(ClipboardRefused::Gone));
+        assert_eq!(
+            handle.offer_text("98".to_owned()),
+            Err(ClipboardRefused::Gone)
+        );
     }
 
     /// Runs the worker's loop over a fake until the test is done.
@@ -2743,6 +2990,33 @@ mod tests {
         rig.wait("the source", |rig| {
             !rig.fake.state().live_sources.is_empty()
         });
+
+        let fake = rig.fake.clone();
+        rig.finish();
+        assert!(fake.state().live_sources.is_empty(), "shutdown releases it");
+    }
+
+    #[test]
+    fn the_worker_offers_a_text_from_its_handle() {
+        let rig = Rig::start(Ok(Fake::default()), History::new(), short_deadlines());
+        rig.wait("the initial rows", |rig| rig.heard().len() == 1);
+        assert_eq!(rig.handle.offer_text("98".to_owned()), Ok(()));
+        rig.wait("the source", |rig| {
+            !rig.fake.state().live_sources.is_empty()
+        });
+        rig.wait("the recorded offer", |rig| {
+            matches!(
+                rig.heard().last(),
+                Some(ClipboardEvent::Changed { total: 1, .. })
+            )
+        });
+        assert_eq!(
+            rig.store.calls(),
+            [Call::Save {
+                entries: 1,
+                now: NOW
+            }]
+        );
 
         let fake = rig.fake.clone();
         rig.finish();

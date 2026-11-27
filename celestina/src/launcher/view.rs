@@ -29,6 +29,10 @@ const SEARCH_ICON: f32 = 18.0;
 const CLEAR_SIZE: f32 = 28.0;
 const CLEAR_ICON: f32 = 16.0;
 const CLEAR_MARGIN: f32 = -8.0;
+/// The Enter key cap: a one-px outline, corner radius and padding.
+const KEY_CAP_RADIUS: f32 = 5.0;
+const KEY_CAP_PAD_X: f32 = 5.0;
+const KEY_CAP_PAD_Y: f32 = 3.0;
 /// The icon of an application whose entry names none.
 const FALLBACK_ICON: &str = "app-window";
 
@@ -65,6 +69,13 @@ pub fn sweep_key() -> Key {
     Key::named("launcher-sweep")
 }
 
+/// The calculator's row, always the first: its own node, so it enters and
+/// leaves with its own entrance.
+#[must_use]
+pub fn calc_key() -> Key {
+    Key::named("launcher-calc")
+}
+
 /// The row at `index`.
 #[must_use]
 pub fn row_key(index: usize) -> Key {
@@ -74,6 +85,9 @@ pub fn row_key(index: usize) -> Key {
 /// The row `key` names, if it is one of `count` rows.
 #[must_use]
 pub fn row_of(key: Key, count: usize) -> Option<usize> {
+    if key == calc_key() {
+        return (count > 0).then_some(0);
+    }
     (0..count).find(|&i| row_key(i) == key)
 }
 
@@ -220,7 +234,7 @@ pub fn card(theme: &Theme, state: &LauncherState, sweep: Option<Sweep>) -> View 
                 .rows
                 .iter()
                 .enumerate()
-                .map(|(i, r)| row(theme, i, r, i == state.selected)),
+                .map(|(i, r)| row(theme, i, r, i == state.selected, state.copied)),
         )
     };
     view::col(card_key())
@@ -255,8 +269,11 @@ fn clear_button(shown: bool) -> View {
 }
 
 /// One row: the icon, the name growing, the secondary text on the right.
-fn row(theme: &Theme, index: usize, row: &Row, selected: bool) -> View {
+fn row(theme: &Theme, index: usize, row: &Row, selected: bool, copied: bool) -> View {
     let i = index as u64;
+    if let Row::Calc { result } = row {
+        return calc_row(theme, result, selected, copied);
+    }
     let (glyph, tint, name, detail) = match row {
         Row::App(app) => {
             let (glyph, tint) = match IconKey::desktop_icon(&app.entry.icon) {
@@ -271,6 +288,7 @@ fn row(theme: &Theme, index: usize, row: &Row, selected: bool) -> View {
             )
         }
         Row::Switch(switch) => switch_parts(*switch),
+        Row::Calc { .. } => unreachable!("the calculator's row returned above"),
         Row::Bubble {
             title,
             app_id,
@@ -317,6 +335,73 @@ fn row(theme: &Theme, index: usize, row: &Row, selected: bool) -> View {
         &detail,
         style(theme.type_scale.row_secondary, Role::TextLo),
     ))
+}
+
+/// The calculator's row: its glyph (a check once copied), an `=` and the
+/// result in the title size, and on the right the action with an Enter key
+/// cap, or "Copied" in the success colour once the result is on the
+/// clipboard.
+fn calc_row(theme: &Theme, result: &str, selected: bool, copied: bool) -> View {
+    let (glyph, word, word_role) = if copied {
+        ("check", copy::LAUNCHER_CALC_COPIED, Role::Success)
+    } else {
+        ("calculator", copy::LAUNCHER_CALC_COPY, Role::TextLo)
+    };
+    let detail_style = style(theme.type_scale.row_secondary, word_role);
+    let mut detail = centred(view::row(Key::named("launcher-calc-detail")))
+        .gap(theme.spacing.sm)
+        .child(view::text(
+            Key::named("launcher-calc-word"),
+            word,
+            detail_style,
+        ));
+    if !copied {
+        detail = detail.child(
+            centred(view::row(Key::named("launcher-calc-cap")))
+                .radius(KEY_CAP_RADIUS)
+                .stroke(Role::Divider)
+                .padding_xy(KEY_CAP_PAD_X, KEY_CAP_PAD_Y)
+                .child(view::text(
+                    Key::named("launcher-calc-key"),
+                    copy::LAUNCHER_CALC_KEY,
+                    style(theme.type_scale.row_secondary, Role::TextLo),
+                )),
+        );
+    }
+    let mut v = centred(view::row(calc_key()))
+        .height(theme.row_height)
+        .padding_xy(theme.spacing.md, 0.0)
+        .gap(theme.spacing.md)
+        .radius(theme.radius_md)
+        .interactive();
+    if selected {
+        v = v.fill(Role::ControlFill);
+    }
+    v.child(icon(
+        Key::named("launcher-calc-icon"),
+        IconKey::Semantic(glyph),
+        Some(Role::TextLo),
+        ICON_SIZE,
+    ))
+    .child(
+        centred(view::row(Key::named("launcher-calc-name")))
+            .gap(KEY_CAP_PAD_X)
+            .grow()
+            .child(view::text(
+                Key::named("launcher-calc-equals"),
+                "=",
+                style(theme.type_scale.row_title, Role::TextLo),
+            ))
+            .child(view::text(
+                Key::named("launcher-calc-result"),
+                result,
+                TextStyle {
+                    tabular: true,
+                    ..style(theme.type_scale.row_title, Role::TextHi)
+                },
+            )),
+    )
+    .child(detail)
 }
 
 fn switch_parts(switch: Switch) -> (IconKey, Option<Role>, String, String) {
@@ -653,5 +738,96 @@ mod tests {
             .children
             .iter()
             .all(|c| c.key != sweep_key()));
+    }
+
+    fn calc_state(copied: bool) -> LauncherState {
+        let mut state = LauncherState::new(std::collections::HashMap::new(), None);
+        state.set_query("2*(3+4)^2", &[]);
+        state.copied = copied;
+        state
+    }
+
+    #[test]
+    fn the_calculator_row_shows_the_glyph_the_equals_the_result_and_the_copy_detail() {
+        let theme = Theme::dark();
+        let v = card(&theme, &calc_state(false), None);
+        let row = &v.children[1].children[0];
+        assert_eq!(row.key, calc_key());
+        assert!(row.interactive);
+        assert!(matches!(
+            row.kind,
+            ViewKind::Box {
+                fill: Some(Role::ControlFill),
+                ..
+            }
+        ));
+        assert!(matches!(
+            row.children[0].kind,
+            ViewKind::Icon {
+                key: IconKey::Semantic("calculator"),
+                tint: Some(Role::TextLo),
+                size,
+            } if size == 24.0
+        ));
+        let name = &row.children[1];
+        let (eq, result) = (&name.children[0], &name.children[1]);
+        assert!(matches!(
+            &eq.kind,
+            ViewKind::Text { text, style, .. } if text == "=" && style.role == Role::TextLo
+        ));
+        assert!(matches!(
+            &result.kind,
+            ViewKind::Text { text, style, .. }
+                if text == "98"
+                    && style.role == Role::TextHi
+                    && style.tabular
+                    && style.size == theme.type_scale.row_title
+        ));
+        let detail = &row.children[2];
+        assert!(matches!(
+            &detail.children[0].kind,
+            ViewKind::Text { text, style, .. }
+                if text == copy::LAUNCHER_CALC_COPY && style.role == Role::TextLo
+        ));
+        let cap = &detail.children[1];
+        assert!(matches!(
+            cap.kind,
+            ViewKind::Box {
+                stroke: Some(Role::Divider),
+                radius,
+                ..
+            } if radius == 5.0
+        ));
+        assert!(matches!(
+            &cap.children[0].kind,
+            ViewKind::Text { text, .. } if text == copy::LAUNCHER_CALC_KEY
+        ));
+    }
+
+    #[test]
+    fn after_the_copy_the_row_shows_the_check_and_the_copied_word_in_success() {
+        let theme = Theme::dark();
+        let v = card(&theme, &calc_state(true), None);
+        let row = &v.children[1].children[0];
+        assert!(matches!(
+            row.children[0].kind,
+            ViewKind::Icon {
+                key: IconKey::Semantic("check"),
+                ..
+            }
+        ));
+        let detail = &row.children[2];
+        assert_eq!(detail.children.len(), 1, "no key cap once copied");
+        assert!(matches!(
+            &detail.children[0].kind,
+            ViewKind::Text { text, style, .. }
+                if text == copy::LAUNCHER_CALC_COPIED && style.role == Role::Success
+        ));
+    }
+
+    #[test]
+    fn a_click_on_the_calculator_row_names_row_zero() {
+        assert_eq!(row_of(calc_key(), 3), Some(0));
+        assert_eq!(row_of(calc_key(), 0), None);
     }
 }

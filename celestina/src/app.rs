@@ -1572,6 +1572,7 @@ impl App {
             self.appearance.reduced_motion,
             self.usage.scores(launcher::usage::unix_now()),
             Locale::from_env(),
+            self.clipboard.get().is_some_and(ClipboardDuty::running),
             &self.index,
         );
         if let Some(mut s) = ctl.surface(surface) {
@@ -1710,7 +1711,8 @@ impl App {
                 self.close_window(window_id);
                 None
             }
-            LauncherAction::Close => None,
+            // Not a closing action; `launcher_input` keeps it out.
+            LauncherAction::Copy(_) | LauncherAction::Close => None,
         };
         let closed = Message::LauncherClosed {
             surface: open.surface(),
@@ -2314,8 +2316,38 @@ impl App {
         };
         match action {
             Some(LauncherAction::RequestClose(window_id)) => self.close_window(window_id),
+            Some(LauncherAction::Copy(text)) => {
+                if !self.copy_to_clipboard(text) {
+                    // The worker took nothing: the row must not say copied
+                    // nor close the launcher.
+                    if let Some(open) = self.launcher.as_mut() {
+                        open.copy_refused();
+                    }
+                    ctl.request_redraw();
+                }
+            }
             Some(action) => self.launcher_acted(action, ctl),
             None => {}
+        }
+    }
+
+    /// Puts the calculator's `text` on the clipboard through the duty's
+    /// worker; a refusal is logged (the text stays out of the log). The
+    /// launcher stays open for its short "Copied" and closes itself.
+    fn copy_to_clipboard(&self, text: String) -> bool {
+        let Some(duty) = self.clipboard.get() else {
+            tracing::warn!("launcher: no clipboard duty; the result was not copied");
+            return false;
+        };
+        match duty.offer_text(text) {
+            Ok(()) => {
+                tracing::info!("launcher: result copied");
+                true
+            }
+            Err(refused) => {
+                tracing::warn!(?refused, "launcher: the result was not copied");
+                false
+            }
         }
     }
 
@@ -3177,6 +3209,10 @@ impl Shell for App {
                         tracing::warn!("the painter is in use; the launcher's frame is skipped");
                         cx.ctl.request_redraw();
                     }
+                }
+                if open.take_finished() {
+                    // The copy said "Copied": close as a Close does.
+                    self.launcher_acted(LauncherAction::Close, &mut cx.ctl);
                 }
                 return;
             }

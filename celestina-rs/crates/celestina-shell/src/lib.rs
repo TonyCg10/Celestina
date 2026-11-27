@@ -26,6 +26,8 @@
 //! - [`workspace_map`] — what a workspace holds, as shares of its columns.
 //! - [`settings`] — the shell's own durable choice (do-not-disturb) and the
 //!   rule that a choice is published only once it is written.
+//! - [`calc`] — whether a launcher query is a math expression, and its result
+//!   as shown.
 //! - [`calendar`] — which day falls where in a month.
 //! - [`clipboard`] — what the clipboard history may keep, for how long, and
 //!   the text-only form it is persisted in.
@@ -58,6 +60,7 @@
 pub mod audio;
 pub mod bounded;
 pub mod brightness;
+pub mod calc;
 pub mod calendar;
 pub mod clipboard;
 pub mod coalesce;

@@ -1768,6 +1768,23 @@ None has been run and none is closed by an agent.
 - **Evidence:** none; the unit's automated evidence is
   [CEL-I-011](docs/evidence/2026-11-26-cel-i-011-tray-fixes.md)
 
+## VAL-CEL-I-016 — The launcher's calculator
+
+- **Status:** pending
+- **Related implementation:** CEL-I-016 (a typed expression shows its result
+  as the launcher's first row; Enter copies it as shown, marks it copied and
+  closes the launcher 350 ms later)
+- **Requires:** the deployed shell after the landing of CEL-I-016, with the
+  clipboard duty on
+- **Procedure:** open the launcher; type `(3+4)^2`; press Enter; paste into
+  any text field; open the launcher again and type `sqrt(2)/2`, then `2+`
+- **Pass condition:** the first row reads `= 49` and Enter shows the copied
+  mark before the launcher closes; the paste is `49`; `sqrt(2)/2` shows
+  `0,707106781187`; `2+` shows no calculator row
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-I-016](docs/evidence/2026-11-27-cel-i-016-calculator.md)
+
 ## VAL-CEL-I-015 — The launcher's search
 
 - **Status:** pending

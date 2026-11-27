@@ -146,6 +146,15 @@ pub const LAUNCHER_PLACEHOLDER: &str = "Buscar aplicaciones o escribir /";
 /// The launcher's only line while nothing answers the query ("No results").
 pub const LAUNCHER_EMPTY: &str = "Sin resultados";
 
+/// The calculator row's action word ("Copy"), shown beside the Enter key.
+pub const LAUNCHER_CALC_COPY: &str = "Copiar";
+
+/// The calculator row's word once the result is copied ("Copied").
+pub const LAUNCHER_CALC_COPIED: &str = "Copiado";
+
+/// The key cap beside the calculator row's action: the Enter key's name.
+pub const LAUNCHER_CALC_KEY: &str = "Enter";
+
 /// The launcher's group names, in tab order: Internet, Multimedia, Games,
 /// Development, Office, System, Utilities. Each is also a word that finds
 /// the group's applications.

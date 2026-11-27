@@ -1,0 +1,49 @@
+# CEL-I-016 exact change inventory
+
+Base revision	bc4b78078a019bbe44ca48175ac78d414114c56b
+Pathspec	celestina-rs/crates/celestina-shell/src/calc.rs
+Pathspec	celestina-rs/crates/celestina-shell/src/lib.rs
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-paint/src/theme.rs
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-016-calculator.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-016-calculator/closed.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-016-calculator/copied.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-016-calculator/percent.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-016-calculator/row.png
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-016.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/clipboard/mod.rs
+Pathspec	celestina/src/clipboard/worker.rs
+Pathspec	celestina/src/copy.rs
+Pathspec	celestina/src/launcher/mod.rs
+Pathspec	celestina/src/launcher/state.rs
+Pathspec	celestina/src/launcher/view.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+476	0	a3c56422fe708ac3db9839cf4feead00683187b2c378e97469414bf088749be4	celestina-rs/crates/celestina-shell/src/calc.rs
+3	0	9662cb84bcd823ed50a899e57a0c73dcaf4e68f438a7c45f656fec472ee9a846	celestina-rs/crates/celestina-shell/src/lib.rs
+1	1	5e064b016fb949662b7d852f10df957e1450f2d2d0f39cfd7620d79414488632	celestina/Cargo.lock
+1	1	b4688e56cd19eb34a9b53ed368558cac2c594535fc0f1b828264190fe13191c2	celestina/Cargo.toml
+17	0	4f48943d1fb3367964dc7f818b7e9f512e306b18c5e3695b76aec39e3b05bccc	celestina/VALIDATION.md
+19	2	47dd832b89b32f533e9723aeda9f04dc67a92b9dc29f0cdf53c08e95ef42e02e	celestina/crates/celestina-paint/src/theme.rs
+56	0	b6363547f44b48741e4eb56129f98ce1fa729018dece45c5e4a41e15b6531185	celestina/docs/evidence/2026-11-27-cel-i-016-calculator.md
+-	-	64c3e30e3f60e391c2f8b91a607b3516dea40439344c56e211496e7db4a9ef0c	celestina/docs/evidence/2026-11-27-cel-i-016-calculator/closed.png
+-	-	032f3da3e8bdc4158b1dc8e6e5f2e4c69704469d9f19340a91d1b13924b90871	celestina/docs/evidence/2026-11-27-cel-i-016-calculator/copied.png
+-	-	5f581b46208b07f69731d123290ad6e0df95fde4356a74dcc183eea18b5190fd	celestina/docs/evidence/2026-11-27-cel-i-016-calculator/percent.png
+-	-	09b3270f78af0bd1f3a44b56a2cd1286ea09d6690504010a095da1403af8c8be	celestina/docs/evidence/2026-11-27-cel-i-016-calculator/row.png
+49	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-016.numstat.tsv
+1	0	8ad65cb516a8c291c64886f42841e3db74ecb2a1e0138ed704f74a3d19206c7e	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+37	1	22ccae7127dd3e53bfd07a929c7a19c942df5f003acf067d1fa9fd703e7c9ce3	celestina/src/app.rs
+35	0	2926f7e76eb2591c44198709e3c0d00e99e0976f15da90612cdcdcc683b13332	celestina/src/clipboard/mod.rs
+282	8	38429c8207b17566c4f707861370fcc9461868056c622f10c6ab7041727c78a1	celestina/src/clipboard/worker.rs
+9	0	599ebf1756b27fc343c19809655ff17848474a47a0519615357b9e8e85515e12	celestina/src/copy.rs
+225	11	b607331fc4e2a6c8d9c7644e71ad4dc18d734d945f3432b0c32bf6cda92b4848	celestina/src/launcher/mod.rs
+55	1	91aaa383c9a432936f273e3202be55d7c6a1034bfe388e4a8809ff7defb98889	celestina/src/launcher/state.rs
+178	2	e4f8d5bfc39ff8d0107fe12c87023eb0a46f11cac1b1206512b34f688525ab4a	celestina/src/launcher/view.rs
+1	0	14dd2f0518941c9d5b5b0e24525aae4472b71720a4ae6e7ff86ab285d3b0de7b	docs/version-history.tsv

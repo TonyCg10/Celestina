@@ -45,11 +45,14 @@ pub enum Role {
     /// The one-px outline of the soft accent wash (the scheme's
     /// `accent_soft_border`).
     AccentSoftBorder,
+    /// A finished action's mark, such as a copy done (the scheme's
+    /// `success`).
+    Success,
 }
 
 impl Role {
     /// Every role, in declaration order.
-    pub const ALL: [Role; 22] = [
+    pub const ALL: [Role; 23] = [
         Role::Canvas,
         Role::Card,
         Role::TextHi,
@@ -72,6 +75,7 @@ impl Role {
         Role::DangerFillInk,
         Role::AccentSoft,
         Role::AccentSoftBorder,
+        Role::Success,
     ];
 }
 
@@ -161,6 +165,8 @@ pub struct Theme {
     pub accent_soft: Color,
     /// The outline of the soft accent wash.
     pub accent_soft_border: Color,
+    /// A finished action's mark.
+    pub success: Color,
     /// The dim a modal layer lays over the output.
     pub scrim: Color,
     /// Haze's grain alpha, drawn under the tint.
@@ -234,6 +240,7 @@ impl From<&Scheme> for Theme {
             danger_fill_ink: color_of(scheme.danger_fill_ink),
             accent_soft: color_of(scheme.accent_soft),
             accent_soft_border: color_of(scheme.accent_soft_border),
+            success: color_of(scheme.success),
             scrim: color_of(scheme.scrim),
             grain_alpha: haze::GRAIN,
             radius_lg: radius::LG,
@@ -301,6 +308,7 @@ impl Theme {
             Role::DangerFillInk => self.danger_fill_ink,
             Role::AccentSoft => self.accent_soft,
             Role::AccentSoftBorder => self.accent_soft_border,
+            Role::Success => self.success,
         }
     }
 
@@ -382,7 +390,7 @@ mod tests {
             let c = t.color(role);
             assert!((0.0..=1.0).contains(&c.3), "{role:?} alpha {}", c.3);
         }
-        assert_eq!(Role::ALL.len(), 22);
+        assert_eq!(Role::ALL.len(), 23);
     }
 
     #[test]
@@ -429,6 +437,7 @@ mod tests {
                 Role::DangerFillInk => DARK.danger_fill_ink,
                 Role::AccentSoft => DARK.accent_soft,
                 Role::AccentSoftBorder => DARK.accent_soft_border,
+                Role::Success => DARK.success,
             };
             assert_eq!(
                 t.color(role),
@@ -490,5 +499,13 @@ mod tests {
         assert_eq!(t.accent_soft_border, t.color(Role::AccentSoftBorder));
         assert!(Role::ALL.contains(&Role::AccentSoft));
         assert!(Role::ALL.contains(&Role::AccentSoftBorder));
+    }
+
+    #[test]
+    fn the_success_role_is_the_tokens() {
+        let t = Theme::dark();
+        assert_eq!(t.color(Role::Success), hex("#8ee0b4"));
+        assert_eq!(t.success, t.color(Role::Success));
+        assert_eq!(Role::ALL.last(), Some(&Role::Success));
     }
 }

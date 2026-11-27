@@ -192,6 +192,10 @@ pub trait Control: Send {
     ///
     /// As [`Control::select`].
     fn resume(&self) -> Result<(), String>;
+    /// # Errors
+    ///
+    /// As [`Control::select`].
+    fn offer_text(&self, text: String) -> Result<(), String>;
     /// Asks the worker to end; the caller joins it.
     fn stop(&self);
 }
@@ -211,6 +215,9 @@ impl Control for ClipboardHandle {
     }
     fn resume(&self) -> Result<(), String> {
         ClipboardHandle::resume(self).map_err(|e| e.to_string())
+    }
+    fn offer_text(&self, text: String) -> Result<(), String> {
+        ClipboardHandle::offer_text(self, text).map_err(|e| e.to_string())
     }
     fn stop(&self) {
         ClipboardHandle::stop(self);
@@ -551,6 +558,21 @@ impl ClipboardDuty {
         .map_err(Refused::Worker)
     }
 
+    /// Has the worker put `text` on the clipboard as the selection and in
+    /// its history (the launcher's calculator).
+    ///
+    /// # Errors
+    ///
+    /// [`Refused::DutyOff`] while no worker runs, [`Refused::Worker`] when it
+    /// did not take the command.
+    pub fn offer_text(&self, text: String) -> Result<(), Refused> {
+        let inner = self.inner.borrow();
+        let Some(slot) = inner.running.as_ref() else {
+            return Err(Refused::DutyOff);
+        };
+        slot.control.offer_text(text).map_err(Refused::Worker)
+    }
+
     /// The shell is ending: waits for a pending reaper, stops and joins the
     /// worker and keeps the file. Also what dropping the duty does.
     pub fn shutdown(&self) {
@@ -747,6 +769,9 @@ mod tests {
         }
         fn resume(&self) -> Result<(), String> {
             self.say("resume".to_owned())
+        }
+        fn offer_text(&self, text: String) -> Result<(), String> {
+            self.say(format!("offer {text}"))
         }
         fn stop(&self) {
             self.log.lock().expect("log").push("stop".to_owned());
@@ -1138,6 +1163,16 @@ mod tests {
         );
         duty.apply(&settings(false), false);
         assert_eq!(duty.command(ClipboardVerb::Clear), Err(Refused::DutyOff));
+    }
+
+    #[test]
+    fn an_offered_text_reaches_the_worker_only_while_the_duty_is_on() {
+        let (fake, log) = Fake::new();
+        let duty = ClipboardDuty::with_spawner(Box::new(fake), None);
+        assert_eq!(duty.offer_text("98".to_owned()), Err(Refused::DutyOff));
+        duty.apply(&settings(true), false);
+        assert_eq!(duty.offer_text("98".to_owned()), Ok(()));
+        assert_eq!(said(&log)[1..], ["offer 98"]);
     }
 
     #[test]

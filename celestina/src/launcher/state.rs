@@ -16,6 +16,7 @@
 use std::collections::HashMap;
 
 use celestina_core::desktop_entry::{DesktopEntry, Locale};
+use celestina_shell::calc;
 use celestina_shell::launcher::fold;
 use celestina_shell::launcher_search::{search, Prepared};
 use celestina_ui::Field;
@@ -42,6 +43,11 @@ pub enum Row {
     /// An application, boxed: the entry is large beside a switch.
     App(Box<AppRow>),
     Switch(Switch),
+    /// The calculator: the query is an expression and `result` its value as
+    /// shown (a comma for the decimal point). Always the first row.
+    Calc {
+        result: String,
+    },
     /// A minimised window of the selector: Melibea's id, its title and
     /// application id (bounded, empty when it has none) and its icon name.
     Bubble {
@@ -78,6 +84,8 @@ pub struct LauncherState {
     prepared: Vec<Prepared>,
     /// Where the rows come from.
     pub source: Source,
+    /// The calculator row's result was just copied: the row says so.
+    pub copied: bool,
 }
 
 impl LauncherState {
@@ -135,6 +143,7 @@ impl LauncherState {
         self.query.set_text(text);
         self.rows = self.answer(index);
         self.selected = 0;
+        self.copied = false;
         true
     }
 
@@ -166,7 +175,13 @@ impl LauncherState {
             Some(switches) => switches.into_iter().map(Row::Switch).collect(),
             None => {
                 self.sync(index);
-                self.ranked(index, query)
+                let mut rows = self.ranked(index, query);
+                if let Some(result) = calc::evaluate(query) {
+                    // First, so the bound on the rows still holds.
+                    rows.insert(0, Row::Calc { result });
+                    rows.truncate(MAX_ROWS);
+                }
+                rows
             }
         }
     }
@@ -257,6 +272,7 @@ mod tests {
             .map(|row| match row {
                 Row::App(a) => a.entry.id.clone(),
                 Row::Switch(s) => s.command().to_owned(),
+                Row::Calc { result } => format!("={result}"),
                 Row::Bubble { window_id, .. } => window_id.to_string(),
             })
             .collect()
@@ -510,5 +526,43 @@ mod tests {
         let mut apps = LauncherState::new(HashMap::new(), None);
         assert!(!apps.set_bubbles(&live(&[1])));
         assert!(!apps.is_selector() && apps.rows.is_empty());
+    }
+
+    #[test]
+    fn an_expression_puts_the_calculator_row_first_and_selects_it() {
+        let index = [entry("aa", "Aa")];
+        let state = typed("2*(3+4)^2", &index, &[]);
+        assert_eq!(
+            state.rows.first(),
+            Some(&Row::Calc {
+                result: "98".to_owned()
+            })
+        );
+        assert_eq!(state.selected, 0);
+        // A half-typed expression has no row; the applications answer.
+        assert!(typed("2*", &index, &[])
+            .rows
+            .iter()
+            .all(|r| !matches!(r, Row::Calc { .. })));
+        // The switches' command list never shows it.
+        assert_eq!(
+            typed("/2+2", &index, &[]).rows,
+            Vec::<Row>::new(),
+            "no switch is named 2+2"
+        );
+        // The bound holds with the row in.
+        let many: Vec<_> = (0..20)
+            .map(|i| entry(&format!("t{i:02}"), &format!("2 Tool {i:02}")))
+            .collect();
+        let full = typed("2+2", &many, &[]);
+        assert!(full.rows.len() <= MAX_ROWS);
+        assert!(matches!(full.rows[0], Row::Calc { .. }));
+    }
+
+    #[test]
+    fn the_selector_never_shows_the_calculator_row() {
+        let mut state = LauncherState::selector(Bubbles::default());
+        state.set_query("2+2", &[]);
+        assert!(state.rows.is_empty());
     }
 }

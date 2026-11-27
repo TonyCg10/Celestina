@@ -98,8 +98,12 @@ enum Hold {
     },
 }
 
+/// How long the launcher stays open after the calculator's result is copied,
+/// so the row can say "Copied" before it closes.
+pub const COPY_CLOSE: Duration = Duration::from_millis(350);
+
 /// What the launcher asks the app to do; each one closes it except
-/// [`LauncherAction::RequestClose`].
+/// [`LauncherAction::RequestClose`] and [`LauncherAction::Copy`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LauncherAction {
     /// Start this application.
@@ -111,6 +115,9 @@ pub enum LauncherAction {
     /// The selector: ask this minimised window to close; the selector
     /// stays open and the row stays until Melibea's projection drops it.
     RequestClose(u64),
+    /// Copy this text (the calculator's result) to the clipboard; the
+    /// launcher stays open for [`COPY_CLOSE`] to say so, then finishes.
+    Copy(String),
     /// Close without acting.
     Close,
 }
@@ -119,7 +126,10 @@ impl LauncherAction {
     /// Whether the overlay closes for this action.
     #[must_use]
     pub fn closes(&self) -> bool {
-        !matches!(self, LauncherAction::RequestClose(_))
+        !matches!(
+            self,
+            LauncherAction::RequestClose(_) | LauncherAction::Copy(_)
+        )
     }
 }
 
@@ -142,6 +152,13 @@ pub struct Launcher {
     keyboard_moved: bool,
     /// The hold-Backspace sweep (the launcher of applications only).
     hold: Hold,
+    /// The clipboard duty runs, so the calculator row can copy.
+    can_copy: bool,
+    /// When the result was copied; the launcher finishes [`COPY_CLOSE`]
+    /// later. Any close resets it.
+    copied_at: Option<Instant>,
+    /// The wait after a copy is over; taken once by [`Launcher::take_finished`].
+    finished: bool,
 }
 
 impl Launcher {
@@ -156,11 +173,14 @@ impl Launcher {
         reduced: bool,
         scores: HashMap<String, u64>,
         locale: Option<Locale>,
+        can_copy: bool,
         index: &[DesktopEntry],
     ) -> Launcher {
         let mut state = LauncherState::new(scores, locale);
         state.update(index);
-        Self::with_state(surface, output, theme, reduced, state)
+        let mut launcher = Self::with_state(surface, output, theme, reduced, state);
+        launcher.can_copy = can_copy;
+        launcher
     }
 
     /// The selector on `surface` of `output` over the minimised windows
@@ -214,6 +234,9 @@ impl Launcher {
             stale: false,
             keyboard_moved: false,
             hold: Hold::Idle,
+            can_copy: false,
+            copied_at: None,
+            finished: false,
         }
     }
 
@@ -322,10 +345,46 @@ impl Launcher {
         }
     }
 
+    /// The clipboard took nothing for the last [`LauncherAction::Copy`]: the
+    /// row stops saying copied, no close is pending, and Enter can try again.
+    pub fn copy_refused(&mut self) {
+        self.copied_at = None;
+        self.state.copied = false;
+        self.stale = true;
+    }
+
+    /// Whether the wait after a copy is over, once: the app closes the
+    /// launcher then, as it does for [`LauncherAction::Close`].
+    pub fn take_finished(&mut self) -> bool {
+        std::mem::take(&mut self.finished)
+    }
+
+    /// Moves the launcher's timed parts to `now`: the wait after a copy
+    /// and the hold-Backspace sweep. Returns whether another frame is due
+    /// for either.
+    fn advance(&mut self, now: Instant, index: &[DesktopEntry]) -> bool {
+        let copying = self.advance_copy(now);
+        self.advance_sweep(now, index) || copying
+    }
+
+    /// While a copy waits a frame is due; once [`COPY_CLOSE`] has passed the
+    /// launcher is finished.
+    fn advance_copy(&mut self, now: Instant) -> bool {
+        let Some(at) = self.copied_at else {
+            return false;
+        };
+        if now.saturating_duration_since(at) >= COPY_CLOSE {
+            self.copied_at = None;
+            self.finished = true;
+            return false;
+        }
+        true
+    }
+
     /// Moves the hold-Backspace sweep to `now`: the view is rebuilt while it
     /// runs, and at its end the query is cleared. Returns whether another
     /// frame is due for it.
-    fn advance(&mut self, now: Instant, index: &[DesktopEntry]) -> bool {
+    fn advance_sweep(&mut self, now: Instant, index: &[DesktopEntry]) -> bool {
         if let Hold::Pressed { since } = self.hold {
             if now.saturating_duration_since(since) < HOLD_DELAY {
                 return true;
@@ -412,7 +471,11 @@ impl Launcher {
         if !self.keyboard_moved || self.state.rows.is_empty() {
             return None;
         }
-        let id = self.tree.node_by_key(view::row_key(self.state.selected))?;
+        let key = match self.state.chosen() {
+            Some(Row::Calc { .. }) => view::calc_key(),
+            _ => view::row_key(self.state.selected),
+        };
+        let id = self.tree.node_by_key(key)?;
         Some(self.tree.rect(id))
     }
 
@@ -457,8 +520,18 @@ impl Launcher {
         outcome.action
     }
 
-    /// [`Launcher::input`] without the painter and the surface.
+    /// [`Launcher::input`] without the painter and the surface. Any action
+    /// that closes the launcher ends a copy's wait, so no second close
+    /// follows it.
     fn handle(&mut self, ev: &InputEvent, index: &[DesktopEntry], now: Instant) -> Outcome {
+        let outcome = self.handle_event(ev, index, now);
+        if outcome.action.as_ref().is_some_and(LauncherAction::closes) {
+            self.copied_at = None;
+        }
+        outcome
+    }
+
+    fn handle_event(&mut self, ev: &InputEvent, index: &[DesktopEntry], now: Instant) -> Outcome {
         let before = self.tree.highlight();
         let mut outcome = Outcome::default();
         let events = match ev {
@@ -636,6 +709,8 @@ impl Launcher {
                         .map(|f| f.text().to_owned())
                         .unwrap_or_default();
                     if self.state.set_query(&text, index) {
+                        // The copied result is no longer on the screen.
+                        self.copied_at = None;
                         self.keyboard_moved = false;
                         self.stale = true;
                     }
@@ -645,7 +720,7 @@ impl Launcher {
                     return outcome;
                 }
                 UiEvent::Activate(key) if key == view::field_key() => {
-                    if let Some(action) = self.chosen() {
+                    if let Some(action) = self.chosen(now) {
                         outcome.action = Some(action);
                         return outcome;
                     }
@@ -656,7 +731,7 @@ impl Launcher {
                 UiEvent::Click(key) => {
                     if let Some(row) = view::row_of(key, self.state.rows.len()) {
                         self.state.selected = row;
-                        if let Some(action) = self.chosen() {
+                        if let Some(action) = self.chosen(now) {
                             outcome.action = Some(action);
                             return outcome;
                         }
@@ -706,16 +781,28 @@ impl Launcher {
     fn chosen_window(&self) -> Option<u64> {
         match self.state.chosen()? {
             Row::Bubble { window_id, .. } => Some(*window_id),
-            Row::App(_) | Row::Switch(_) => None,
+            Row::App(_) | Row::Switch(_) | Row::Calc { .. } => None,
         }
     }
 
-    /// What choosing the selected row asks for.
-    fn chosen(&self) -> Option<LauncherAction> {
+    /// What choosing the selected row asks for. The calculator row copies:
+    /// without the clipboard duty, or once it has copied, it asks nothing;
+    /// otherwise the copy starts the wait before the launcher finishes.
+    fn chosen(&mut self, now: Instant) -> Option<LauncherAction> {
         match self.state.chosen()? {
             Row::App(app) => Some(LauncherAction::Launch(Box::new(app.entry.clone()))),
             Row::Switch(switch) => Some(LauncherAction::Switch(*switch)),
             Row::Bubble { window_id, .. } => Some(LauncherAction::Restore(*window_id)),
+            Row::Calc { result } => {
+                if !self.can_copy || self.state.copied {
+                    return None;
+                }
+                let result = result.clone();
+                self.copied_at = Some(now);
+                self.state.copied = true;
+                self.stale = true;
+                Some(LauncherAction::Copy(result))
+            }
         }
     }
 }
@@ -774,6 +861,10 @@ mod tests {
     }
 
     fn launcher(index: &[DesktopEntry]) -> Launcher {
+        launcher_copying(index, true)
+    }
+
+    fn launcher_copying(index: &[DesktopEntry], can_copy: bool) -> Launcher {
         Launcher::new(
             SurfaceId(5),
             OutputId(1),
@@ -781,6 +872,7 @@ mod tests {
             false,
             HashMap::new(),
             None,
+            can_copy,
             index,
         )
     }
@@ -1586,5 +1678,127 @@ mod tests {
         l.handle(&backspace(true, false, false), &[], t0 + MS(30));
         assert_eq!(text(&l), "", "the repeat deletes as the field does");
         assert!(matches!(l.hold, Hold::Idle));
+    }
+
+    #[test]
+    fn enter_on_the_calculator_row_copies_and_the_launcher_closes_350_ms_later() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "2*(3+4)^2", &index);
+        let t0 = Instant::now();
+        let enter = l.handle(&key(RETURN, None, false), &index, t0);
+        assert_eq!(enter.action, Some(LauncherAction::Copy("98".to_owned())));
+        assert!(
+            !enter.action.as_ref().is_some_and(LauncherAction::closes),
+            "a copy does not close at once"
+        );
+        assert!(l.state().copied && l.stale, "the row says it copied");
+        assert!(
+            l.advance(t0 + Duration::from_millis(100), &index),
+            "redraws"
+        );
+        assert!(!l.take_finished());
+        l.advance(t0 + Duration::from_millis(349), &index);
+        assert!(!l.take_finished(), "not yet at +349 ms");
+        l.advance(t0 + Duration::from_millis(350), &index);
+        assert!(l.take_finished(), "done at +350 ms");
+        assert!(!l.take_finished(), "and only once");
+        assert!(!l.advance(t0 + Duration::from_millis(400), &index));
+        assert!(!l.take_finished());
+    }
+
+    #[test]
+    fn a_refused_copy_neither_says_copied_nor_closes() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "2+2", &index);
+        let t0 = Instant::now();
+        let enter = l.handle(&key(RETURN, None, false), &index, t0);
+        assert_eq!(enter.action, Some(LauncherAction::Copy("4".to_owned())));
+        l.copy_refused();
+        assert!(!l.state().copied, "the row does not say copied");
+        assert!(!l.advance(t0 + COPY_CLOSE, &index));
+        assert!(!l.take_finished(), "the launcher stays open");
+        let again = l.handle(&key(RETURN, None, false), &index, t0 + COPY_CLOSE);
+        assert_eq!(
+            again.action,
+            Some(LauncherAction::Copy("4".to_owned())),
+            "Enter can try again"
+        );
+    }
+
+    #[test]
+    fn a_second_enter_does_not_copy_again() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "2+2", &index);
+        let t0 = Instant::now();
+        let enter = l.handle(&key(RETURN, None, false), &index, t0);
+        assert_eq!(enter.action, Some(LauncherAction::Copy("4".to_owned())));
+        let again = l.handle(&key(RETURN, None, false), &index, t0);
+        assert_eq!(again.action, None, "the copy stands once");
+    }
+
+    #[test]
+    fn without_the_clipboard_duty_enter_on_the_calculator_row_does_nothing() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher_copying(&index, false);
+        typed(&mut l, "2+2", &index);
+        l.stale = false;
+        let t0 = Instant::now();
+        let enter = l.handle(&key(RETURN, None, false), &index, t0);
+        assert_eq!(enter.action, None);
+        assert!(!l.state().copied && !l.stale, "nothing changes");
+        assert!(!l.advance(t0 + Duration::from_secs(1), &index));
+        assert!(!l.take_finished(), "and the launcher stays open");
+    }
+
+    #[test]
+    fn escape_inside_the_wait_closes_once_and_the_copy_does_not_close_again() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "2+2", &index);
+        let t0 = Instant::now();
+        l.handle(&key(RETURN, None, false), &index, t0);
+        let esc = l.handle(&key(ESCAPE, None, false), &index, t0);
+        assert_eq!(esc.action, Some(LauncherAction::Close));
+        l.advance(t0 + Duration::from_millis(500), &index);
+        assert!(!l.take_finished(), "the close reset the wait");
+    }
+
+    #[test]
+    fn losing_the_focus_inside_the_wait_resets_it_too() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "2+2", &index);
+        let t0 = Instant::now();
+        l.handle(&key(RETURN, None, false), &index, t0);
+        let lost = l.handle(&InputEvent::FocusLost, &index, t0);
+        assert_eq!(lost.action, Some(LauncherAction::Close));
+        l.advance(t0 + Duration::from_millis(500), &index);
+        assert!(!l.take_finished());
+    }
+
+    #[test]
+    fn typing_after_the_copy_cancels_the_pending_close() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "2+2", &index);
+        let t0 = Instant::now();
+        l.handle(&key(RETURN, None, false), &index, t0);
+        typed(&mut l, "3", &index);
+        assert!(!l.state().copied);
+        l.advance(t0 + Duration::from_millis(500), &index);
+        assert!(!l.take_finished());
+    }
+
+    #[test]
+    fn the_calculator_row_is_chosen_not_launched_and_the_selector_never_has_it() {
+        let index = [entry("aa", "Aa")];
+        let mut l = launcher(&index);
+        typed(&mut l, "2+2", &index);
+        assert_eq!(l.state().selected, 0);
+        assert!(matches!(l.state().rows[0], Row::Calc { .. }));
+        assert_eq!(l.chosen_window(), None);
     }
 }
