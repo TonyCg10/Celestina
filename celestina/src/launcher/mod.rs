@@ -36,6 +36,7 @@
 pub mod commands;
 pub mod groups;
 pub mod recent;
+pub mod scrolling;
 pub mod selector;
 pub mod spawn;
 pub mod state;
@@ -47,11 +48,13 @@ use std::time::{Duration, Instant};
 
 use celestina_core::desktop_entry::{DesktopEntry, Locale};
 use celestina_paint::{silhouette_slices, Painter, Rect, Role, Theme};
-use celestina_ui::{focus_ring, Interaction, Tree, UiEvent, FOCUS_WIDTH};
+use celestina_ui::{focus_ring, Interaction, Scroll, Tree, UiEvent, FOCUS_WIDTH, ONE_UI};
 use celestina_wayland::{FrameCx, InputEvent, Modifiers, OutputId, SurfaceCtl, SurfaceId};
 
 pub use commands::{commands_for, Switch};
 pub use state::{AppRow, LauncherState, Row, Source};
+
+use scrolling::THUMB_LINGER;
 
 use crate::bubbles::Bubbles;
 use crate::island::state::SILHOUETTE_STEP;
@@ -159,6 +162,14 @@ pub struct Launcher {
     copied_at: Option<Instant>,
     /// The wait after a copy is over; taken once by [`Launcher::take_finished`].
     finished: bool,
+    /// How far the list is scrolled.
+    scroll: Scroll,
+    /// The scroll bar shows until then: the offset last changed 800 ms
+    /// before.
+    thumb_until: Option<Instant>,
+    /// The next layout moves the column at once (the wheel, a new answer)
+    /// instead of sliding it.
+    jump_next: bool,
 }
 
 impl Launcher {
@@ -207,7 +218,13 @@ impl Launcher {
     ) -> Launcher {
         let mut tree = Tree::new(reduced, theme);
         tree.apply(
-            view::launcher(theme, &state, (0.0, 0.0), None),
+            view::launcher(
+                theme,
+                &state,
+                (0.0, 0.0),
+                None,
+                &view::ListScroll::default(),
+            ),
             Instant::now(),
         );
         let mut input = Interaction::new();
@@ -237,6 +254,9 @@ impl Launcher {
             can_copy: false,
             copied_at: None,
             finished: false,
+            scroll: Scroll::default(),
+            thumb_until: None,
+            jump_next: false,
         }
     }
 
@@ -299,7 +319,13 @@ impl Launcher {
     /// the rows changed (a frame is due).
     pub fn set_index(&mut self, index: &[DesktopEntry]) -> bool {
         let before = self.state.rows.clone();
+        let selected = self.state.selected;
         self.state.update(index);
+        self.sync_extent();
+        if self.state.selected != selected {
+            // The selection fell back to the first row: show it.
+            self.reveal_selected(Instant::now(), true);
+        }
         self.stale |= before != self.state.rows;
         self.stale
     }
@@ -329,9 +355,12 @@ impl Launcher {
         self.layout(painter, now);
         painter.begin(self.size, self.dpr, cx.blur_available);
         self.tree.paint(painter, now);
-        if let Some(ring) = self.ring() {
-            let (rect, radius) = focus_ring(ring, self.theme.radius_md);
+        if let Some((row, area)) = self.ring_parts(now) {
+            // The whole row's ring, cut where the area ends.
+            let (rect, radius) = focus_ring(row, self.theme.radius_md);
+            painter.push_clip(area, 0.0);
             painter.stroke_rounded(rect, radius, FOCUS_WIDTH, self.theme.color(Role::FocusRing));
+            painter.pop_clip();
         }
         painter.end();
         let (input, blur) = regions(self.size, &self.theme);
@@ -364,7 +393,76 @@ impl Launcher {
     /// for either.
     fn advance(&mut self, now: Instant, index: &[DesktopEntry]) -> bool {
         let copying = self.advance_copy(now);
-        self.advance_sweep(now, index) || copying
+        let lingering = self.advance_thumb(now);
+        self.advance_sweep(now, index) || copying || lingering
+    }
+
+    /// While the scroll bar lingers a frame is due; once [`THUMB_LINGER`]
+    /// has passed the view is rebuilt once without it, and the tree fades it
+    /// out.
+    fn advance_thumb(&mut self, now: Instant) -> bool {
+        let Some(until) = self.thumb_until else {
+            return false;
+        };
+        if now >= until {
+            self.thumb_until = None;
+            self.stale = true;
+            return false;
+        }
+        true
+    }
+
+    /// Sets the scroll's extent from the rows and the area: the list's
+    /// height in the area's.
+    fn sync_extent(&mut self) {
+        let row = self.theme.row_height;
+        self.scroll.set_extent(
+            self.state.rows.len() as f32 * row,
+            view::AREA_ROWS as f32 * row,
+        );
+    }
+
+    /// The offset moved: the bar shows until [`THUMB_LINGER`] after `now`,
+    /// and the view is built again.
+    fn scrolled(&mut self, now: Instant) {
+        self.thumb_until = Some(now + THUMB_LINGER);
+        self.stale = true;
+    }
+
+    /// Scrolls the least that brings the selected row fully into view. A
+    /// move shows the bar; `jump` moves the column at once instead of
+    /// sliding it. Returns whether the offset moved.
+    fn reveal_selected(&mut self, now: Instant, jump: bool) -> bool {
+        self.sync_extent();
+        let row = self.theme.row_height;
+        let want = scrolling::reveal(
+            self.scroll.offset(),
+            self.state.selected as f32 * row,
+            row,
+            view::AREA_ROWS as f32 * row,
+        );
+        let moved = self.scroll.wheel(want - self.scroll.offset());
+        if moved {
+            self.jump_next |= jump;
+            self.scrolled(now);
+        }
+        moved
+    }
+
+    /// A new answer: the list starts at the top, with no bar.
+    fn scroll_to_top(&mut self) {
+        if self.scroll.offset() != 0.0 {
+            self.scroll = Scroll::default();
+            self.jump_next = true;
+        }
+        self.thumb_until = None;
+        self.sync_extent();
+    }
+
+    /// Whether a wheel on the node `key` scrolls the list: the area or one
+    /// of its rows.
+    fn scrolls_list(&self, key: celestina_ui::Key) -> bool {
+        key == view::area_key() || view::row_of(key, self.state.rows.len()).is_some()
     }
 
     /// While a copy waits a frame is due; once [`COPY_CLOSE`] has passed the
@@ -453,8 +551,21 @@ impl Launcher {
     fn apply(&mut self, now: Instant) {
         if self.stale {
             let sweep = self.sweep(now);
+            self.sync_extent();
+            let scroll = view::ListScroll::new(
+                &self.theme,
+                self.state.rows.len(),
+                self.scroll.offset(),
+                self.thumb_until.is_some(),
+            );
+            if std::mem::take(&mut self.jump_next) {
+                // Every node that moved is drawn at its new place at once:
+                // the column too, so a keyboard slide still running ends.
+                // (Marking the column "still" would leave that slide on.)
+                self.tree.slide_with(Duration::ZERO, ONE_UI.into(), &[]);
+            }
             self.tree.apply(
-                view::launcher(&self.theme, &self.state, self.size, sweep),
+                view::launcher(&self.theme, &self.state, self.size, sweep, &scroll),
                 now,
             );
             self.stale = false;
@@ -466,8 +577,9 @@ impl Launcher {
         self.size.0 > 0.0 && self.size.1 > 0.0
     }
 
-    /// The selected row's rect while the keyboard moved the selection.
-    fn ring(&self) -> Option<Rect> {
+    /// The selected row's rect where it is drawn at `now`, and the area's,
+    /// while the keyboard moved the selection and the row is built.
+    fn ring_parts(&self, now: Instant) -> Option<(Rect, Rect)> {
         if !self.keyboard_moved || self.state.rows.is_empty() {
             return None;
         }
@@ -475,8 +587,44 @@ impl Launcher {
             Some(Row::Calc { .. }) => view::calc_key(),
             _ => view::row_key(self.state.selected),
         };
-        let id = self.tree.node_by_key(key)?;
-        Some(self.tree.rect(id))
+        // A row beyond the built ones may still be fading out in the tree,
+        // where it was: it is not on screen.
+        let row_h = self.theme.row_height;
+        let viewport = view::AREA_ROWS as f32 * row_h;
+        let built = scrolling::built(
+            self.scroll.offset(),
+            row_h,
+            viewport,
+            self.state.rows.len(),
+            view::BUILD_MARGIN,
+        );
+        if !built.contains(&self.state.selected) {
+            return None;
+        }
+        let row = self.tree.painted_rect(self.tree.node_by_key(key)?, now);
+        let area = self
+            .tree
+            .painted_rect(self.tree.node_by_key(view::area_key())?, now);
+        // A row scrolled out of view has no ring.
+        Self::cut(row, area).map(|_| (row, area))
+    }
+
+    /// `row` cut to `area`, `None` when they do not meet.
+    fn cut(row: Rect, area: Rect) -> Option<Rect> {
+        let x = row.x.max(area.x);
+        let y = row.y.max(area.y);
+        let w = (row.x + row.w).min(area.x + area.w) - x;
+        let h = (row.y + row.h).min(area.y + area.h) - y;
+        (w > 0.0 && h > 0.0).then_some(Rect { x, y, w, h })
+    }
+
+    /// The selected row's ring rect: its rect cut to the area's, or `None`
+    /// when the row is scrolled out of view (or the keyboard did not move
+    /// the selection).
+    #[cfg(test)]
+    fn ring(&self, now: Instant) -> Option<Rect> {
+        let (row, area) = self.ring_parts(now)?;
+        Self::cut(row, area)
     }
 
     /// The caret's rectangle in the surface, for the input method.
@@ -553,6 +701,7 @@ impl Launcher {
                 self.state
                     .move_selection(if *keysym == XKB_KEY_UP { -1 } else { 1 });
                 self.keyboard_moved = true;
+                self.reveal_selected(now, false);
                 self.stale = true;
                 outcome.changed = true;
                 return outcome;
@@ -574,6 +723,7 @@ impl Launcher {
                 let back = *shift || *keysym == XKB_KEY_ISO_LEFT_TAB;
                 self.state.move_selection(if back { -1 } else { 1 });
                 self.keyboard_moved = true;
+                self.reveal_selected(now, false);
                 self.stale = true;
                 outcome.changed = true;
                 return outcome;
@@ -712,6 +862,7 @@ impl Launcher {
                         // The copied result is no longer on the screen.
                         self.copied_at = None;
                         self.keyboard_moved = false;
+                        self.scroll_to_top();
                         self.stale = true;
                     }
                 }
@@ -737,6 +888,15 @@ impl Launcher {
                         }
                     }
                 }
+                UiEvent::Scroll(key, _, vertical) if self.scrolls_list(key) => {
+                    // The wheel jumps: no slide, the column is drawn at its
+                    // new place at once.
+                    self.sync_extent();
+                    if self.scroll.wheel(vertical) {
+                        self.jump_next = true;
+                        self.scrolled(now);
+                    }
+                }
                 UiEvent::FieldChanged(_)
                 | UiEvent::Activate(_)
                 | UiEvent::HoverChanged(..)
@@ -756,6 +916,7 @@ impl Launcher {
         }
         self.state.set_query("", index);
         self.keyboard_moved = false;
+        self.scroll_to_top();
         self.stale = true;
     }
 
@@ -1800,5 +1961,330 @@ mod tests {
         assert_eq!(l.state().selected, 0);
         assert!(matches!(l.state().rows[0], Row::Calc { .. }));
         assert_eq!(l.chosen_window(), None);
+    }
+
+    // The scrolled list (CEL-I-017).
+
+    fn tools(n: usize) -> Vec<DesktopEntry> {
+        (0..n)
+            .map(|i| entry(&format!("t{i:03}"), &format!("Tool {i:03}")))
+            .collect()
+    }
+
+    /// A sized launcher over `n` applications.
+    fn listing(index: &[DesktopEntry]) -> Launcher {
+        let mut l = launcher(index);
+        sized(&mut l, (2560.0, 1440.0));
+        l
+    }
+
+    /// What a frame does at `now`: builds the view when stale and lays out.
+    fn relayout(l: &mut Launcher, now: Instant) {
+        l.apply(now);
+        l.tree
+            .layout_measured(l.size, |s, _, _| (7.0 * s.len() as f32, 16.0));
+    }
+
+    fn rect_of(l: &Launcher, key: celestina_ui::Key) -> Rect {
+        l.tree
+            .node_by_key(key)
+            .map(|id| l.tree.rect(id))
+            .expect("the node is laid out")
+    }
+
+    fn wheel_at(x: f32, y: f32, vertical: f32) -> InputEvent {
+        InputEvent::Axis {
+            x,
+            y,
+            horizontal: 0.0,
+            vertical,
+        }
+    }
+
+    /// Wheels `vertical` px over the row `i`.
+    fn wheel_over_row(
+        l: &mut Launcher,
+        i: usize,
+        vertical: f32,
+        index: &[DesktopEntry],
+        now: Instant,
+    ) {
+        let r = rect_of(l, view::row_key(i));
+        l.handle(
+            &wheel_at(r.x + r.w / 2.0, r.y + r.h / 2.0, vertical),
+            index,
+            now,
+        );
+        relayout(l, now);
+    }
+
+    fn down(l: &mut Launcher, times: usize, index: &[DesktopEntry], now: Instant) {
+        for _ in 0..times {
+            l.handle(&key(XKB_KEY_DOWN, None, false), index, now);
+        }
+        relayout(l, now);
+    }
+
+    #[test]
+    fn a_wheel_over_a_row_scrolls_the_list_at_once_and_shows_the_bar() {
+        let index = tools(30);
+        let mut l = listing(&index);
+        let t0 = Instant::now();
+        assert!(l.thumb_until.is_none());
+        wheel_over_row(&mut l, 2, 120.0, &index, t0);
+        assert_eq!(l.scroll.offset(), 120.0);
+        assert_eq!(l.thumb_until, Some(t0 + scrolling::THUMB_LINGER));
+        let area = rect_of(&l, view::area_key());
+        assert_eq!(rect_of(&l, view::inner_key()).y, area.y - 120.0);
+        // The wheel jumps: the column is drawn where it is laid out.
+        let inner = l.tree.node_by_key(view::inner_key()).expect("inner");
+        assert_eq!(l.tree.painted_rect(inner, t0), l.tree.rect(inner));
+        assert!(l.tree.node_by_key(view::thumb_key()).is_some());
+        // Row 3 (120 / 40) is the first row in view.
+        assert_eq!(rect_of(&l, view::row_key(3)).y, area.y);
+        // On the area itself, past the last row's end it also scrolls.
+        let r = rect_of(&l, view::row_key(4));
+        l.handle(&wheel_at(r.x + 4.0, r.y + 4.0, -50.0), &index, t0);
+        assert_eq!(l.scroll.offset(), 70.0);
+    }
+
+    #[test]
+    fn a_wheel_over_the_field_or_the_tab_row_does_not_scroll() {
+        let index = tools(30);
+        let mut l = listing(&index);
+        let t0 = Instant::now();
+        let field = rect_of(&l, view::field_key());
+        l.handle(&wheel_at(field.x + 20.0, field.y + 5.0, 120.0), &index, t0);
+        assert_eq!(l.scroll.offset(), 0.0);
+        assert!(l.thumb_until.is_none());
+        // On the card's padding and outside the card: no list key either.
+        let card = l.card();
+        l.handle(&wheel_at(card.x + 2.0, card.y + 2.0, 120.0), &index, t0);
+        l.handle(&wheel_at(card.x - 20.0, card.y + 200.0, 120.0), &index, t0);
+        assert_eq!(l.scroll.offset(), 0.0);
+    }
+
+    #[test]
+    fn a_list_that_fits_has_nothing_to_scroll() {
+        let index = tools(5);
+        let mut l = listing(&index);
+        let t0 = Instant::now();
+        wheel_over_row(&mut l, 1, 120.0, &index, t0);
+        assert_eq!(l.scroll.offset(), 0.0);
+        assert!(l.thumb_until.is_none(), "no bar for a list that fits");
+        assert!(l.tree.node_by_key(view::thumb_key()).is_none());
+    }
+
+    #[test]
+    fn down_from_the_last_visible_row_reveals_the_next_with_a_slide() {
+        let index = tools(30);
+        let mut l = listing(&index);
+        let t0 = Instant::now();
+        down(&mut l, 7, &index, t0);
+        assert_eq!(l.state().selected, 7);
+        assert_eq!(l.scroll.offset(), 0.0, "row 7 is in view");
+        down(&mut l, 1, &index, t0);
+        assert_eq!(l.state().selected, 8);
+        assert_eq!(l.scroll.offset(), 40.0);
+        assert!(l.thumb_until.is_some());
+        let inner = l.tree.node_by_key(view::inner_key()).expect("inner");
+        let (laid, drawn) = (l.tree.rect(inner), l.tree.painted_rect(inner, t0));
+        assert!(
+            drawn.y > laid.y,
+            "the column still slides up from where it was"
+        );
+        let later = t0 + Duration::from_millis(400);
+        assert_eq!(l.tree.painted_rect(inner, later), l.tree.rect(inner));
+    }
+
+    #[test]
+    fn up_from_the_first_row_wraps_to_the_last_at_the_bottom_and_back() {
+        let index = tools(30);
+        let mut l = listing(&index);
+        let t0 = Instant::now();
+        l.handle(&key(XKB_KEY_UP, None, false), &index, t0);
+        relayout(&mut l, t0);
+        assert_eq!(l.state().selected, 29);
+        assert_eq!(l.scroll.offset(), 30.0 * 40.0 - 8.0 * 40.0);
+        l.handle(&key(XKB_KEY_DOWN, None, false), &index, t0);
+        relayout(&mut l, t0);
+        assert_eq!(l.state().selected, 0);
+        assert_eq!(l.scroll.offset(), 0.0);
+    }
+
+    #[test]
+    fn typing_resets_the_offset_but_a_new_index_keeps_it() {
+        let index = tools(30);
+        let mut l = listing(&index);
+        let t0 = Instant::now();
+        wheel_over_row(&mut l, 2, 200.0, &index, t0);
+        assert_eq!(l.scroll.offset(), 200.0);
+        // The same answers again: the offset stays.
+        assert!(!l.set_index(&index));
+        assert_eq!(l.scroll.offset(), 200.0);
+        // A longer index: the selected row (0) still exists, the offset stays.
+        let longer = tools(40);
+        assert!(l.set_index(&longer));
+        relayout(&mut l, t0);
+        assert_eq!(l.scroll.offset(), 200.0);
+        // A shorter one clamps it to its end (10 rows: 400 - 320).
+        let short = tools(10);
+        assert!(l.set_index(&short));
+        relayout(&mut l, t0);
+        assert_eq!(l.scroll.offset(), 80.0);
+        // The selection was reset to row 0 by nothing here; it is visible.
+        assert_eq!(l.state().selected, 0);
+
+        let mut l = listing(&longer);
+        wheel_over_row(&mut l, 2, 200.0, &longer, t0);
+        typed(&mut l, "t", &longer);
+        relayout(&mut l, t0);
+        assert_eq!(l.scroll.offset(), 0.0, "a new answer starts at the top");
+        assert!(l.thumb_until.is_none(), "and no bar shows for it");
+    }
+
+    #[test]
+    fn a_new_index_that_drops_the_selected_row_brings_the_new_selection_into_view() {
+        let index = tools(40);
+        let mut l = listing(&index);
+        let t0 = Instant::now();
+        down(&mut l, 30, &index, t0);
+        assert_eq!(l.state().selected, 30);
+        let short = tools(10);
+        assert!(l.set_index(&short));
+        relayout(&mut l, t0);
+        assert_eq!(l.state().selected, 0);
+        assert_eq!(l.scroll.offset(), 0.0);
+    }
+
+    #[test]
+    fn the_bar_stays_800_ms_after_the_last_move_then_is_rebuilt_once_without_it() {
+        let index = tools(30);
+        let mut l = listing(&index);
+        let t0 = Instant::now();
+        wheel_over_row(&mut l, 2, 120.0, &index, t0);
+        l.stale = false;
+        assert!(
+            l.advance(t0 + Duration::from_millis(799), &index),
+            "a frame is due"
+        );
+        assert!(!l.stale, "nothing to rebuild while it lingers");
+        assert!(l.thumb_until.is_some());
+        assert!(!l.advance(t0 + Duration::from_millis(800), &index));
+        assert!(l.thumb_until.is_none());
+        assert!(l.stale, "rebuilt once with the bar hidden");
+        relayout(&mut l, t0 + Duration::from_millis(800));
+        assert!(!l.stale);
+        assert!(
+            !l.advance(t0 + Duration::from_millis(900), &index),
+            "and no more"
+        );
+        assert!(!l.stale);
+        // Another move starts the 800 ms again.
+        wheel_over_row(&mut l, 5, 40.0, &index, t0 + Duration::from_secs(2));
+        assert!(l.thumb_until.is_some());
+    }
+
+    #[test]
+    fn the_ring_is_none_for_a_row_out_of_view_and_clipped_for_a_half_visible_one() {
+        let index = tools(30);
+        let mut l = listing(&index);
+        let t0 = Instant::now();
+        down(&mut l, 1, &index, t0);
+        l.handle(&key(XKB_KEY_UP, None, false), &index, t0);
+        relayout(&mut l, t0);
+        assert_eq!(l.state().selected, 0);
+        let area = rect_of(&l, view::area_key());
+        let full = l.ring(t0).expect("row 0 is in view");
+        assert_eq!((full.y, full.h), (area.y, 40.0));
+        // 20 px of row 0 are scrolled away: the ring is cut at the area.
+        wheel_over_row(&mut l, 2, 20.0, &index, t0);
+        let half = l.ring(t0).expect("row 0 is half in view");
+        assert_eq!((half.y, half.h), (area.y, 20.0));
+        assert!(half.y >= area.y && half.y + half.h <= area.y + area.h);
+        // Scrolled fully away: no ring, not outside the card.
+        wheel_over_row(&mut l, 5, 400.0, &index, t0);
+        assert_eq!(l.ring(t0), None);
+        // Row 8 revealed at the bottom, then 20 px back up: its lower half
+        // is under the area's end, and the ring is cut there.
+        wheel_over_row(&mut l, 12, -1000.0, &index, t0);
+        down(&mut l, 8, &index, t0);
+        assert_eq!(l.state().selected, 8);
+        assert_eq!(l.scroll.offset(), 40.0);
+        wheel_over_row(&mut l, 5, -20.0, &index, t0);
+        let cut = l.ring(t0).expect("half of row 8 is in view");
+        assert_eq!((cut.y, cut.h), (area.y + area.h - 20.0, 20.0));
+    }
+
+    #[test]
+    fn a_click_on_a_half_hidden_row_launches_that_row() {
+        let index = tools(30);
+        let mut l = listing(&index);
+        let t0 = Instant::now();
+        wheel_over_row(&mut l, 2, 20.0, &index, t0);
+        let area = rect_of(&l, view::area_key());
+        let row0 = rect_of(&l, view::row_key(0));
+        assert_eq!(row0.y, area.y - 20.0, "laid out above the area's top");
+        let (x, y) = (area.x + 100.0, area.y + 5.0);
+        l.handle(&press(x, y), &index, t0);
+        let release = InputEvent::PointerRelease {
+            x,
+            y,
+            button: 0x110,
+            serial: 3,
+        };
+        assert_eq!(
+            l.handle(&release, &index, t0).action,
+            Some(LauncherAction::Launch(Box::new(index[0].clone()))),
+            "the hidden half's row, not the one under"
+        );
+        // Above the area the same row is not under the pointer.
+        let (x, y) = (area.x + 100.0, area.y - 5.0);
+        l.handle(&press(x, y), &index, t0);
+        let release = InputEvent::PointerRelease {
+            x,
+            y,
+            button: 0x110,
+            serial: 3,
+        };
+        assert_eq!(l.handle(&release, &index, t0).action, None);
+    }
+
+    #[test]
+    fn holding_down_through_three_hundred_rows_restarts_the_slide_each_time() {
+        let index = tools(300);
+        let mut l = listing(&index);
+        let t0 = Instant::now();
+        let step = Duration::from_millis(40);
+        for i in 1..300u32 {
+            let now = t0 + step * i;
+            l.handle(&repeat(XKB_KEY_DOWN, None), &index, now);
+            relayout(&mut l, now);
+            assert_eq!(l.state().selected, i as usize);
+            let inner = l.tree.node_by_key(view::inner_key()).expect("inner");
+            let lag = l.tree.painted_rect(inner, now).y - l.tree.rect(inner).y;
+            assert!(
+                (0.0..=4.0 * 40.0).contains(&lag),
+                "the column is drawn {lag} px behind its place at step {i}"
+            );
+            // Rows that left are fading out and do not count.
+            let built: Vec<_> = l
+                .tree
+                .painted_children(inner, now)
+                .into_iter()
+                .map(|(key, _, _)| key)
+                .collect();
+            assert!(
+                built.contains(&view::row_key(i as usize)),
+                "the selected row is built at step {i}"
+            );
+            // At most the rows in view and the margin on both sides.
+            assert!(
+                built.len() <= 8 + 2 * 4 + 1,
+                "{} rows at step {i}",
+                built.len()
+            );
+        }
+        assert_eq!(l.scroll.offset(), 300.0 * 40.0 - 8.0 * 40.0);
     }
 }

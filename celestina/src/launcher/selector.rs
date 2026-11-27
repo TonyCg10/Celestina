@@ -6,17 +6,21 @@
 //! (`celestina_shell::launcher::score`): the title is what a person types
 //! at, the application id only ever answers loosely, so a title outranks an
 //! id. Within one tier the windows keep Melibea's order, the most recently
-//! minimised first. At most [`MAX_ROWS`] rows are shown. With no windows, or
-//! with Melibea not live, the card shows one note instead of rows.
+//! minimised first. At most [`SELECTOR_MAX_ROWS`] rows are shown, and they
+//! are not scrolled. With no windows, or with Melibea not live, the card
+//! shows one note instead of rows.
 
 use celestina_core::desktop_entry::DesktopEntry;
 use celestina_shell::launcher::score;
 
-use super::state::{Row, MAX_ROWS};
+use super::state::Row;
 use crate::{
     bubbles::{Bubbles, Link},
     copy,
 };
+
+/// The most windows the selector lists; it is not scrolled.
+pub const SELECTOR_MAX_ROWS: usize = 8;
 
 /// The most characters of a title or an application id a row keeps (and
 /// the matcher reads): the protocol already bounds them, and this keeps a
@@ -62,7 +66,7 @@ pub fn rows(bubbles: &Bubbles, query: &str) -> Vec<Row> {
     // Stable: equal tiers keep Melibea's order.
     hits.sort_by_key(|(quality, _)| std::cmp::Reverse(*quality));
     hits.into_iter()
-        .take(MAX_ROWS)
+        .take(SELECTOR_MAX_ROWS)
         .map(|(_, row)| row)
         .collect()
 }
@@ -161,10 +165,12 @@ mod tests {
             .map(|i| window(100 - i, &format!("Doc {i}"), "app"))
             .collect();
         let got = ids(&rows(&live(many), "doc"));
-        assert_eq!(got.len(), MAX_ROWS);
+        assert_eq!(got.len(), SELECTOR_MAX_ROWS);
         assert_eq!(
             got,
-            (0..MAX_ROWS as u64).map(|i| 100 - i).collect::<Vec<_>>()
+            (0..SELECTOR_MAX_ROWS as u64)
+                .map(|i| 100 - i)
+                .collect::<Vec<_>>()
         );
     }
 

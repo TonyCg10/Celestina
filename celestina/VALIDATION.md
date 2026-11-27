@@ -1768,6 +1768,23 @@ None has been run and none is closed by an agent.
 - **Evidence:** none; the unit's automated evidence is
   [CEL-I-011](docs/evidence/2026-11-26-cel-i-011-tray-fixes.md)
 
+## VAL-CEL-I-017 — The launcher scrolls
+
+- **Status:** pending
+- **Related implementation:** CEL-I-017 (the launcher lists every answer;
+  the wheel scrolls the list; a keyboard move keeps the selected row in view;
+  a thin bar shows while it moves)
+- **Requires:** the deployed shell after the landing of CEL-I-017
+- **Procedure:** open the launcher with an empty field; turn the wheel over
+  the list; hold Down for two seconds; type one letter
+- **Pass condition:** the list scrolls smoothly past the first eight
+  applications and a thin bar shows at its right edge, then fades; the
+  selected row and its focus ring stay inside the card while Down repeats;
+  typing brings the list back to its top
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-I-017](docs/evidence/2026-11-27-cel-i-017-scrolling.md)
+
 ## VAL-CEL-I-016 — The launcher's calculator
 
 - **Status:** pending

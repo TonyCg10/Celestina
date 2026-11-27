@@ -1,6 +1,6 @@
-//! The launcher's view: a Haze card with the search field on top and up to
-//! eight rows under it, centred in a transparent surface that fills the
-//! output (design §5.5, Launcher; `celestina-style/DESIGN.md`:
+//! The launcher's view: a Haze card with the search field on top and a
+//! clipped area of eight rows under it (the list scrolls past them), centred
+//! in a transparent surface that fills the output (design §5.5, Launcher; `celestina-style/DESIGN.md`:
 //! search fields are pills, rows of the row height). An application's row
 //! shows its icon, its name and its generic name; a switch's row its
 //! semantic icon, its command and what it does; a minimised window's row
@@ -13,13 +13,23 @@ use taffy::{AlignItems, JustifyContent, LengthPercentageAuto};
 
 use super::{
     commands::Switch,
-    selector,
-    state::{LauncherState, Row, Source, MAX_ROWS},
+    scrolling, selector,
+    state::{LauncherState, Row, Source},
 };
 use crate::{copy, island::pages::activity::truncate_title};
 
 /// The card's width, logical px.
 pub const LAUNCHER_W: f32 = 560.0;
+/// How many rows the area shows at once.
+pub const AREA_ROWS: usize = 8;
+/// Rows built beyond each edge of the area, so a row that enters with the
+/// tree's entrance animation enters out of view.
+pub const BUILD_MARGIN: usize = 4;
+/// The scroll bar's width, its distance from the area's right edge and its
+/// corner radius.
+const THUMB_W: f32 = 4.0;
+const THUMB_INSET: f32 = 2.0;
+const THUMB_RADIUS: f32 = 2.0;
 /// A row's icon.
 pub const ICON_SIZE: f32 = 24.0;
 /// The search glyph in the field.
@@ -76,6 +86,25 @@ pub fn calc_key() -> Key {
     Key::named("launcher-calc")
 }
 
+/// The clipped box that shows the rows and takes the wheel.
+#[must_use]
+pub fn area_key() -> Key {
+    Key::named("launcher-area")
+}
+
+/// The column inside the area that holds the built rows and is offset by
+/// the scroll.
+#[must_use]
+pub fn inner_key() -> Key {
+    Key::named("launcher-inner")
+}
+
+/// The scroll bar at the area's right edge.
+#[must_use]
+pub fn thumb_key() -> Key {
+    Key::named("launcher-thumb")
+}
+
 /// The row at `index`.
 #[must_use]
 pub fn row_key(index: usize) -> Key {
@@ -89,6 +118,32 @@ pub fn row_of(key: Key, count: usize) -> Option<usize> {
         return (count > 0).then_some(0);
     }
     (0..count).find(|&i| row_key(i) == key)
+}
+
+/// How the list is scrolled when the view is built.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ListScroll {
+    /// How far the list is scrolled, logical px.
+    pub offset: f32,
+    /// The bar's y and height in the area; `None` when nothing scrolls.
+    pub thumb: Option<(f32, f32)>,
+    /// The bar is shown (opacity 1) or fading out (0).
+    pub thumb_shown: bool,
+}
+
+impl ListScroll {
+    /// The scroll of `rows` rows in `theme`, `offset` px down, with the bar
+    /// shown or not.
+    #[must_use]
+    pub fn new(theme: &Theme, rows: usize, offset: f32, shown: bool) -> ListScroll {
+        let content = rows as f32 * theme.row_height;
+        let viewport = AREA_ROWS as f32 * theme.row_height;
+        ListScroll {
+            offset,
+            thumb: scrolling::thumb(offset, content, viewport),
+            thumb_shown: shown,
+        }
+    }
 }
 
 /// The wash that sweeps the query away while Backspace is held: it grows
@@ -105,13 +160,13 @@ pub struct Sweep {
 const SWEEP_INSET: f32 = 10.0;
 
 /// The card's logical size with `theme`: the card's width; the field, the
-/// small gap and eight rows, padded by the medium spacing.
+/// small gap and the area of eight rows, padded by the medium spacing.
 #[must_use]
 pub fn card_size(theme: &Theme) -> (f32, f32) {
     let h = 2.0 * theme.spacing.md
         + theme.top_bar
         + theme.spacing.sm
-        + MAX_ROWS as f32 * theme.row_height;
+        + AREA_ROWS as f32 * theme.row_height;
     (LAUNCHER_W, h)
 }
 
@@ -164,17 +219,24 @@ pub fn launcher(
     state: &LauncherState,
     surface: (f32, f32),
     sweep: Option<Sweep>,
+    scroll: &ListScroll,
 ) -> View {
     let at = card_rect(surface, card_size(theme));
     view::col(surface_key())
         .size(surface.0, surface.1)
-        .child(card(theme, state, sweep).absolute(at.x, at.y))
+        .child(card(theme, state, sweep, scroll).absolute(at.x, at.y))
 }
 
 /// The card for `state` in `theme`, with the `sweep` over the query while
-/// there is one (the launcher of applications only).
+/// there is one (the launcher of applications only) and the list scrolled
+/// as `scroll` says.
 #[must_use]
-pub fn card(theme: &Theme, state: &LauncherState, sweep: Option<Sweep>) -> View {
+pub fn card(
+    theme: &Theme,
+    state: &LauncherState,
+    sweep: Option<Sweep>,
+    scroll: &ListScroll,
+) -> View {
     let (w, h) = card_size(theme);
     let (placeholder, note) = match &state.source {
         Source::Apps => (copy::LAUNCHER_PLACEHOLDER, None),
@@ -216,34 +278,75 @@ pub fn card(theme: &Theme, state: &LauncherState, sweep: Option<Sweep>) -> View 
     if apps {
         pill = pill.child(clear_button(!state.query.text().is_empty()));
     }
-    let rows = view::col(Key::named("launcher-rows"));
-    let rows = if state.rows.is_empty() {
-        rows.child(
-            centred(view::row(Key::named("launcher-empty")))
-                .height(theme.row_height)
-                .padding_xy(theme.spacing.md, 0.0)
-                .child(view::text(
-                    Key::named("launcher-empty-text"),
-                    note.unwrap_or(copy::LAUNCHER_EMPTY),
-                    style(theme.type_scale.body, Role::TextLo),
-                )),
-        )
-    } else {
-        rows.children(
-            state
-                .rows
-                .iter()
-                .enumerate()
-                .map(|(i, r)| row(theme, i, r, i == state.selected, state.copied)),
-        )
-    };
+    let area_w = w - 2.0 * theme.spacing.md;
+    let area = rows_area(theme, state, scroll, area_w, note);
     view::col(card_key())
         .haze(theme.radius_lg)
         .size(w, h)
         .padding(theme.spacing.md)
         .gap(theme.spacing.sm)
         .child(pill)
-        .child(rows)
+        .child(area)
+}
+
+/// The area: a clipped box of eight rows' height holding the inner column,
+/// which is offset up by the scroll and holds the rows near the view, each at
+/// its full place; and the scroll bar over it. Only rows in view and
+/// [`BUILD_MARGIN`] beyond are built.
+fn rows_area(
+    theme: &Theme,
+    state: &LauncherState,
+    scroll: &ListScroll,
+    width: f32,
+    note: Option<&str>,
+) -> View {
+    let row_h = theme.row_height;
+    let viewport = AREA_ROWS as f32 * row_h;
+    let count = state.rows.len();
+    let mut area = view::col(area_key()).size(width, viewport).clip();
+    if scroll.thumb.is_some() {
+        // Rows cover the whole area, so the box itself is never what the
+        // pointer lifts: it only needs to be a target when it scrolls.
+        area = area.interactive();
+    }
+    let inner = if count == 0 {
+        view::col(inner_key())
+            .size(width, viewport)
+            .absolute(0.0, 0.0)
+            .child(
+                centred(view::row(Key::named("launcher-empty")))
+                    .absolute(0.0, 0.0)
+                    .size(width, row_h)
+                    .padding_xy(theme.spacing.md, 0.0)
+                    .child(view::text(
+                        Key::named("launcher-empty-text"),
+                        note.unwrap_or(copy::LAUNCHER_EMPTY),
+                        style(theme.type_scale.body, Role::TextLo),
+                    )),
+            )
+    } else {
+        let built = scrolling::built(scroll.offset, row_h, viewport, count, BUILD_MARGIN);
+        view::col(inner_key())
+            .size(width, count as f32 * row_h)
+            .absolute(0.0, 0.0 - scroll.offset)
+            .children(built.map(|i| {
+                row(theme, i, &state.rows[i], i == state.selected, state.copied)
+                    .width(width)
+                    .absolute(0.0, i as f32 * row_h)
+            }))
+    };
+    area = area.child(inner);
+    if let Some((y, h)) = scroll.thumb {
+        area = area.child(
+            view::col(thumb_key())
+                .size(THUMB_W, h)
+                .radius(THUMB_RADIUS)
+                .fill(Role::ControlHover)
+                .opacity(if scroll.thumb_shown { 1.0 } else { 0.0 })
+                .absolute(width - THUMB_INSET - THUMB_W, y),
+        );
+    }
+    area
 }
 
 /// The clear button: a round plate with an `x`, at the pill's right end. It
@@ -438,6 +541,224 @@ mod tests {
         }
     }
 
+    /// The rows' area in a card.
+    fn area(v: &View) -> &View {
+        v.children
+            .iter()
+            .find(|c| c.key == area_key())
+            .expect("the card holds the rows' area")
+    }
+
+    /// The column inside the area that holds the built rows.
+    fn inner(v: &View) -> &View {
+        area(v)
+            .children
+            .iter()
+            .find(|c| c.key == inner_key())
+            .expect("the area holds the inner column")
+    }
+
+    /// The built rows (or the note) of a card.
+    fn rows_of(v: &View) -> &Vec<View> {
+        &inner(v).children
+    }
+
+    fn at(x: f32, y: f32) -> (LengthPercentageAuto, LengthPercentageAuto) {
+        (
+            LengthPercentageAuto::length(x),
+            LengthPercentageAuto::length(y),
+        )
+    }
+
+    fn many(n: usize) -> (Vec<DesktopEntry>, LauncherState) {
+        let index: Vec<_> = (0..n)
+            .map(|i| entry(&format!("t{i:02}"), &format!("Tool {i:02}")))
+            .collect();
+        let mut state = LauncherState::new(std::collections::HashMap::new(), None);
+        state.update(&index);
+        (index, state)
+    }
+
+    fn scrolled(theme: &Theme, rows: usize, offset: f32, shown: bool) -> ListScroll {
+        ListScroll::new(theme, rows, offset, shown)
+    }
+
+    #[test]
+    fn thirty_answers_build_the_rows_near_the_top_in_a_clipped_area() {
+        let theme = Theme::dark();
+        let (_, state) = many(30);
+        assert_eq!(state.rows.len(), 30);
+        let scroll = scrolled(&theme, 30, 0.0, false);
+        let v = card(&theme, &state, None, &scroll);
+        let a = area(&v);
+        assert!(a.clip, "the area clips");
+        assert_eq!(
+            a.style.size.height,
+            taffy::Dimension::length(AREA_ROWS as f32 * theme.row_height)
+        );
+        let content_w = LAUNCHER_W - 2.0 * theme.spacing.md;
+        assert_eq!(a.style.size.width, taffy::Dimension::length(content_w));
+        assert!(a.interactive, "a scrolling area takes the wheel");
+        let rows = rows_of(&v);
+        assert_eq!(rows.len(), 12, "8 in view and 4 of margin");
+        for (i, row) in rows.iter().enumerate() {
+            assert_eq!(row.key, row_key(i));
+            assert_eq!(row.style.position, taffy::Position::Absolute);
+            let (x, y) = at(0.0, i as f32 * theme.row_height);
+            assert_eq!((row.style.inset.left, row.style.inset.top), (x, y));
+        }
+        let inner = inner(&v);
+        assert_eq!(
+            inner.style.size.height,
+            taffy::Dimension::length(30.0 * theme.row_height)
+        );
+        assert_eq!(inner.style.inset.top, LengthPercentageAuto::length(0.0));
+    }
+
+    #[test]
+    fn a_scrolled_list_builds_the_rows_around_the_offset_and_moves_the_column_up() {
+        let theme = Theme::dark();
+        let (_, state) = many(30);
+        let offset = 10.0 * theme.row_height;
+        let v = card(&theme, &state, None, &scrolled(&theme, 30, offset, true));
+        let keys: Vec<_> = rows_of(&v).iter().map(|r| r.key).collect();
+        let want: Vec<_> = (6..22).map(row_key).collect();
+        assert_eq!(keys, want);
+        let (_, y) = at(0.0, -offset);
+        assert_eq!(inner(&v).style.inset.top, y);
+        // A row keeps its place in the column, whatever the offset.
+        let row = &rows_of(&v)[0];
+        assert_eq!(
+            row.style.inset.top,
+            LengthPercentageAuto::length(6.0 * theme.row_height)
+        );
+    }
+
+    #[test]
+    fn the_calculator_row_keeps_its_own_key_at_the_top_of_the_column() {
+        let theme = Theme::dark();
+        let index: Vec<_> = (0..30)
+            .map(|i| entry(&format!("t{i:02}"), &format!("2+2 Tool {i:02}")))
+            .collect();
+        let mut state = LauncherState::new(std::collections::HashMap::new(), None);
+        state.set_query("2+2", &index);
+        assert!(matches!(state.rows[0], Row::Calc { .. }));
+        let v = card(
+            &theme,
+            &state,
+            None,
+            &scrolled(&theme, state.rows.len(), 0.0, false),
+        );
+        let first = &rows_of(&v)[0];
+        assert_eq!(first.key, calc_key());
+        assert_eq!(first.style.inset.top, LengthPercentageAuto::length(0.0));
+        assert_eq!(rows_of(&v)[1].key, row_key(1));
+    }
+
+    #[test]
+    fn the_thumb_shows_with_thirty_rows_and_is_absent_with_five() {
+        let theme = Theme::dark();
+        let (_, state) = many(30);
+        let v = card(&theme, &state, None, &scrolled(&theme, 30, 0.0, true));
+        let thumb = area(&v)
+            .children
+            .iter()
+            .find(|c| c.key == thumb_key())
+            .expect("30 rows scroll: the bar is built");
+        assert!(matches!(
+            thumb.kind,
+            ViewKind::Box {
+                fill: Some(Role::ControlHover),
+                radius,
+                ..
+            } if radius == 2.0
+        ));
+        assert_eq!(thumb.opacity, 1.0);
+        assert!(!thumb.interactive);
+        let content_w = LAUNCHER_W - 2.0 * theme.spacing.md;
+        assert_eq!(thumb.style.size.width, taffy::Dimension::length(4.0));
+        let (_, h) = scrolling::thumb(0.0, 30.0 * theme.row_height, 8.0 * theme.row_height)
+            .expect("the content is taller than the area");
+        assert_eq!(thumb.style.size.height, taffy::Dimension::length(h));
+        assert_eq!(
+            thumb.style.inset.left,
+            LengthPercentageAuto::length(content_w - 2.0 - 4.0)
+        );
+
+        let hidden = card(&theme, &state, None, &scrolled(&theme, 30, 0.0, false));
+        let thumb = area(&hidden)
+            .children
+            .iter()
+            .find(|c| c.key == thumb_key())
+            .expect("kept built so that it can fade");
+        assert_eq!(thumb.opacity, 0.0);
+
+        let (_, few) = many(5);
+        let v = card(&theme, &few, None, &scrolled(&theme, 5, 0.0, true));
+        assert!(area(&v).children.iter().all(|c| c.key != thumb_key()));
+        assert!(!area(&v).interactive, "nothing to scroll: no wheel target");
+    }
+
+    #[test]
+    fn the_selector_builds_at_most_eight_rows_and_no_thumb() {
+        use crate::bubbles::{Bubbles, Link};
+        use celestina_shell::melibea::Window;
+        let theme = Theme::dark();
+        let windows: Vec<_> = (0..20)
+            .map(|i| Window {
+                id: 100 - i,
+                app_id: Some("app".to_owned()),
+                title: Some(format!("Doc {i}")),
+                icon_name: None,
+            })
+            .collect();
+        let state = LauncherState::selector(Bubbles {
+            windows,
+            link: Link::Live,
+        });
+        assert_eq!(state.rows.len(), 8);
+        let v = card(
+            &theme,
+            &state,
+            None,
+            &scrolled(&theme, state.rows.len(), 0.0, true),
+        );
+        assert_eq!(rows_of(&v).len(), 8);
+        assert!(area(&v).children.iter().all(|c| c.key != thumb_key()));
+    }
+
+    #[test]
+    fn the_area_is_laid_out_inside_the_card_and_clips_its_rows() {
+        let theme = Theme::dark();
+        let (_, state) = many(30);
+        let scroll = scrolled(&theme, 30, 3.0 * theme.row_height, false);
+        let surface = (2560.0, 1440.0);
+        let mut tree = Tree::new(false, &theme);
+        tree.apply(
+            launcher(&theme, &state, surface, None, &scroll),
+            Instant::now(),
+        );
+        tree.layout_measured(surface, fake_measure);
+        let rect = |key| {
+            tree.node_by_key(key)
+                .map(|id| tree.rect(id))
+                .expect("laid out")
+        };
+        let (card_r, area_r) = (rect(card_key()), rect(area_key()));
+        assert_eq!(area_r.h, 8.0 * theme.row_height);
+        assert_eq!(area_r.w, LAUNCHER_W - 2.0 * theme.spacing.md);
+        assert!(
+            area_r.y + area_r.h <= card_r.y + card_r.h,
+            "inside the card"
+        );
+        let inner_r = rect(inner_key());
+        assert_eq!(inner_r.y, area_r.y - 3.0 * theme.row_height);
+        let row3 = rect(row_key(3));
+        assert_eq!(row3.y, area_r.y, "row 3 is the first in view");
+        assert_eq!(row3.h, theme.row_height);
+        assert_eq!(row3.w, area_r.w, "a row is as wide as the area");
+    }
+
     #[test]
     fn the_card_holds_the_field_and_one_row_per_answer_and_keeps_the_typed_text() {
         let theme = Theme::dark();
@@ -449,7 +770,10 @@ mod tests {
         let size = card_size(&theme);
         let surface = (2560.0, 1440.0);
         let at = card_rect(surface, size);
-        tree.apply(launcher(&theme, &state, surface, None), t0);
+        tree.apply(
+            launcher(&theme, &state, surface, None, &ListScroll::default()),
+            t0,
+        );
         tree.layout_measured(surface, fake_measure);
 
         let root = tree.node_by_key(surface_key()).map(|id| tree.rect(id));
@@ -468,7 +792,7 @@ mod tests {
         assert!(field.is_some_and(|r| r.w > 0.0
             && r.y >= at.y
             && r.y < at.y + theme.top_bar + theme.spacing.md));
-        let rows: Vec<_> = (0..MAX_ROWS)
+        let rows: Vec<_> = (0..AREA_ROWS)
             .filter_map(|i| tree.node_by_key(row_key(i)))
             .map(|id| tree.rect(id))
             .collect();
@@ -485,14 +809,18 @@ mod tests {
             field.set_text("ab");
         }
         state.set_query("ab", &index);
-        tree.apply(launcher(&theme, &state, surface, None), t0);
+        tree.apply(
+            launcher(&theme, &state, surface, None, &ListScroll::default()),
+            t0,
+        );
         tree.layout_measured(surface, fake_measure);
         assert_eq!(
             tree.field(FIELD).map(|f| f.text().to_owned()),
             Some("ab".to_owned())
         );
         // One answer now; the rows that left fade out in the tree.
-        assert_eq!(card(&theme, &state, None).children[1].children.len(), 1);
+        let v = card(&theme, &state, None, &ListScroll::default());
+        assert_eq!(rows_of(&v).len(), 1);
     }
 
     #[test]
@@ -502,8 +830,8 @@ mod tests {
         let mut state = LauncherState::new(std::collections::HashMap::new(), None);
         state.set_query("a", &index);
         state.move_selection(1);
-        let v = card(&theme, &state, None);
-        let rows = &v.children[1].children;
+        let v = card(&theme, &state, None, &ListScroll::default());
+        let rows = rows_of(&v);
         let fills: Vec<_> = rows
             .iter()
             .map(|r| match r.kind {
@@ -545,15 +873,15 @@ mod tests {
         let theme = Theme::dark();
         let mut state = LauncherState::new(std::collections::HashMap::new(), None);
         state.set_query("/zzz", &[]);
-        let v = card(&theme, &state, None);
-        let rows = &v.children[1].children;
+        let v = card(&theme, &state, None, &ListScroll::default());
+        let rows = rows_of(&v);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].key, Key::named("launcher-empty"));
         assert!(!rows[0].interactive);
     }
 
     fn note_text(v: &View) -> String {
-        let rows = &v.children[1].children;
+        let rows = rows_of(v);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].key, Key::named("launcher-empty"));
         assert!(!rows[0].interactive, "the note is not a row to choose");
@@ -572,7 +900,7 @@ mod tests {
             link: Link::Live,
         });
         assert_eq!(
-            note_text(&card(&theme, &empty, None)),
+            note_text(&card(&theme, &empty, None, &ListScroll::default())),
             copy::SELECTOR_NO_WINDOWS
         );
         for link in [Link::Absent, Link::Refused, Link::Unavailable] {
@@ -581,7 +909,7 @@ mod tests {
                 link,
             });
             assert_eq!(
-                note_text(&card(&theme, &gone, None)),
+                note_text(&card(&theme, &gone, None, &ListScroll::default())),
                 copy::SELECTOR_UNAVAILABLE,
                 "{link:?}"
             );
@@ -597,7 +925,10 @@ mod tests {
             link: Link::Live,
         });
         some.set_query("zzz", &[]);
-        assert_eq!(note_text(&card(&theme, &some, None)), copy::LAUNCHER_EMPTY);
+        assert_eq!(
+            note_text(&card(&theme, &some, None, &ListScroll::default())),
+            copy::LAUNCHER_EMPTY
+        );
     }
 
     #[test]
@@ -622,8 +953,8 @@ mod tests {
             ],
             link: Link::Live,
         });
-        let v = card(&theme, &state, None);
-        let rows = &v.children[1].children;
+        let v = card(&theme, &state, None, &ListScroll::default());
+        let rows = rows_of(&v);
         assert_eq!(rows.len(), 2);
         assert!(rows.iter().all(|r| r.interactive));
         let texts = |r: &View| -> Vec<String> {
@@ -657,7 +988,11 @@ mod tests {
         let theme = Theme::dark();
         let index = [entry("aa", "Aa")];
         let mut state = LauncherState::new(std::collections::HashMap::new(), None);
-        let pill = |state: &LauncherState| card(&theme, state, None).children.remove(0);
+        let pill = |state: &LauncherState| {
+            card(&theme, state, None, &ListScroll::default())
+                .children
+                .remove(0)
+        };
         let empty = pill(&state);
         let button = empty.children.last().expect("the pill has children");
         assert_eq!(button.key, clear_key());
@@ -706,7 +1041,7 @@ mod tests {
             progress: 0.5,
             text_end: 120.0,
         };
-        let v = card(&theme, &state, Some(sweep));
+        let v = card(&theme, &state, Some(sweep), &ListScroll::default());
         let node = v.children[0]
             .children
             .iter()
@@ -733,7 +1068,7 @@ mod tests {
         let first = &v.children[0].children[0];
         assert_eq!(first.key, sweep_key(), "under the text: the first child");
 
-        let none = card(&theme, &state, None);
+        let none = card(&theme, &state, None, &ListScroll::default());
         assert!(none.children[0]
             .children
             .iter()
@@ -750,8 +1085,8 @@ mod tests {
     #[test]
     fn the_calculator_row_shows_the_glyph_the_equals_the_result_and_the_copy_detail() {
         let theme = Theme::dark();
-        let v = card(&theme, &calc_state(false), None);
-        let row = &v.children[1].children[0];
+        let v = card(&theme, &calc_state(false), None, &ListScroll::default());
+        let row = &rows_of(&v)[0];
         assert_eq!(row.key, calc_key());
         assert!(row.interactive);
         assert!(matches!(
@@ -807,8 +1142,8 @@ mod tests {
     #[test]
     fn after_the_copy_the_row_shows_the_check_and_the_copied_word_in_success() {
         let theme = Theme::dark();
-        let v = card(&theme, &calc_state(true), None);
-        let row = &v.children[1].children[0];
+        let v = card(&theme, &calc_state(true), None, &ListScroll::default());
+        let row = &rows_of(&v)[0];
         assert!(matches!(
             row.children[0].kind,
             ViewKind::Icon {

@@ -6,8 +6,8 @@
 //! index with `celestina_shell::launcher_search` (words in any order, one
 //! typo, aliases), and within equal scores the application used more comes
 //! first ([`super::usage`]). An empty query, or one of only separators,
-//! lists the whole index by use, then by name. At most [`MAX_ROWS`] rows are
-//! shown.
+//! lists the whole index by use, then by name. Every answer is a row: the
+//! view scrolls the list ([`super::scrolling`]).
 //!
 //! The `Mod+K` selector is the same state over the bubbles [`Source`]: its
 //! rows are Melibea's minimised windows ([`super::selector`]), and no query
@@ -24,9 +24,6 @@ use celestina_ui::Field;
 use super::commands::{commands_for, Switch};
 use super::{groups, selector};
 use crate::bubbles::Bubbles;
-
-/// The most rows the launcher shows.
-pub const MAX_ROWS: usize = 8;
 
 /// An application row: the entry and the texts the row shows (the localized
 /// name and generic name when the locale has them).
@@ -177,9 +174,8 @@ impl LauncherState {
                 self.sync(index);
                 let mut rows = self.ranked(index, query);
                 if let Some(result) = calc::evaluate(query) {
-                    // First, so the bound on the rows still holds.
+                    // First: the row at the top is the one Enter copies.
                     rows.insert(0, Row::Calc { result });
-                    rows.truncate(MAX_ROWS);
                 }
                 rows
             }
@@ -203,7 +199,7 @@ impl LauncherState {
             .collect();
     }
 
-    /// The rows of `query` over the prepared `index`, at most [`MAX_ROWS`].
+    /// The rows of `query` over the prepared `index`: every answer.
     fn ranked(&self, index: &[DesktopEntry], query: &str) -> Vec<Row> {
         let score = |id: &str| self.scores.get(id).copied().unwrap_or(0);
         let hits: Vec<usize> = if query.chars().any(|c| c.is_alphanumeric() || c == '+') {
@@ -220,7 +216,6 @@ impl LauncherState {
             all.into_iter().map(|(_, _, i)| i).collect()
         };
         hits.into_iter()
-            .take(MAX_ROWS)
             .map(|i| {
                 Row::App(Box::new(AppRow {
                     entry: index[i].clone(),
@@ -315,12 +310,12 @@ mod tests {
             "loose.desktop",
         ];
         assert_eq!(ids(&typed("term", &index, &[])), want);
-        // And never more than eight rows.
+        // Every answer is a row, past eight: the view scrolls.
         let many: Vec<_> = (0..20)
             .map(|i| entry(&format!("t{i:02}"), &format!("Tool {i:02}")))
             .collect();
-        assert_eq!(typed("t", &many, &[]).rows.len(), MAX_ROWS);
-        assert_eq!(typed("", &many, &[]).rows.len(), MAX_ROWS);
+        assert_eq!(typed("t", &many, &[]).rows.len(), 20);
+        assert_eq!(typed("", &many, &[]).rows.len(), 20);
     }
 
     #[test]
@@ -550,12 +545,12 @@ mod tests {
             Vec::<Row>::new(),
             "no switch is named 2+2"
         );
-        // The bound holds with the row in.
+        // The row leads the whole list.
         let many: Vec<_> = (0..20)
-            .map(|i| entry(&format!("t{i:02}"), &format!("2 Tool {i:02}")))
+            .map(|i| entry(&format!("t{i:02}"), &format!("2+2 Tool {i:02}")))
             .collect();
         let full = typed("2+2", &many, &[]);
-        assert!(full.rows.len() <= MAX_ROWS);
+        assert_eq!(full.rows.len(), 21, "the 20 tools and the result");
         assert!(matches!(full.rows[0], Row::Calc { .. }));
     }
 
