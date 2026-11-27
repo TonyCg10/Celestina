@@ -17,12 +17,16 @@
 # debt. Hematita's +1 is assumed from the other seven, measured against their
 # release modules; no Hematita release module was available, and the landing's
 # own count confirms it.
+# Every row was re-measured on 2026-11-27 under Qt 6.12.1's qmllint (RS-L10N-A):
+# the host upgraded on 2026-11-25 and the new linter counts more in every
+# application, against fresh release modules and QML unchanged since; a
+# correction of the measurement, not new debt.
 # warnings<TAB>project
-57	fluorita
-39	grafita
-39	magnetita
-221	siderita
-27	hematita
-10	cuprita
-2	calcita
-2	selenita
+75	fluorita
+58	grafita
+46	magnetita
+314	siderita
+52	hematita
+11	cuprita
+4	calcita
+3	selenita

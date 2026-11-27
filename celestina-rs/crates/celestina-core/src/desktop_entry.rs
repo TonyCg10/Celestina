@@ -57,12 +57,22 @@ pub struct DesktopEntry {
     /// The file name, e.g. `firefox.desktop`: the id every other desktop tool
     /// uses, and what a user override shadows.
     pub id: String,
-    /// The unlocalized `Name`. Localized variants are deliberately ignored:
-    /// picking one means picking a locale, which is the caller's business and
-    /// not something to guess while parsing.
+    /// The unlocalized `Name`. Localized variants are kept apart in
+    /// [`name_l10n`](Self::name_l10n): picking one means picking a locale,
+    /// which is the caller's business and not something to guess while
+    /// parsing. [`localized_name`](Self::localized_name) does the picking.
     pub name: String,
     pub generic_name: String,
     pub comment: String,
+    /// Every `Name[tag]` as `(tag as written, value)`, in file order, at most
+    /// [`MAX_LOCALIZED_PER_KEY`].
+    pub name_l10n: Vec<(String, String)>,
+    /// Every `GenericName[tag]`, kept like [`name_l10n`](Self::name_l10n).
+    pub generic_name_l10n: Vec<(String, String)>,
+    /// Every `Comment[tag]`, kept like [`name_l10n`](Self::name_l10n).
+    pub comment_l10n: Vec<(String, String)>,
+    /// Every `Keywords[tag]`, kept like [`name_l10n`](Self::name_l10n).
+    pub keywords_l10n: Vec<(String, Vec<String>)>,
     pub exec: String,
     pub try_exec: String,
     pub icon: String,
@@ -78,7 +88,109 @@ pub struct DesktopEntry {
     pub terminal: bool,
 }
 
+/// The most `Key[tag]` lines the reader keeps per key. A hostile file with
+/// hundreds of them costs a bounded amount; the first ones in file order win.
+pub const MAX_LOCALIZED_PER_KEY: usize = 64;
+
+/// A person's message locale, split the way the specification matches
+/// `Key[lang_COUNTRY@MODIFIER]` tags.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Locale {
+    pub lang: String,
+    pub country: Option<String>,
+    pub modifier: Option<String>,
+}
+
+impl Locale {
+    /// Reads a POSIX locale name such as `es_ES.UTF-8@euro`. The `.encoding`
+    /// is dropped and the `@modifier` kept. `C`, `POSIX` and an empty value
+    /// (and any value with no language) mean no locale.
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        let value = value.trim();
+        let (rest, modifier) = match value.split_once('@') {
+            Some((rest, modifier)) => (rest, Some(modifier)),
+            None => (value, None),
+        };
+        let rest = rest.split_once('.').map_or(rest, |(before, _)| before);
+        let (lang, country) = match rest.split_once('_') {
+            Some((lang, country)) => (lang, Some(country)),
+            None => (rest, None),
+        };
+        if lang.is_empty() || lang == "C" || lang == "POSIX" {
+            return None;
+        }
+        let non_empty =
+            |part: Option<&str>| part.filter(|part| !part.is_empty()).map(str::to_owned);
+        Some(Self {
+            lang: lang.to_owned(),
+            country: non_empty(country),
+            modifier: non_empty(modifier),
+        })
+    }
+
+    /// The locale from the first non-empty of `LC_ALL`, `LC_MESSAGES` and
+    /// `LANG`, read through `get`. A first non-empty value that is `C` or
+    /// `POSIX` means no locale; later variables are not consulted.
+    #[must_use]
+    pub fn from_vars(get: impl Fn(&str) -> Option<String>) -> Option<Self> {
+        ["LC_ALL", "LC_MESSAGES", "LANG"]
+            .into_iter()
+            .find_map(|name| get(name).filter(|value| !value.is_empty()))
+            .and_then(|value| Self::parse(&value))
+    }
+
+    /// [`from_vars`](Self::from_vars) over the process environment.
+    #[must_use]
+    pub fn from_env() -> Option<Self> {
+        Self::from_vars(|name| std::env::var(name).ok())
+    }
+
+    /// The tags to try, most specific first: `lang_COUNTRY@MODIFIER`,
+    /// `lang_COUNTRY`, `lang@MODIFIER`, `lang`.
+    fn candidates(&self) -> Vec<String> {
+        let mut tags = Vec::with_capacity(4);
+        if let Some(country) = &self.country {
+            if let Some(modifier) = &self.modifier {
+                tags.push(format!("{}_{country}@{modifier}", self.lang));
+            }
+            tags.push(format!("{}_{country}", self.lang));
+        }
+        if let Some(modifier) = &self.modifier {
+            tags.push(format!("{}@{modifier}", self.lang));
+        }
+        tags.push(self.lang.clone());
+        tags
+    }
+}
+
+fn pick<'a, T>(items: &'a [(String, T)], locale: &Locale) -> Option<&'a T> {
+    locale
+        .candidates()
+        .iter()
+        .find_map(|tag| items.iter().find(|(own, _)| own == tag).map(|(_, v)| v))
+}
+
 impl DesktopEntry {
+    /// The `Name` for `locale`, or `None` when the caller should use
+    /// [`name`](Self::name).
+    #[must_use]
+    pub fn localized_name(&self, locale: &Locale) -> Option<&str> {
+        pick(&self.name_l10n, locale).map(String::as_str)
+    }
+
+    /// The `GenericName` for `locale`, or `None` for the unlocalized one.
+    #[must_use]
+    pub fn localized_generic_name(&self, locale: &Locale) -> Option<&str> {
+        pick(&self.generic_name_l10n, locale).map(String::as_str)
+    }
+
+    /// The `Keywords` for `locale`, or `None` for the unlocalized list.
+    #[must_use]
+    pub fn localized_keywords(&self, locale: &Locale) -> Option<&[String]> {
+        pick(&self.keywords_l10n, locale).map(Vec::as_slice)
+    }
+
     /// Whether this is an application a person should be offered.
     ///
     /// `Hidden` means the entry was deleted by a user override and is not an
@@ -231,6 +343,13 @@ fn parse_with(id: &str, content: &str, values: Values) -> Option<DesktopEntry> {
         };
         let (key, value) = (key.trim(), value.trim());
 
+        if let Some((base, tag)) = key.split_once('[') {
+            if let Some(tag) = tag.strip_suffix(']') {
+                push_localized(&mut entry, values, base, tag, value);
+            }
+            continue;
+        }
+
         match key {
             "Name" => entry.name = values.string(value),
             "GenericName" => entry.generic_name = values.string(value),
@@ -252,6 +371,26 @@ fn parse_with(id: &str, content: &str, values: Values) -> Option<DesktopEntry> {
     }
 
     seen_group.then_some(entry)
+}
+
+/// Records a `Key[tag]` line for the four localizable keys, up to the bound.
+fn push_localized(entry: &mut DesktopEntry, values: Values, key: &str, tag: &str, value: &str) {
+    let text = |list: &mut Vec<(String, String)>| {
+        if list.len() < MAX_LOCALIZED_PER_KEY {
+            list.push((tag.to_owned(), values.string(value)));
+        }
+    };
+    match key {
+        "Name" => text(&mut entry.name_l10n),
+        "GenericName" => text(&mut entry.generic_name_l10n),
+        "Comment" => text(&mut entry.comment_l10n),
+        "Keywords" if entry.keywords_l10n.len() < MAX_LOCALIZED_PER_KEY => {
+            entry
+                .keywords_l10n
+                .push((tag.to_owned(), values.list(value)));
+        }
+        _ => {}
+    }
 }
 
 /// Splits an `Exec` value into words the way the specification defines: shell
@@ -754,6 +893,180 @@ mod tests {
         let entry = parse("firefox.desktop", FIREFOX).expect("an entry");
 
         assert_eq!(entry.name, "Firefox");
+    }
+
+    fn l10n_get(vars: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
+        move |name| {
+            vars.iter()
+                .find(|(key, _)| *key == name)
+                .map(|(_, value)| (*value).to_owned())
+        }
+    }
+
+    #[test]
+    fn the_localized_values_are_kept_with_their_tags() {
+        let entry = parse("firefox.desktop", FIREFOX).expect("an entry");
+
+        assert_eq!(
+            entry.name_l10n,
+            [("es".to_owned(), "Zorro de fuego".to_owned())]
+        );
+        assert!(entry.generic_name_l10n.is_empty());
+        assert!(entry.comment_l10n.is_empty());
+        assert!(entry.keywords_l10n.is_empty());
+    }
+
+    #[test]
+    fn every_localizable_key_is_collected() {
+        let body = "[Desktop Entry]\nType=Application\nName=A\n\
+                    GenericName[de_AT@euro]=G\nComment[fr]=C\nKeywords[es]=one;two;\n";
+        let entry = parse("a.desktop", body).expect("an entry");
+
+        assert_eq!(
+            entry.generic_name_l10n,
+            [("de_AT@euro".to_owned(), "G".to_owned())]
+        );
+        assert_eq!(entry.comment_l10n, [("fr".to_owned(), "C".to_owned())]);
+        assert_eq!(
+            entry.keywords_l10n,
+            [("es".to_owned(), vec!["one".to_owned(), "two".to_owned()])]
+        );
+    }
+
+    #[test]
+    fn a_locale_drops_its_encoding_and_keeps_its_modifier() {
+        let locale = Locale::parse("es_ES.UTF-8@euro").expect("a locale");
+
+        assert_eq!(locale.lang, "es");
+        assert_eq!(locale.country.as_deref(), Some("ES"));
+        assert_eq!(locale.modifier.as_deref(), Some("euro"));
+
+        let plain = Locale::parse("es").expect("a locale");
+        assert_eq!((plain.country, plain.modifier), (None, None));
+        let modifier_only = Locale::parse("sr@latin").expect("a locale");
+        assert_eq!(modifier_only.modifier.as_deref(), Some("latin"));
+        assert_eq!(modifier_only.country, None);
+    }
+
+    #[test]
+    fn c_posix_and_empty_locales_are_no_locale() {
+        for value in ["C", "POSIX", "", "C.UTF-8", ".UTF-8", "_ES", "@euro"] {
+            assert_eq!(Locale::parse(value), None, "{value:?}");
+        }
+    }
+
+    #[test]
+    fn hostile_locale_values_do_not_panic() {
+        let long = "x".repeat(10_000);
+        for value in [
+            long.as_str(),
+            "\u{e9}_\u{c9}.\u{fc}@\u{df}",
+            "_.@",
+            "@@@",
+            "a_b_c.d.e@f@g",
+        ] {
+            let _ = Locale::parse(value);
+        }
+    }
+
+    #[test]
+    fn the_locale_comes_from_lc_all_then_lc_messages_then_lang() {
+        const BOTH: &[(&str, &str)] = &[("LC_ALL", "fr_FR.UTF-8"), ("LANG", "es_ES.UTF-8")];
+        let locale = Locale::from_vars(l10n_get(BOTH)).expect("a locale");
+        assert_eq!(locale.lang, "fr");
+
+        const EMPTY_ALL: &[(&str, &str)] = &[("LC_ALL", ""), ("LANG", "es_ES.UTF-8")];
+        let locale = Locale::from_vars(l10n_get(EMPTY_ALL)).expect("a locale");
+        assert_eq!(locale.lang, "es");
+
+        const MESSAGES: &[(&str, &str)] = &[("LC_MESSAGES", "de"), ("LANG", "es")];
+        let locale = Locale::from_vars(l10n_get(MESSAGES)).expect("a locale");
+        assert_eq!(locale.lang, "de");
+
+        const NONE: &[(&str, &str)] = &[];
+        assert_eq!(Locale::from_vars(l10n_get(NONE)), None);
+        const C: &[(&str, &str)] = &[("LANG", "C")];
+        assert_eq!(Locale::from_vars(l10n_get(C)), None);
+        const POSIX_FIRST: &[(&str, &str)] = &[("LC_ALL", "POSIX"), ("LANG", "es")];
+        assert_eq!(Locale::from_vars(l10n_get(POSIX_FIRST)), None);
+    }
+
+    #[test]
+    fn the_most_specific_localized_name_wins() {
+        let body = "[Desktop Entry]\nName[es]=ES\nName[es_ES]=ES_ES\n\
+                    Name[es@euro]=ES_EURO\nName[es_ES@euro]=ES_ES_EURO\n";
+        let entry = parse("a.desktop", body).expect("an entry");
+        let name = |tag: &str| {
+            entry
+                .localized_name(&Locale::parse(tag).expect("a locale"))
+                .map(str::to_owned)
+        };
+
+        assert_eq!(name("es_ES@euro").as_deref(), Some("ES_ES_EURO"));
+        assert_eq!(name("es_ES").as_deref(), Some("ES_ES"));
+        assert_eq!(name("es_MX@euro").as_deref(), Some("ES_EURO"));
+        assert_eq!(name("es_MX").as_deref(), Some("ES"));
+        assert_eq!(name("fr"), None);
+    }
+
+    #[test]
+    fn a_missing_country_variant_falls_back_to_the_language() {
+        let body = "[Desktop Entry]\nName[es_ES]=ES_ES\nName[es]=ES\n";
+        let entry = parse("a.desktop", body).expect("an entry");
+
+        let spain = Locale::parse("es_ES").expect("a locale");
+        let mexico = Locale::parse("es_MX").expect("a locale");
+        assert_eq!(entry.localized_name(&spain), Some("ES_ES"));
+        assert_eq!(entry.localized_name(&mexico), Some("ES"));
+    }
+
+    #[test]
+    fn generic_names_and_keywords_use_the_same_order() {
+        let body = "[Desktop Entry]\nGenericName[es]=G\nGenericName[es_ES]=G_ES\n\
+                    Keywords[es]=a;b;\nKeywords[es_ES]=c;\n";
+        let entry = parse("a.desktop", body).expect("an entry");
+        let spain = Locale::parse("es_ES").expect("a locale");
+        let mexico = Locale::parse("es_MX").expect("a locale");
+
+        assert_eq!(entry.localized_generic_name(&spain), Some("G_ES"));
+        assert_eq!(entry.localized_generic_name(&mexico), Some("G"));
+        assert_eq!(
+            entry.localized_keywords(&spain),
+            Some(&["c".to_owned()][..])
+        );
+        assert_eq!(
+            entry.localized_keywords(&mexico),
+            Some(&["a".to_owned(), "b".to_owned()][..])
+        );
+    }
+
+    #[test]
+    fn a_flood_of_localized_lines_keeps_the_first_sixty_four() {
+        let mut body = String::from("[Desktop Entry]\nName=A\n");
+        for index in 0..100 {
+            body.push_str(&format!("Name[x{index}]=v{index}\n"));
+            body.push_str(&format!("Keywords[x{index}]=k{index};\n"));
+        }
+        let entry = parse("a.desktop", &body).expect("an entry");
+
+        assert_eq!(entry.name_l10n.len(), MAX_LOCALIZED_PER_KEY);
+        assert_eq!(entry.name_l10n[0], ("x0".to_owned(), "v0".to_owned()));
+        assert_eq!(entry.name_l10n[63].0, "x63");
+        assert_eq!(entry.keywords_l10n.len(), MAX_LOCALIZED_PER_KEY);
+    }
+
+    #[test]
+    fn localized_values_are_unescaped_under_read_and_raw_under_parse() {
+        let body = "[Desktop Entry]\nName=A\nName[es]=uno\\sdos\nKeywords[es]=a\\;b;c;\n";
+        let raw = parse("a.desktop", body).expect("an entry");
+        assert_eq!(raw.name_l10n[0].1, "uno\\sdos");
+
+        let parsed = parse_with("a.desktop", body, Values::Unescaped).expect("an entry");
+        assert_eq!(parsed.name_l10n[0].1, "uno dos");
+        assert_eq!(
+            parsed.keywords_l10n[0].1,
+            ["a;b".to_owned(), "c".to_owned()]
+        );
     }
 
     #[test]

@@ -1,0 +1,23 @@
+# RS-L10N-A exact change inventory
+
+Base revision	756e9e6e86fad814601ff8f2b5ecf3dc8827067c
+Pathspec	celestina-rs/ROADMAP.md
+Pathspec	celestina-rs/STATUS.md
+Pathspec	celestina-rs/crates/celestina-core/src/desktop_entry.rs
+Pathspec	celestina-rs/docs/evidence/2026-11-27-desktop-l10n.md
+Pathspec	celestina-rs/docs/inventories/2026-11-27-desktop-l10n/RS-L10N-A.numstat.tsv
+Pathspec	celestina-rs/docs/plans/active/2026-11-27-desktop-l10n.md
+Pathspec	celestina-rs/docs/plans/active/README.md
+Pathspec	scripts/qmllint-baseline.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+5	4	2c62b7d75971d995a81e56efbef16dfb3757faf9ad1fbcd05d488c9b6e464c69	celestina-rs/ROADMAP.md
+5	3	9871c6290289c6c4c227e180e5889fb13c2dea6ba55aba7403af425e04a62b2d	celestina-rs/STATUS.md
+316	3	59b4bd157f2b214793983ff4d4639e67e9577ca279be96fbd36de4d05fb2f07e	celestina-rs/crates/celestina-core/src/desktop_entry.rs
+65	0	ec3fa8617d88127cc4c06cc86e63551e2f243c13764ecfda7d618c7d333f4553	celestina-rs/docs/evidence/2026-11-27-desktop-l10n.md
+23	0	self	celestina-rs/docs/inventories/2026-11-27-desktop-l10n/RS-L10N-A.numstat.tsv
+58	0	897b19879982198f2b80e3f5172872091722207f2fefe9587df7f9c432f117c7	celestina-rs/docs/plans/active/2026-11-27-desktop-l10n.md
+2	1	ccf86f1bb29d3b1133487d92312266cadad49a7051b205ebfcf33e978ebac045	celestina-rs/docs/plans/active/README.md
+12	8	a6261e586345538676234a8790e6027974934cdf2c986c2b0a013e56f886f02c	scripts/qmllint-baseline.tsv

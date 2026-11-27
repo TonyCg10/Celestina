@@ -1,12 +1,13 @@
 # Celestina Rust workspace implementation roadmap
 
-- **Status:** idle
-- **Active implementation checkpoint:** none
+- **Status:** active
+- **Active implementation checkpoint:** RS-L10N
 - **Related author validation:** product-level queues linked from
   [VALIDATION.md](VALIDATION.md); they do not block implementation
 
-`CORE-M1` remains the next settled candidate after `RS-H1` and has no
-active execution plan.
+`RS-L10N` is active: [Localized values in the desktop entry reader](docs/plans/active/2026-11-27-desktop-l10n.md),
+for the shell's `CEL-I-015`. `CORE-M1` remains the next settled candidate
+and has no active execution plan.
 
 ## RS-H1 — Shared owners after the monorepo audit (closed 2026-11-25)
 

@@ -1,13 +1,15 @@
 # Celestina Rust workspace status
 
-- **Updated:** 2026-11-25
+- **Updated:** 2026-11-27
 - **Implementation:** the registered workspace crates are present;
   `dotfiles-core` has no consumer (see the RS-H1 plan's exclusions); `RS-H1`,
   the shared owners that follow the 2026-09-26 monorepo audit, closed on
   2026-11-25: its single unit `RS-H1-A` added those owners to
   `celestina-core` without switching any consumer, and its
-  [plan](docs/plans/archive/2026-09-26-hardening.md) is archived; no
-  checkpoint is active
+  [plan](docs/plans/archive/2026-09-26-hardening.md) is archived; `RS-L10N`
+  is active: its one unit `RS-L10N-A` adds the localized values to
+  `desktop_entry` for the shell's launcher search
+  ([plan](docs/plans/active/2026-11-27-desktop-l10n.md))
 - **Author validation:** routed to the owning applications; see
   [VALIDATION.md](VALIDATION.md)
 
