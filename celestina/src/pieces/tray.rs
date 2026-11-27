@@ -110,7 +110,11 @@ fn chevron(cx: &BarCx<'_>) -> View {
         .rotate(if cx.tray_open { 180.0 } else { 0.0 });
     let dot = hidden_attention(cx)
         .then(|| attention_dot(Key::named("tray-hidden-attention"), DOT_AT.0, DOT_AT.1));
-    let node = centred(view::row(chevron_key()))
+    // Centred on both axes: the glyph sits, and turns, in the middle of
+    // the box, as a tray icon sits in its plate.
+    let mut row = centred(view::row(chevron_key()));
+    row.style.justify_content = taffy::JustifyContent::CENTER;
+    let node = row
         .size(CHEVRON_BOX, CHEVRON_BOX)
         .radius(cx.theme.radius_md)
         .interactive()

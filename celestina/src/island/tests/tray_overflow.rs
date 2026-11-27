@@ -135,14 +135,32 @@ fn overflow_window_lists_hidden_apps_only() {
 }
 
 #[test]
-fn overflow_window_aligns_to_the_capsule_right_edge() {
+fn overflow_window_centres_under_the_chevron() {
     let (island, t) = opened();
-    let end = end_capsule(&island);
+    let chevron = bar_rect(&island, chevron_key());
     let window = shown_rect(&island, t);
     assert_eq!(window.y, 56.0);
-    assert_eq!(window.x + window.w, end.x + end.w, "right edges agree");
+    assert_eq!(window.w, 240.0);
+    assert!(
+        (window.x + window.w / 2.0 - (chevron.x + chevron.w / 2.0)).abs() < 0.01,
+        "centred under the chevron: {window:?} for {chevron:?}"
+    );
+    assert!(window.x >= 16.0 && window.x + window.w <= 1920.0 - 16.0);
     // It is the window of CEL-D-009: its own shape beside the capsules.
     assert!(island.shapes(t).contains(&(window, island.theme.radius_lg)));
+}
+
+#[test]
+fn the_chevron_glyph_sits_in_the_centre_of_its_box() {
+    let (island, _) = overflow_island();
+    let chevron = bar_rect(&island, chevron_key());
+    let glyph = bar_rect(&island, Key::named("tray-hidden-icon"));
+    assert_eq!((chevron.w, chevron.h), (32.0, 32.0));
+    assert!(
+        (glyph.x + glyph.w / 2.0 - (chevron.x + chevron.w / 2.0)).abs() < 0.01
+            && (glyph.y + glyph.h / 2.0 - (chevron.y + chevron.h / 2.0)).abs() < 0.01,
+        "the glyph {glyph:?} turns about the centre of {chevron:?}"
+    );
 }
 
 #[test]

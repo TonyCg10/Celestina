@@ -210,10 +210,19 @@ impl Island {
     /// either is gone.
     pub(super) fn live_anchor(&self, zone: usize, piece: Key, now: Instant) -> Option<Anchor> {
         let bar = self.bar.as_ref()?;
+        let pill = bar.pill_of(piece, now)?;
+        // The tray's window opens centred under its chevron (the author's
+        // call of 2026-11-26, after seeing it live): lined up with the
+        // capsule's edge it opened far from the icon.
+        let (capsule, edge) = if piece == tray_piece::chevron_key() {
+            (pill, Edge::Centre)
+        } else {
+            (bar.capsule_extent(zone, now)?, Edge::of_zone(zone))
+        };
         Some(Anchor {
-            capsule: bar.capsule_extent(zone, now)?,
-            edge: Edge::of_zone(zone),
-            pill: geometry::pill(bar.pill_of(piece, now)?),
+            capsule,
+            edge,
+            pill: geometry::pill(pill),
             surface: self.size,
         })
     }

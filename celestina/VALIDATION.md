@@ -1768,6 +1768,25 @@ None has been run and none is closed by an agent.
 - **Evidence:** none; the unit's automated evidence is
   [CEL-I-011](docs/evidence/2026-11-26-cel-i-011-tray-fixes.md)
 
+## VAL-CEL-I-013 — The chevron's plate and its window's place
+
+- **Status:** pending
+- **Related implementation:** CEL-I-013 (the chevron's glyph sits and turns
+  in the middle of its 32 px plate; the hidden-apps window opens centred
+  under the chevron, 8 px under the bar, 16 px from the screen's sides)
+- **Requires:** the deployed shell after the landing of CEL-I-013, with at
+  least one tray app hidden and pieces after the tray in its capsule
+- **Procedure:** hover the chevron; press it and watch the glyph turn; look
+  where the window opens; close it; repeat on the output's right end if a
+  layout puts the tray there
+- **Pass condition:** the glyph sits in the middle of the hover and open
+  plate, which matches a tray icon's; it turns about its own centre; the
+  window opens under the chevron, centred on it, and stays 16 px inside the
+  screen
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-I-013](docs/evidence/2026-11-27-cel-i-013-chevron-fixes.md)
+
 ## VAL-CEL-I-012 — The collapsible tray
 
 - **Status:** pending

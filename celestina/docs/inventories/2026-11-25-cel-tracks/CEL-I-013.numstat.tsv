@@ -1,0 +1,39 @@
+# CEL-I-013 exact change inventory
+
+Base revision	4997e0356db828e0af96f7467eb7efbe97d3c1a5
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes/chevron-hover.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes/chevron-turning.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes/chevron-zoom.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes/window-birth.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes/window-closing.png
+Pathspec	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes/window-open.png
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-013.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/island/sheets.rs
+Pathspec	celestina/src/island/tests/tray_overflow.rs
+Pathspec	celestina/src/pieces/tray.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	97dbddc4c5414c16dc3abbc4d8f8d8dfd13dbca874f13c8a6de8f52e2f65bad7	celestina/Cargo.lock
+1	1	c17d5030fb3418cd1d8abe85c85c648a5df0cd8b34a979a2292430f059198538	celestina/Cargo.toml
+19	0	ed7273d6dda9f3cfd77ddda09c8a863afcac4a379c8cdc9d4c0e8ad532d0ce5c	celestina/VALIDATION.md
+58	0	e36c70d5c5cd9df3161254bf3a40419eaa5dcd7eff22e56ba39926b40f60f292	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes.md
+-	-	eb45425d738f159f7fba265f90dd6d03911caea0613eab17e643d052bb674fc3	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes/chevron-hover.png
+-	-	0f89ba1ae785dea9414276ead9d9f7a9bf1f55b480bbad683e84b1640282f213	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes/chevron-turning.png
+-	-	c31d34a1eda4bd4e1be5b4d30c79d6d6959fca143f811009b5646ce1629090fd	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes/chevron-zoom.png
+-	-	122eaf6fffce60e7f5ac4c3f49a7604a94fa8837dc1c9776f0b6b71a425678cc	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes/window-birth.png
+-	-	86019d4c3d7976dd2783a20e7977cc1ccadac7a549525e9f894f39f2dadc359b	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes/window-closing.png
+-	-	2f41c82e60fff56afd09611e0ed529cc4601cd4c86dea0bd5b3bad01849d92d3	celestina/docs/evidence/2026-11-27-cel-i-013-chevron-fixes/window-open.png
+39	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-I-013.numstat.tsv
+1	0	79d6a1ac6260cbf83f0d81b7ad9bbec829738cfc27ebed43e298a0100fed084f	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+12	3	d10baf6adcb341dd5f39de9c85f6883e5bc8ede48cdc98e7846e7554e47cd079	celestina/src/island/sheets.rs
+21	3	d66d6f8d32f9144ac93e7d79fea5230a59b74b0df50422d6d7e1a2ea7f34f4f7	celestina/src/island/tests/tray_overflow.rs
+5	1	97d3e103117edbd1de4d8c27a0e40f9f28e70c7de5d7fa1d4e64ca70652c1b71	celestina/src/pieces/tray.rs
+1	0	5a67ce4af4c0e5319a62c2574960bb3e44a9536d92c160678d9372603ed8c2b2	docs/version-history.tsv
