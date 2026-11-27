@@ -1,0 +1,17 @@
+# CEL-TRACKS-DOCS-9 exact change inventory
+
+Base revision	4a90c58ba04650c1081bf82f4626e3066dc29fbf
+Pathspec	docs/evidence/2026-11-26-cel-tracks-docs-9.md
+Pathspec	docs/inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-9.numstat.tsv
+Pathspec	docs/plans/active/2026-11-25-cel-tracks-docs.md
+Pathspec	docs/superpowers/plans/2026-11-26-celestina-cel-d-011-plan.md
+Pathspec	docs/superpowers/specs/2026-11-26-celestina-island-notices-design.md
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+39	0	d1f44aa1f6190864df65a96a60e0e71bc0ce6f8b86c80eb146709358431d21f8	docs/evidence/2026-11-26-cel-tracks-docs-9.md
+17	0	self	docs/inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-9.numstat.tsv
+2	1	76a76ab6b3b543da0342eb40f15c90928d527707749fb94fbe843de82838f203	docs/plans/active/2026-11-25-cel-tracks-docs.md
+197	0	2673740e5c9274cddc8d282a5f30d219237e429ca878695a123e1344f7071c94	docs/superpowers/plans/2026-11-26-celestina-cel-d-011-plan.md
+265	0	707f39c214aeec6b202189a1feba63888058fa56bacad5b3452f63851ce54531	docs/superpowers/specs/2026-11-26-celestina-island-notices-design.md
