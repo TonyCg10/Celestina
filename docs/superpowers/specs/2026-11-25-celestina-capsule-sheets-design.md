@@ -100,6 +100,11 @@ cannot animate).
 
 ### 4.2 The menu window (`CEL-D-009`)
 
+- **Superseded in part (2026-11-27).** The open and close motion, the switch
+  and the tray's app menus follow
+  [the menu drop design](2026-11-27-celestina-menu-drop-design.md)
+  (`CEL-D-013`, `CEL-D-015`, `CEL-D-016`).
+
 - **Shape.** Each menu is its own window: one rounded rectangle, radius 20,
   with the capsules' Haze glass, apart from the bar. The bar keeps its
   capsules as they are, and the open piece still leaves its slot (§4.3).
@@ -160,6 +165,10 @@ cannot animate).
   piece), lined up with its capsule's outer edge. `CEL-D-009` delivers it.
 
 ### 4.3 The open piece becomes the menu's subtitle (`CEL-D-008`)
+
+- **Superseded (2026-11-27).** The piece stays in its slot with the open pill
+  ([the menu drop design](2026-11-27-celestina-menu-drop-design.md) §5.4,
+  `CEL-D-014`); the window keeps its first row as a title.
 
 - **Subtitle.** Every sheet body starts with a subtitle row, height 40,
   padding x 4, gap 10: the open piece's icon at 22 px, then its text at

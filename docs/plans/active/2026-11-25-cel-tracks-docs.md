@@ -12,7 +12,7 @@
   2026-11-25; on 2026-11-25 too, the previews of the session menu,
   the icon tabs and the per-app mute button (variant A of each); on
   2026-11-25 as well, the capsule sheets preview (version 7) and design for
-  CEL-D-002 to CEL-D-005; on 2026-11-26, the preview of CEL-D-007 (O1 and P1); on 2026-11-26 too, the notifications and tray preview and design for CEL-I-010 to CEL-I-012 (variant A, list G2); on 2026-11-26 as well, the launcher preview (tabs variant A, hold Backspace with the clear button, localized names), its approaches and its design for CEL-I-014 to CEL-I-017, STYLE-ICONS-2 and CEL-D-012; on 2026-11-26 as well, variant A of the Island notices preview for CEL-D-011
+  CEL-D-002 to CEL-D-005; on 2026-11-26, the preview of CEL-D-007 (O1 and P1); on 2026-11-26 too, the notifications and tray preview and design for CEL-I-010 to CEL-I-012 (variant A, list G2); on 2026-11-26 as well, the launcher preview (tabs variant A, hold Backspace with the clear button, localized names), its approaches and its design for CEL-I-014 to CEL-I-017, STYLE-ICONS-2 and CEL-D-012; on 2026-11-26 as well, variant A of the Island notices preview for CEL-D-011; on 2026-11-27, version 3 of the menu drop preview (drop G1, the grey card, the open piece at 80 %, the travelling switch) for CEL-D-013 to CEL-D-016
 - **Scope:** suite
 - **Implementation checkpoint:** TRK-1
 - **Author-validation checkpoint:** none
@@ -67,5 +67,6 @@ tracks.
 | CEL-TRACKS-DOCS-8 | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-8.numstat.tsv) | 7 files, +509/-1 | Add the notifications and tray design the author approved on 2026-11-26 and the CEL-I-010, CEL-I-011 and CEL-I-012 plans | [evidence](../../evidence/2026-11-26-cel-tracks-docs-8.md) | None |
 | CEL-TRACKS-DOCS-10 | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-10.numstat.tsv) | 9 files, +1232/-1 | Add the launcher design the author approved on 2026-11-26 (tabs, grid, scrolling, search, quick clear, calculator) and the CEL-I-014 to CEL-I-017 and CEL-D-012 plans | [evidence](../../evidence/2026-11-26-cel-tracks-docs-10.md) | None |
 | CEL-TRACKS-DOCS-9 | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-9.numstat.tsv) | 5 files, +520/-1 | Add the Island notices design the author chose on 2026-11-26 (variant A, CEL-D-011) and the CEL-D-011 plan | [evidence](../../evidence/2026-11-26-cel-tracks-docs-9.md) | None |
+| CEL-TRACKS-DOCS-11 | `suite:` | done | [inventory](../../inventories/2026-11-25-cel-tracks-docs/CEL-TRACKS-DOCS-11.numstat.tsv) | 9 files, +1965/-1 | Add the menu drop design the author approved on 2026-11-27 (drop G1, the open piece in its slot, the travelling switch, app menus born from their icon) and the CEL-D-013 to CEL-D-016 plans | [evidence](../../evidence/2026-11-27-cel-tracks-docs-11.md) | None |
 
 This plan records intent; it grants no authority.
