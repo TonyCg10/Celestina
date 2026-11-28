@@ -1,5 +1,7 @@
 # CEL-D-016 Implementation Plan: app menus as capsule menu windows
 
+> **Notes added 2026-11-27, before execution.** `CEL-D-013` landed with drop D1, not G1 (design §5.1 to §5.3): at `drop::OPEN_HOLD` (0.52) the held pose is D1's round bulb, 12 px in radius, 16 px under the capsule, with its thread already broken. `drop::MERGE_AT` is 0.8, and `Sheets::held_pieces` replaced the single held piece. `CEL-D-017` (design §5.8) lands before this unit and places every capsule menu window from its piece; a tray icon's window follows it with no extra code. Read the landed code (`celestina/src/sheet/drop.rs`, `liquid.rs`, `motion.rs`, `geometry.rs`) before Task 2: names in this plan that predate it may differ.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A tray app's menu stops being an `xdg_popup`. A bar icon's menu comes out of the icon as a capsule menu window, with the drop of `CEL-D-013` and the pill of `CEL-D-014`. A hidden app's menu unfolds as a card under its row inside the hidden-apps window while the other rows blur, and the Island's Tray page uses the same card. Submenus open inside the window, and a tall menu scrolls.

@@ -1,5 +1,7 @@
 # CEL-D-013 Implementation Plan: the drop and the one glass shape
 
+> **Amended during execution (2026-11-27).** The author turned down drop G1 at the gate of Task 1.5 and chose drop D1; the section "Amendment" at the end replaces Tasks 1.2 and 1.3 and the G1 numbers below. `CEL-D-013` landed with D1 as `be89dd0a`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Every capsule menu window leaves the bar as drop G1 (it swells under the piece, stretches a neck that breaks, then opens into the window) and goes back the same way. The capsule's glass, the neck and the window are one Haze shape, filled once, and the compositor's blur follows that shape.
@@ -517,3 +519,124 @@ If the author turns G1 down:
 | 6 nest and docs | Sonnet | medium | Guarded bursts, smoke, evidence |
 | `/simplify` | this session | n/a | In session, no subagents |
 | Final review | Opus | high | `/code-review`, a model other than the implementers'; at most 2 rounds |
+
+## Amendment (2026-11-27): drop D1 replaces G1
+
+### Decision
+
+- 2026-11-27 the author saw G1 in the nest (Task 1.5) and turned it down: "no me gusta el estilo, quiero que parezca mas una gota, parece como una pelota con protuberancias raras".
+- Preview the drop preview, version 4 (private artifact https://claude.ai/artifact/1QBmyjzDb7p1gbbQKU6ZXw, version "v4.2"; source `cel-d/preview-approved/src17.html` in the notes) offered D1, a hanging drop, and D2, a heavy drop. **The author chose D1** the same day.
+- What changes: the drop is ONE continuous liquid contour, built from a half-width profile mirrored around the piece's centre, instead of a rounded rect + neck + tabs + tips + fillets. The bulb is round (radius 12). On open it hangs, stretches a thin thread that pinches near the bulb, the bulb rounds off and opens into the window. On close the window gathers into the round bulb, which rises, meets a cone the capsule reaches down, merges and is absorbed.
+- What stays: everything outside `sheet/liquid.rs` and `sheet/drop.rs`. Task 1.1 (`ShapePath`, `slices_of_path`) and Task 1.4 (`haze_path`) stay as they are. Tasks 2 to 6 keep their text, with these substitutions:
+  - `DropFrame.join: Join` becomes `DropFrame.liquid: Option<Liquid>` plus `DropFrame.drawn: bool` (whether `rect`/`radius` is painted as a rounded rect; a liquid-only frame carries the bulb's box in `rect` for clips and travels, with `drawn = false`). "Join::Detached" in later tests reads "`liquid` is `None`".
+  - `MERGE_AT` is **0.8** (the approved preview's `MERGE.d1`), so the pill returns at 320 ms of the close (Task 5's test: Some at 319 ms, None at 320 ms; Task 2's `merged`: false at 319, true at 320).
+  - `OPEN_MS` 460, `CLOSE_MS` 400 and `OPEN_HOLD` 0.52 are unchanged.
+  - `Source { cx, w }` stays; D1 does not read `w` (the bulb is 12 px whatever the piece's width). Keep the field.
+- The repository's design (`docs/superpowers/specs/2026-11-27-celestina-menu-drop-design.md` §5.1–§5.3) and plan still describe G1; they are amended by a docs unit after this one (the evidence records this amendment and the approval).
+
+### Task 1.2b + 1.3b: port D1 (replaces the code of Tasks 1.2 and 1.3)
+
+**Files:** rewrite `celestina/src/sheet/liquid.rs` and `celestina/src/sheet/drop.rs` (tests in each file). Keep `geometry::CAPSULE_BOTTOM`.
+
+**The source to port, exactly (mode `d1` only; `V4.d1` values; `y0` = `CAPSULE_BOTTOM`; the window radius 20):** the JS below, from the approved preview. `bez`, `ONEUI`, `INOUT`, `EIN`, `OUTBACK` map to `celestina_ui::{CubicBezier, ONE_UI, SINE_IN_OUT_80, Easing::OutBack(overshoot)}` and the local `RISE = CubicBezier(0.4, 0.0, 0.9, 0.6)`; `OUTBACK` here uses `theme.overshoot` (1.15) passed in as before. `f2` (2-decimal rounding) is SVG only: do not port it.
+
+**Interfaces:**
+- `liquid.rs`:
+  - `#[derive(Clone, Copy, Debug, PartialEq)] pub struct Bulb { pub cy: f32, pub rx: f32, pub ry: f32 }`
+  - `#[derive(Clone, Copy, Debug, PartialEq)] pub struct Liquid { pub cx: f32, pub y0: f32, pub a: f32, pub m: f32, pub yw: f32, pub f: f32, pub bulb: Option<Bulb> }` (`f` is `o.f ?? 7`: 7 on open, 6 on close; `k1` = 3 and `k2` = 4 are constants)
+  - `pub fn smax(a: f32, b: f32, k: f32) -> f32`
+  - `pub fn half_width(l: &Liquid, y: f32) -> f32` = `profileW`
+  - `pub fn contour(path: &mut ShapePath, l: &Liquid)` = `liquidPath`: the same y samples (0.5 px steps from `y0 − 2` to `bot`, plus 65 samples `cy + ry·sin(−π/2 + π·i/64)` when there is a bulb, plus `bot`, sorted), the same runs where `w > 0.05`, each run emitted as one closed polygon: right side down (`cx + w`), left side up (`cx − w`), `close()`. Runs of fewer than 2 samples are skipped. Clockwise on screen.
+  - Non-finite input adds nothing.
+- `drop.rs`: `OPEN_MS`, `CLOSE_MS`, `OPEN_HOLD`, `MERGE_AT = 0.8`, `Source` (+ `Source::of`), `DropFrame { rect, radius, drawn, liquid: Option<Liquid>, glass, content, blur }`, `DropFrame::window(rect, radius)` (drawn, no liquid, glass 1, content 1, blur 0), `open_frame(t, to, src, overshoot)`, `close_frame(t, from, src)`, `shape(capsule: Option<(Rect, f32)>, frames: &[(DropFrame, Source)]) -> ShapePath`: capsule rounded rect, then per frame its rounded rect when `drawn`, then `liquid::contour` when `liquid` is `Some`. `Join` and the old `neck`, `neck_into`, `tip`, `merge_fillet` go.
+  - The liquid-only frames carry `rect` = the bulb's box and `radius` = `min(rx, ry)`, `drawn = false` (the preview's `noRect`).
+  - Clamp `t` to 0..1, NaN `t` counts as 1, sanitise a non-finite `Source`/rect as the current `drop.rs` does.
+
+**Tests** (sentence names; piece `cx 1800`, `w 28`; `y0` 48; window `R = (1500, 56, 320, 200)`; overshoot 1.15):
+```rust
+// liquid.rs
+#[test] fn smax_is_max_away_from_k_and_rounds_within_it()          // smax(5,0,3)=5; smax(1,1,4)=2
+#[test] fn a_contour_is_closed_clockwise_polygons_one_per_run()     // pendant frame: 1 sub-path, area > 0; pinched frame: 2 sub-paths
+#[test] fn the_half_width_has_no_step_anywhere()                    // for open t in 0..0.52 step 0.01 and close t in 0.42..1 step 0.01: |w(y+0.05) − w(y)| ≤ 0.6 for every y from y0−2 to bot (the author's "protuberancias": no jump)
+#[test] fn nothing_is_drawn_above_a_bulb_that_has_not_reached_the_edge() // close t 0.55: half_width(y0+0.5) ≤ 0.05 (no nub on the edge)
+#[test] fn non_finite_inputs_add_nothing()
+// drop.rs
+#[test] fn the_drop_swells_from_a_3_px_bulb_on_the_edge()           // t 0: liquid a 3, m 3, bulb {cy 46.5, rx 3, ry 3}; drawn false; content 0, blur 12
+#[test] fn the_bulb_hangs_round_at_the_end_of_the_swell()           // t 0.28: bulb {cy 59.4, rx 12, ry 12}, a 8, m 6.5
+#[test] fn the_thread_thins_then_pinches_into_two_pieces()          // some t in (0.28,0.52) with m in (0,1.5]; the first t with m < 0 → contour has 2 sub-paths
+#[test] fn the_open_starts_from_the_round_bulb_and_lands_on_the_window() // t 0.52: drawn rect (1788, 64, 24, 24) r 12, liquid bulb None, a 1.5; some t with rect.w > 320; t 1: R, r 20, content 1, blur 0, liquid None
+#[test] fn the_open_content_fades_in_from_60_percent()               // as before
+#[test] fn the_close_gathers_into_a_round_bulb_16_px_under_the_edge() // t 0.42 (rise start): liquid bulb {cy 76, rx 12}, drawn false; t 0.30: drawn rect between R and (1788,64,24,24)
+#[test] fn the_capsule_reaches_down_and_the_bulb_merges()           // a rise frame with gap < 12 has a > 0 and m < 0; a later one with gap < 2 has m > 0 and 1 sub-path
+#[test] fn the_capsule_absorbs_the_drop()                           // t 1: shape below y0 is empty (half_width(y) ≤ 0.05 for y ≥ y0)
+#[test] fn the_close_follows_the_live_piece()                        // same t, cx 1700 vs 1800: bulb box x differs by 100
+#[test] fn a_degenerate_piece_never_yields_non_finite_shapes()
+#[test] fn shape_unites_the_capsule_and_the_drop_in_one_path()       // contains points in the capsule, the thread and the bulb at open t 0.34
+#[test] fn the_open_matches_the_preview_at_its_frames()             // compare open/close frames at t ∈ {0.08,0.18,0.28,0.34,0.39,0.43,0.46,0.49,0.52,0.6} and close {0.3,0.45,0.55,0.63,0.7,0.76,0.82,0.88,0.94,0.99} against the numbers printed by running the preview JS with node (see below): every field within 1e-3
+```
+For the last test, generate the expected numbers with node from the JS below (a throwaway script in the scratchpad, not committed: `const window={}` stub; print `JSON.stringify` of each frame), and write them as literals in the test.
+
+**Commits:** `celestina-maintenance: Replace the drop's neck shapes with one liquid contour` (liquid.rs) and `celestina-maintenance: Replace drop G1's frames with drop D1` (drop.rs), or one commit with the second subject if they cannot compile apart.
+
+### The JS (verbatim from the approved preview)
+
+```js
+function bez(x1,y1,x2,y2){const cx=3*x1,bx=3*(x2-x1)-cx,ax=1-cx-bx,cy=3*y1,by=3*(y2-y1)-cy,ay=1-cy-by;
+ const sx=t=>((ax*t+bx)*t+cx)*t,sy=t=>((ay*t+by)*t+cy)*t;
+ return x=>{if(x<=0)return 0;if(x>=1)return 1;let lo=0,hi=1,t=x;for(let i=0;i<40;i++){const v=sx(t);if(Math.abs(v-x)<1e-6)break;if(v<x)lo=t;else hi=t;t=(lo+hi)/2}return sy(t)}}
+const EXIT=bez(.32,0,.67,0),ONEUI=bez(.22,.25,0,1),INOUT=bez(.33,0,.2,1),EIN=bez(.4,0,.9,.6);
+const OUTBACK=t=>{const s=1.15;t-=1;return t*t*((s+1)*t+s)+1};
+const lerp=(a,b,t)=>a+(b-a)*t,clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const lerpR=(a,b,k)=>({x:lerp(a.x,b.x,k),y:lerp(a.y,b.y,k),w:lerp(a.w,b.w,k),h:lerp(a.h,b.h,k)});
+const f2=v=>Math.round(v*100)/100;
+// ---------- drop v4: one continuous liquid contour ----------
+// The shape under the edge y0 is a half-width profile w(y), mirrored around cx: the edge
+// fillet, the thread (a at the edge, waist m at yw, then widening into the bulb) and the
+// bulb (an ellipse), joined by smooth maxima so every join is a liquid fillet. Each term is
+// continuous in y, so the outline has no step. A negative waist splits the thread into two
+// cones that retract: the pinch-off.
+const smax=(a,b,k)=>{if(k<.01)return Math.max(a,b);const h=Math.max(k-Math.abs(a-b),0)/k;return Math.max(a,b)+h*h*k/4};
+function profileW(o,y){const {y0,a,m,yw}=o,aa=Math.max(a,0),f=Math.min(o.f??7,aa);
+ let e;if(aa<.05)e=-1e9;else if(y<=y0)e=aa+f;else if(y<y0+f){const d=y-(y0+f);e=aa+f-Math.sqrt(Math.max(0,f*f-d*d))}else e=aa-6*(y-y0-f);
+ let th;const b=o.bulb;
+ if(y<=yw){const s=Math.min(1,(yw-y)/Math.max(yw-y0,.5));th=m+(a-m)*s*s}
+ else if(b&&y<b.cy){const s=(y-yw)/Math.max(b.cy-yw,.5);th=m+(b.rx*.9-m)*s*s}else th=-1e9;
+ let w=smax(e,th,o.k1??3);
+ if(b){const d=(y-b.cy)/b.ry,bw=Math.abs(d)<1?b.rx*Math.sqrt(1-d*d):0,kb=(o.k2??4)*clamp((b.cy-y)/(.5*b.ry))*clamp((y-b.cy+b.ry)/(.3*b.ry));w=smax(w,bw,kb)}
+ return w}
+function liquidPath(o){const top=o.y0-2;let bot=o.y0+Math.max(o.f??7,2);
+ if(o.bulb)bot=Math.max(bot,o.bulb.cy+o.bulb.ry);else bot=Math.max(bot,o.yw+1);
+ const ys=[];for(let y=top;y<=bot;y+=.5)ys.push(y);
+ if(o.bulb)for(let i=0;i<=64;i++)ys.push(o.bulb.cy+o.bulb.ry*Math.sin(-Math.PI/2+Math.PI*i/64));
+ ys.push(bot);ys.sort((p,q)=>p-q);
+ const runs=[];let cur=null;
+ for(const y of ys){if(y<top||y>bot)continue;const w=profileW(o,y);
+  if(w>.05){if(!cur){cur=[];runs.push(cur)}cur.push([y,w])}else cur=null}
+ let d='';for(const r of runs){if(r.length<2)continue;
+  d+=`M${f2(o.cx+r[0][1])},${f2(r[0][0])}`;for(const [y,w] of r.slice(1))d+=`L${f2(o.cx+w)},${f2(y)}`;
+  for(const [y,w] of r.slice().reverse())d+=`L${f2(o.cx-w)},${f2(y)}`;d+='Z'}
+ return d}
+// D1 (gota colgante) and D2 (gota pesada): frames of t; the dropOpen/dropClose contract plus `liquid`.
+const V4={
+ d1:{R:12,fall:16,thin:.55,pinch:.78,stretch:.10,openAt:.52,thread:.72,open:460,close:400},
+ d2:{R:13,fall:22,thin:.6,pinch:.85,stretch:.2,openAt:.58,thread:.62,open:540,close:440}};
+function dropOpenV4(mode,t,Rw,P,y0){const c=V4[mode],cx=P.cx,R=c.R,cyEnd=y0+c.fall+R;
+ if(t<.28){const u=ONEUI(t/.28),r=lerp(3,R,u),cy=y0+lerp(-.5,.95,u)*r;
+  return{liquid:{cx,y0,a:lerp(r,8,u),m:lerp(r,6.5,u),yw:y0+(cy-r-y0)*.5,bulb:{cy,rx:r,ry:r}},rect:{x:cx-r,y:cy-r,w:2*r,h:2*r},r,noRect:true,co:0,blur:12}}
+ if(t<c.openAt){const u=INOUT((t-.28)/(c.openAt-.28)),cy=lerp(y0+.95*R,cyEnd,u),el=c.stretch*Math.sin(Math.PI*clamp(u/c.pinch*.9));
+  const ry=R*(1+el),rx=R*(1-el*.5),yw=y0+Math.max(0,cy-ry-y0)*c.thread;
+  const m=u<c.thin?lerp(6.5,1.4,ONEUI(u/c.thin)):u<c.pinch?lerp(1.4,0,(u-c.thin)/(c.pinch-c.thin)):-lerp(0,10,(u-c.pinch)/(1-c.pinch));
+  const a=u<c.pinch?lerp(8,4,u/c.pinch):lerp(4,1.5,(u-c.pinch)/(1-c.pinch));
+  return{liquid:{cx,y0,a,m,yw,bulb:{cy,rx,ry}},rect:{x:cx-rx,y:cy-ry,w:2*rx,h:2*ry},r:Math.min(rx,ry),noRect:true,co:0,blur:12}}
+ const u=clamp((t-c.openAt)/(1-c.openAt)),k=OUTBACK(u),B={x:cx-R,y:cyEnd-R,w:2*R,h:2*R},yw=y0+c.fall*c.thread;
+ const a=lerp(1.5,0,clamp(u/.2)),o={rect:lerpR(B,Rw,k),r:lerp(R,20,clamp(k)),co:clamp((t-.6)/.34),blur:12*(1-ONEUI(u))};
+ if(a>.05)o.liquid={cx,y0,a,m:-10-40*u,yw,bulb:null};return o}
+function dropCloseV4(mode,t,R0,P,y0){const c=V4[mode],cx=P.cx,R=c.R,cyStart=y0+c.fall+R;
+ if(t<.42){const u=ONEUI(t/.42);return{rect:lerpR(R0,{x:cx-R,y:cyStart-R,w:2*R,h:2*R},u),r:lerp(20,R,u),co:1-clamp(t/.28),blur:12*Math.pow(clamp(t/.3),.7)}}
+ const u=EIN((t-.42)/.58),cy=lerp(cyStart,y0-R*.7,u),r=lerp(R,R*.5,clamp((y0+R-cy)/(2*R))),g=cy-r-y0;
+ const chord=Math.abs(cy-y0)<r?Math.sqrt(r*r-(cy-y0)**2):0;
+ let a,m;if(g>2){a=lerp(0,4,clamp((12-g)/9));m=-(g-2)*.9}else{const s=clamp((2-g)/5);a=Math.max(lerp(4,r*.9,s),chord*.95);m=lerp(0,r*.75,s)}
+ a*=1-clamp((t-.92)/.08);
+ return{liquid:{cx,y0,a,m,yw:y0+Math.max(g,0)*.5,bulb:{cy,rx:r,ry:r},f:6},rect:{x:cx-r,y:cy-r,w:2*r,h:2*r},r,noRect:true,co:0,blur:12}}
+
+```

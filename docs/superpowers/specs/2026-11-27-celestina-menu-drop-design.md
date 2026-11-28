@@ -1,9 +1,9 @@
 # Celestina: menus as a drop, the piece in its slot, a travelling switch and app menus born from their icon
 
 - **Date:** 2026-11-27
-- **Entries:** `CEL-D-013` to `CEL-D-016`, on the shell's standing plan `CEL-TRACKS`
-- **Approved preview:** "Celestina · la gota", version 3, approved by the author on 2026-11-27 (drop G1, the grey card, the open piece at 80 %, the travelling switch); published as a private artifact, its source kept in the sessions' notes as `cel-d/preview-approved/src16.html`
-- **Status:** approved; implementation by the four plans named in §9
+- **Entries:** `CEL-D-013` to `CEL-D-017`, on the shell's standing plan `CEL-TRACKS`
+- **Approved preview:** "Celestina · la gota", version 3, approved by the author on 2026-11-27 (drop G1, the grey card, the open piece at 80 %, the travelling switch); published as a private artifact, its source kept in the sessions' notes as `cel-d/preview-approved/src16.html`. Amended twice on 2026-11-27: the author turned down drop G1 in the nested check of §7 and chose drop D1 from version 4 of the same preview (version 4.2, source `cel-d/preview-approved/src17.html`); then he chose rule B of the menu placement preview (version 1, source `cel-d/preview-pending/d013/src18.html`) for where a menu opens (§5.8)
+- **Status:** approved; implementation by the five plans named in §9
 
 ## 1. Intent
 
@@ -85,7 +85,9 @@ every piece in place, and an app's menu hangs from its app.
   falling drop: an 18 px round drop falls into the window's place and splashes
   into it; more playful, slower (520 ms). G3, a meniscus: the window grows
   attached to the capsule by a wide bridge that breaks at the end; the most
-  sober. The author chose G1.
+  sober. The author chose G1. In the nested check (§7) he turned it down
+  ("it looks like a ball with odd bumps") and chose D1, a hanging drop, over
+  D2, a heavy drop that stretches into a tear (version 4 of the preview).
 - **The switch.** The window travels to its new shape and only the content
   changes (chosen), or a hard cut: the old window vanishes and the new one
   opens with the full drop. The cut shows the drop more often but reads as a
@@ -99,62 +101,72 @@ every piece in place, and an app's menu hangs from its app.
   (chosen): the menu on ControlFill, the open app's row on ControlHover in
   semibold, the same language as the open piece in the bar. An accent tint:
   the card and the row on AccentSoft with its border.
+- **Where a menu opens.** Today (`CEL-D-009`) a window lines up with its
+  capsule's outer edge, so the menu of a piece far from that edge (CPU · RAM,
+  360 px) opens more than 200 px away from it. Rule B, from the icon (chosen):
+  the window starts 16 px before its piece and grows towards the outer edge,
+  moving inward only as much as it needs to stay within that edge. Rule C,
+  centred under the icon within the capsule: symmetric under the drop, but
+  wide menus of end pieces still sit at the edge and middle ones cover more of
+  the bar on both sides.
 
 ## 5. The design
 
 ### 5.1 One glass shape (CEL-D-013)
 
-- While a window is joined to its capsule, the capsule's glass, the neck and
+- While a window is joined to its capsule, the capsule's glass, the drop and
   the window are one shape, filled once with the Haze material (tint, grain,
   the compositor's blur behind). No part is drawn twice, so there is no darker
   seam where they meet.
+- **The liquid contour.** Under the capsule's bottom edge (y 48) the drop is
+  one closed outline: a half-width profile `w(y)` mirrored around the piece's
+  centre. The profile is the smooth maximum of three terms, each continuous
+  in `y`: a fillet into the edge (7 px on the open, 6 px on the close), a
+  thread (half-width `a` at the edge, waist `m` at height `yw`, widening into
+  the bulb) and the bulb, an ellipse of radii `rx`, `ry` centred at `cy`. A
+  negative waist splits the thread into two cones that retract: the pinch-off.
+  The outline has no corners and no steps; `celestina/src/sheet/liquid.rs`
+  holds it and `celestina/src/sheet/drop.rs` its frames.
 - The shape is a path: the capsule's rounded rect, the window's rounded rect
-  (or the drop's), the neck between them, and the small tips left when the
-  neck breaks. All parts are wound the same way, so the fill is their union.
-- **The neck.** Between the capsule's bottom edge (y 48) and the drop's top
-  edge. Top half-width `a`, bottom half-width `b`, waist half-width `m`,
-  fillet `f` = 7 px into both edges. Each side is two cubic curves through
-  the waist at mid height, tangent to the edges, so the joins are concave and
-  smooth. The neck's top is centred on the piece; its bottom is centred on the
-  piece but kept inside the window's straight top edge (for a round drop, up
-  to 45 % into its corner radius).
-- **Merging.** When a round drop overlaps the capsule's edge, two concave
-  fillets of 6 px smooth the crease.
-- **Blur region and input region.** The compositor's blur region and the
-  input region follow the whole shape, neck included, by the same 2 px
-  horizontal bands the panel uses today. The window's glass no longer fades:
-  it leaves by changing shape, so the rule that dropped a window below 35 %
-  glass from the blur region goes.
+  once the drop has opened, and the liquid contour. All parts are wound the
+  same way, so the fill is their union.
+- **Blur region and input region.** The compositor's blur region follows the
+  whole shape, drop included, by the same 2 px horizontal bands the panel uses
+  today. The window's glass no longer fades: it leaves by changing shape. The
+  35 % rule stays only for a path that fades under reduced motion.
 
-### 5.2 Drop G1, open: 460 ms
+### 5.2 Drop D1, open: 460 ms
 
-`pw` is the piece's width; `dw = max(pw, 28) + 6` and `dh = 26` are the
-drop's size; `t` runs 0 to 1.
+The bulb's radius is `R` = 12 px and it falls `fall` = 16 px; `t` runs 0 to
+1.
 
-- **0 to 28 %, the drop swells** (ONE_UI): width `0.6·pw → dw`, height
-  6 → 26, gap under the capsule 0 → 3 px; the neck is as wide as the drop and
-  narrows to 0.8 of it.
-- **28 to 52 %, it falls** (One UI sine in-out 80): gap 3 → 16 px; the waist
-  narrows with the gap and the neck breaks at a gap of 13 px. The capsule keeps
-  a 6 px tip that retracts over the next 10 % of the flight.
-- **52 to 100 %, it opens:** the rect goes from the drop (at a gap of 16) to
-  the window with OutBack 1.15, the radius from 13 to 20; the window settles at
-  y 56.
+- **0 to 28 %, the drop swells** (ONE_UI): a round bulb grows from 3 px to
+  `R` while it moves down out of the edge; the thread is as wide as the bulb
+  (`a` 3 → 8, waist 3 → 6.5).
+- **28 to 52 %, it falls** (One UI sine in-out 80): the bulb's centre goes to
+  `48 + fall + R`; the bulb stretches up to 10 % into a tear and rounds off;
+  the waist thins to 1.4 px by 55 % of the fall, to 0 at 78 %, then goes
+  negative: the thread pinches near the bulb and its upper cone retracts into
+  the capsule.
+- **52 to 100 %, it opens:** the rect goes from the round bulb to the window
+  with OutBack 1.15, the radius from 12 to 20; the window settles at y 56. The
+  last of the thread's root (`a` 1.5 → 0) goes in the first 20 % of the phase.
 - **Content:** opacity `(t - 0.6) / 0.34`, blur `12 · (1 - ONE_UI(u))` px with
   `u` the open phase's own fraction.
 
-### 5.3 Drop G1, close: 400 ms
+### 5.3 Drop D1, close: 400 ms
 
 - **0 to 42 %, it gathers** (ONE_UI): the rect goes from the window to the
-  drop at a gap of 14 px under the piece, the radius from 20 to 13. Content
-  opacity `1 - t / 0.28`, blur `12 · min(1, t / 0.3)^0.7` px.
-- **42 to 100 %, it rises** (ease-in, Bezier 0.4, 0, 0.9, 0.6): the gap goes
-  from 14 to `-(dh + 2)`, the width from `dw` to `0.6·pw`. Below a gap of
-  12 px the neck forms again, its waist growing as the gap closes; once the
-  drop overlaps the capsule the merge fillets of §5.1 apply, and the capsule
-  absorbs it.
+  round bulb 16 px under the edge, the radius from 20 to 12. Content opacity
+  `1 - t / 0.28`, blur `12 · min(1, t / 0.3)^0.7` px.
+- **42 to 100 %, it rises** (ease-in, Bezier 0.4, 0, 0.9, 0.6): the bulb
+  rises until its centre is `0.7·R` above the edge, shrinking to half its
+  radius as it enters. When its gap to the edge is under 12 px the capsule
+  reaches down with a cone; under 2 px the two meet, the waist grows and the
+  bulb merges; the capsule absorbs it and the root fades in the last 8 %.
 - The close targets the piece's live slot, wherever the piece is that frame.
-- The open pill and the piece's opacity return at 78 % of the close.
+- The open pill and the piece's opacity return at 80 % of the close
+  (`drop::MERGE_AT`).
 
 ### 5.4 The piece in its slot (CEL-D-014)
 
@@ -250,6 +262,21 @@ No drop and no travel: a window appears and disappears with a 150 ms fade at
 its place, the card unfolds and folds at once, rows blur at once, and the
 pill and the piece's opacity change at once.
 
+### 5.8 Where a menu opens (CEL-D-017)
+
+- **End capsule.** The window's left edge is 16 px before its piece's left
+  edge, then moved inward (left) only as much as it needs to keep its right
+  edge within the capsule's right edge; a window wider than its capsule grows
+  inward from that edge, as today.
+- **Start capsule.** The mirror: the window's right edge is 16 px after its
+  piece's right edge, then moved inward (right) only as much as it needs to
+  keep its left edge within the capsule's left edge.
+- **Centre capsule.** Unchanged (`Edge::Centre`).
+- The screen's 16 px side margins hold as today. The drop of §5.2 opens from
+  the piece into this rect, and the travel of §5.5 goes between two such
+  rects.
+- App menus (§5.6) from a tray icon in the bar follow the same rule.
+
 ## 6. Calls made after the preview
 
 - The header stays in the window (§5.4); the author approved the preview with
@@ -269,6 +296,10 @@ pill and the piece's opacity change at once.
 - If the author turns down the nested screenshots of the neck (§7), the
   geometry is written so the meniscus (G3) uses the same neck with other
   numbers, and `CEL-D-013` stops at its first task until the author chooses.
+  He did turn G1 down, and chose D1 (§4); `CEL-D-013` landed with D1.
+- Rule B mirrors on the start capsule and leaves the centre capsule's windows
+  (the Island's capsule and the hidden-apps window under the chevron) as they
+  are (§5.8).
 - The open piece has no hover fill over its pill (§5.4).
 - The fidelity check of §7 is the first step of `CEL-D-013`, before the rest
   of the unit.
@@ -304,10 +335,12 @@ pill and the piece's opacity change at once.
 | `CEL-D-014` | The piece in its slot (§5.4) | small | `docs/superpowers/plans/2026-11-27-celestina-cel-d-014-plan.md` |
 | `CEL-D-015` | The travelling switch (§5.5) | small | `docs/superpowers/plans/2026-11-27-celestina-cel-d-015-plan.md` |
 | `CEL-D-013` | The drop and the one glass shape (§5.1 to §5.3, §5.7) | large | `docs/superpowers/plans/2026-11-27-celestina-cel-d-013-plan.md` |
+| `CEL-D-017` | Where a menu opens (§5.8) | small | `docs/superpowers/plans/2026-11-27-celestina-cel-d-017-plan.md` |
 | `CEL-D-016` | App menus as capsule menu windows (§5.6) | large | `docs/superpowers/plans/2026-11-27-celestina-cel-d-016-plan.md` |
 
 Order, by the tracks' rule (small and safe first): `CEL-D-014`, then
-`CEL-D-015` stacked on it, then `CEL-D-013`, then `CEL-D-016`, which opens the
-bar's tray menus with the drop of `CEL-D-013`. The close overlap (request 3)
+`CEL-D-015` stacked on it, then `CEL-D-013`, then `CEL-D-017`, then
+`CEL-D-016`, which opens the bar's tray menus with the drop of `CEL-D-013`
+where `CEL-D-017` places them. The close overlap (request 3)
 is fixed by `CEL-D-013`: the window leaves by changing shape into the
 capsule's own glass.
