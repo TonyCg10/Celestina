@@ -1,0 +1,39 @@
+# CEL-D-018 exact change inventory
+
+Base revision	2632647a8910a14167eb542af8bd6b79795ebac2
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-paint/src/backend.rs
+Pathspec	celestina/crates/celestina-paint/src/painter.rs
+Pathspec	celestina/crates/celestina-paint/tests/painter_contract.rs
+Pathspec	celestina/docs/evidence/2026-11-28-cel-d-018-wallpaper-spotlight.md
+Pathspec	celestina/docs/evidence/2026-11-28-cel-d-018-wallpaper-spotlight/full-output.jpg
+Pathspec	celestina/docs/evidence/2026-11-28-cel-d-018-wallpaper-spotlight/menu-top.jpg
+Pathspec	celestina/docs/evidence/2026-11-28-cel-d-018-wallpaper-spotlight/rest-top.jpg
+Pathspec	celestina/docs/evidence/2026-11-28-cel-d-018-wallpaper-spotlight/scale-1-25-seam-zoom.jpg
+Pathspec	celestina/docs/evidence/2026-11-28-cel-d-018-wallpaper-spotlight/scale-1-333-seam-zoom.jpg
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-018.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/wallpaper/surface.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	cd5bfabf553c3eefe4314ebc32d44ee73822a6941192181e5945fb151da55e3b	celestina/Cargo.lock
+1	1	a006e7d6ae3fba5db30622e5b2d11db9ff08f5a1bc391ce8509000b8746069c8	celestina/Cargo.toml
+18	0	b1fcfc914dd52aeafdc6e0f56caa9d5d2d4f72630bc24ca1fe728a22cd58f60f	celestina/VALIDATION.md
+35	0	fadec41c7675e3454950e5ea1bd1820f82473c9973f059946cbb33c36a85be8a	celestina/crates/celestina-paint/src/backend.rs
+9	0	66cbe022b8f390aac1637a2be781018103f336b7ec145289e1e7068ff60ef452	celestina/crates/celestina-paint/src/painter.rs
+5	0	dcd2dcc8a8918a305872551f88d33e9b45bcc30f5935430bc8830fe87c5aa903	celestina/crates/celestina-paint/tests/painter_contract.rs
+44	0	b15dd7958a74ef58403cf2d08de2609e7d84ca53b43ed7d3945471523409be0a	celestina/docs/evidence/2026-11-28-cel-d-018-wallpaper-spotlight.md
+-	-	2df291b5599b70c3d47541c6442112835a4527d45ee479ffd12210abc6bd4ce4	celestina/docs/evidence/2026-11-28-cel-d-018-wallpaper-spotlight/full-output.jpg
+-	-	e57ea76a308332261f8d709527dcd8d437ae4c777fe2c1b5b10ed94a8575a78a	celestina/docs/evidence/2026-11-28-cel-d-018-wallpaper-spotlight/menu-top.jpg
+-	-	2778fe7e62fd6589285871e1bc47971f732e61cbc6b8bb10885018c3bbce5ddf	celestina/docs/evidence/2026-11-28-cel-d-018-wallpaper-spotlight/rest-top.jpg
+-	-	d840295e64e10443e0797e2c88de8c92946a1fc6fc23005055fd6baf9eece737	celestina/docs/evidence/2026-11-28-cel-d-018-wallpaper-spotlight/scale-1-25-seam-zoom.jpg
+-	-	b2ad71204a0a76ce249f6b60d4692c8a4eac774c86a9e1bf09c7749fda01c81d	celestina/docs/evidence/2026-11-28-cel-d-018-wallpaper-spotlight/scale-1-333-seam-zoom.jpg
+39	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-018.numstat.tsv
+1	0	7266fd247e2428d1d7176d4c696ee2d64b892269b170d560426368229803271b	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+120	2	20f21b8594a9576712d978032b8ef3687e0cbe8abe43ca77b07e15f407c69de9	celestina/src/wallpaper/surface.rs
+1	0	90fbfa89cab151c0b1ae3387fec04affa7100dce507be3e2ecfa258c4eae1fd9	docs/version-history.tsv

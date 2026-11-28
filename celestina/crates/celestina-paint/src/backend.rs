@@ -112,6 +112,11 @@ pub(crate) fn fv_color(c: Color) -> femtovg::Color {
     )
 }
 
+/// The gradient line of a vertical gradient: down `x` from `y0` to `y1`.
+fn gradient_axis(x: f32, y0: f32, y1: f32) -> (f32, f32, f32, f32) {
+    (x, y0, x, y1)
+}
+
 fn rounded(rect: Rect, radius: f32) -> Path {
     let mut path = Path::new();
     path.rounded_rect(rect.x, rect.y, rect.w, rect.h, radius.max(0.0));
@@ -557,6 +562,22 @@ impl Backend {
         self.canvas.fill_path(&fv_path(path), &paint);
     }
 
+    /// Fills `rect` with a gradient whose line runs down `rect.x` from `y0`
+    /// (colour `top`) to `y1` (colour `bottom`); past either end the end
+    /// colour holds.
+    pub(crate) fn fill_vertical_gradient(
+        &mut self,
+        rect: Rect,
+        (y0, top): (f32, Color),
+        (y1, bottom): (f32, Color),
+    ) {
+        let (x0, y0, x1, y1) = gradient_axis(rect.x, y0, y1);
+        let paint = Paint::linear_gradient(x0, y0, x1, y1, fv_color(top), fv_color(bottom));
+        let mut path = Path::new();
+        path.rect(rect.x, rect.y, rect.w, rect.h);
+        self.canvas.fill_path(&path, &paint);
+    }
+
     /// A rounded outline of `width` centred on the rect edge.
     pub(crate) fn stroke_rounded(&mut self, rect: Rect, radius: f32, width: f32, color: Color) {
         let paint = Paint::color(fv_color(color)).with_line_width(width);
@@ -748,6 +769,20 @@ mod tests {
         assert!((c.b - 16.0 / 255.0).abs() < 1e-6);
         let c = fv_color(Color(255, 255, 255, 0.5));
         assert_eq!((c.r, c.g, c.b, c.a), (1.0, 1.0, 1.0, 0.5));
+    }
+
+    #[test]
+    fn a_vertical_gradient_axis_is_set_apart_from_the_rect() {
+        let rect = Rect {
+            x: 10.0,
+            y: 52.0,
+            w: 300.0,
+            h: 148.0,
+        };
+        assert_eq!(
+            gradient_axis(rect.x, 52.0, 200.0),
+            (10.0, 52.0, 10.0, 200.0)
+        );
     }
 
     #[test]

@@ -44,7 +44,7 @@ use std::cell::OnceCell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use celestina_paint::{PixmapId, Rect};
+use celestina_paint::{Color, Painter, PixmapId, Rect};
 use celestina_shell::settings::{Duty, Settings, WallpaperSettings};
 use celestina_shell::wallpaper::{choose, next, Choice};
 use celestina_wayland::surface::buffer_size;
@@ -56,6 +56,7 @@ use celestina_wayland::{
 use crate::command::{Target, Verb};
 use crate::error_chain;
 use crate::island::menu::SharedPainter;
+use crate::island::state::{CAPSULE_H, TOP_GAP};
 use crate::providers::settings::{ShellSettings, ShellSettingsError};
 use crate::providers::wallpaper::{WallpaperCommand, WallpaperEvent, WallpaperProvider};
 use crate::wallpaper::decode::Decoded;
@@ -401,7 +402,9 @@ impl Wallpapers {
         let dpr = valid_scale(cx.scale).map_or(1.0, |scale| scale as f32);
         painter.begin(cx.size, dpr, cx.blur_available);
         if let Some(texture) = output.texture {
-            painter.draw_wallpaper(texture.id, placement(texture.px, wanted, cx.size, dpr));
+            let covered = placement(texture.px, wanted, cx.size, dpr);
+            painter.draw_wallpaper(texture.id, covered);
+            draw_spot(&mut painter, (covered.w, covered.h));
         }
         painter.end();
         failed
@@ -1020,6 +1023,63 @@ fn placement(
     }
 }
 
+/// Where the wallpaper's spotlight starts (logical px from the top): the
+/// bar's height (`TOP_GAP` + `CAPSULE_H`, as `BAR_H` in the island) plus 4 px
+/// (preview W1). Above it the picture is at full brightness.
+const SPOT_TOP: f32 = TOP_GAP + CAPSULE_H + 4.0;
+/// Where the spotlight's ramp ends (logical px): the veil is full from here.
+const SPOT_END: f32 = 200.0;
+/// The veil's opacity from `SPOT_END` down.
+const SPOT_DIM: f32 = 0.30;
+
+/// The black veil's opacity at logical `y`: 0 down to `SPOT_TOP`, a linear
+/// ramp to `SPOT_DIM` at `SPOT_END`, `SPOT_DIM` below. Not finite counts as 0.
+fn spot_dim(y: f32) -> f32 {
+    if !y.is_finite() || y <= SPOT_TOP {
+        return 0.0;
+    }
+    if y >= SPOT_END {
+        return SPOT_DIM;
+    }
+    SPOT_DIM * (y - SPOT_TOP) / (SPOT_END - SPOT_TOP)
+}
+
+/// The veil: one rect, so no edge is shared by two antialiased fills, with
+/// the gradient line set apart from it (colour holds past the line's ends).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Veil {
+    rect: Rect,
+    from: (f32, Color),
+    to: (f32, Color),
+}
+
+/// The veil over a picture of logical `size` (the extent the picture covers):
+/// one fill from `SPOT_TOP` to its bottom, ramping `SPOT_TOP` to `SPOT_END`.
+/// `None` for a picture that does not reach `SPOT_TOP` or has no width.
+fn spot_veil(size: (f32, f32)) -> Option<Veil> {
+    let (w, h) = size;
+    if !(w.is_finite() && h.is_finite()) || w <= 0.0 || h <= SPOT_TOP {
+        return None;
+    }
+    Some(Veil {
+        rect: Rect {
+            x: 0.0,
+            y: SPOT_TOP,
+            w,
+            h: h - SPOT_TOP,
+        },
+        from: (SPOT_TOP, Color(0, 0, 0, spot_dim(SPOT_TOP))),
+        to: (SPOT_END, Color(0, 0, 0, spot_dim(SPOT_END))),
+    })
+}
+
+/// Paints the spotlight over a drawn wallpaper covering `extent`.
+fn draw_spot(painter: &mut Painter, extent: (f32, f32)) {
+    if let Some(veil) = spot_veil(extent) {
+        painter.fill_vertical_gradient(veil.rect, veil.from, veil.to);
+    }
+}
+
 /// `scale` when it is a usable device pixel ratio.
 fn valid_scale(scale: f64) -> Option<f64> {
     (scale.is_finite() && scale > 0.0).then_some(scale)
@@ -1121,6 +1181,64 @@ mod tests {
     use crate::test_support::quiet_settings;
     use celestina_shell::wallpaper::Mode;
     use std::path::PathBuf;
+
+    fn rect(y: f32, h: f32) -> Rect {
+        Rect {
+            x: 0.0,
+            y,
+            w: 800.0,
+            h,
+        }
+    }
+
+    #[test]
+    fn the_spotlight_is_clear_in_the_bars_zone_and_ramps_to_thirty_percent() {
+        assert_eq!(spot_dim(0.0), 0.0);
+        assert_eq!(spot_dim(52.0), 0.0);
+        assert!((spot_dim(126.0) - 0.15).abs() < 1e-6);
+        assert!((spot_dim(200.0) - 0.30).abs() < 1e-6);
+        assert!((spot_dim(1000.0) - 0.30).abs() < 1e-6);
+        assert_eq!(spot_dim(-5.0), 0.0);
+        assert_eq!(spot_dim(f32::NAN), 0.0);
+        assert_eq!(spot_dim(f32::INFINITY), 0.0);
+    }
+
+    #[test]
+    fn spot_top_is_the_bars_height_plus_four() {
+        assert_eq!(SPOT_TOP, 52.0);
+    }
+
+    #[test]
+    fn the_veil_is_one_fill_from_the_top_of_the_ramp_to_the_bottom() {
+        assert_eq!(
+            spot_veil((800.0, 600.0)),
+            Some(Veil {
+                rect: rect(52.0, 548.0),
+                from: (52.0, Color(0, 0, 0, 0.0)),
+                to: (200.0, Color(0, 0, 0, 0.30)),
+            })
+        );
+    }
+
+    #[test]
+    fn the_ramp_runs_from_clear_to_full_and_down_the_screen() {
+        let veil = spot_veil((1707.0, 961.0)).expect("a veil");
+        assert_eq!(veil.from.1, Color(0, 0, 0, 0.0));
+        assert_eq!(veil.to.1, Color(0, 0, 0, SPOT_DIM));
+        assert!(veil.from.0 < veil.to.0);
+        assert_eq!((veil.rect.w, veil.rect.y + veil.rect.h), (1707.0, 961.0));
+    }
+
+    #[test]
+    fn a_short_surface_keeps_the_same_ramp_and_a_tiny_one_gets_none() {
+        let veil = spot_veil((800.0, 126.0)).expect("a veil");
+        assert_eq!((veil.rect.y, veil.rect.h), (52.0, 74.0));
+        assert_eq!((veil.from.0, veil.to.0), (52.0, 200.0));
+        assert_eq!(spot_veil((800.0, 52.0)), None);
+        assert_eq!(spot_veil((800.0, 0.0)), None);
+        assert_eq!(spot_veil((0.0, 600.0)), None);
+        assert_eq!(spot_veil((f32::NAN, 600.0)), None);
+    }
 
     /// Records what the decisions did.
     #[derive(Debug, Default)]

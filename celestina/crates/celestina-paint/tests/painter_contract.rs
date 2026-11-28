@@ -34,6 +34,11 @@ fn frame(p: &mut Painter, run: &TextRun, pixmap: PixmapId) -> Result<(), PaintEr
     p.haze(r, 20.0);
     p.fill_rounded(r, 12.0, accent);
     p.stroke_rounded(r, 12.0, 2.0, accent);
+    p.fill_vertical_gradient(
+        r,
+        (0.0, accent.with_alpha(0.0)),
+        (20.0, accent.with_alpha(0.3)),
+    );
     p.push_clip(r, 20.0);
     p.glyphs(run, 12.0, 10.0, accent);
     p.icon(&IconKey::Semantic("bell"), r, Some(accent));

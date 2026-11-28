@@ -432,6 +432,15 @@ impl Painter {
         self.backend.fill_rounded(rect, radius, color);
     }
 
+    /// Fills `rect` with a vertical linear gradient whose line runs down the
+    /// rect's left edge from `from` (a y and the colour there) to `to`; past
+    /// either end the end colour holds, so `rect` may be longer than the
+    /// line. Colours are interpolated premultiplied, as in CSS; `opacity`
+    /// applies.
+    pub fn fill_vertical_gradient(&mut self, rect: Rect, from: (f32, Color), to: (f32, Color)) {
+        self.backend.fill_vertical_gradient(rect, from, to);
+    }
+
     /// A rounded outline of `width` centred on the rect edge.
     pub fn stroke_rounded(&mut self, rect: Rect, radius: f32, width: f32, color: Color) {
         self.backend.stroke_rounded(rect, radius, width, color);

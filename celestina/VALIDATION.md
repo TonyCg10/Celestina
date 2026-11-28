@@ -2155,6 +2155,24 @@ None has been run and none is closed by an agent.
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-017](docs/evidence/2026-11-27-cel-d-017-menu-from-icon.md)
 
+## VAL-CEL-D-018 — The wallpaper is brightest behind the bar
+
+- **Status:** pending
+- **Related implementation:** CEL-D-018 (the wallpaper surface draws a spotlight
+  after the picture: one black fill from 52 px to the bottom of the picture,
+  clear at 52 px and growing to 30 % by 200 px, then 30 % to the bottom; the lock screen's
+  picture does not use this draw)
+- **Requires:** the deployed shell after the landing of CEL-D-018 with the
+  wallpaper duty on and a picture whose top edge is bright
+- **Procedure:** look at the desktop with no window, then with a window under
+  the bar, on each output, and at the lock screen
+- **Pass condition:** the wallpaper is at full brightness behind the bar and
+  visibly dimmer below it; no line where the dimming ends (about 200 px from
+  the top), also on an output at a fractional scale such as 1.33; the lock screen's picture is unchanged
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-018](docs/evidence/2026-11-28-cel-d-018-wallpaper-spotlight.md)
+
 ## VAL-CEL-D-016 — An app's menu is a window or a card
 
 - **Status:** pending
