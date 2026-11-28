@@ -511,3 +511,185 @@ fn a_press_on_a_window_still_closing_does_nothing() {
     assert!(!island.sheets.has_queued());
     assert!(!island.sheets.is_open(), "it did not come back either");
 }
+
+/// The level island with the end capsule `volume`, `brightness`, then eight
+/// tray apps: the capsule is wider than a 320 px body, so a window under its
+/// first piece is not pushed by the capsule's right edge.
+fn wide_end_island() -> (Island, Instant) {
+    let (mut island, t0) = level_island();
+    island.tray_rows = (0..8)
+        .map(|n| TrayRow {
+            id: ItemId {
+                bus_name: format!(":1.{n}"),
+                path: "/StatusNotifierItem".to_owned(),
+            },
+            sni_id: format!("app{n}"),
+            title: format!("app {n}"),
+            has_menu: true,
+            ..TrayRow::default()
+        })
+        .collect();
+    island.set_bar(&BarLayout {
+        end: vec![
+            "volume".to_owned(),
+            "brightness".to_owned(),
+            "tray".to_owned(),
+        ],
+        ..BarLayout::default()
+    });
+    island.apply_views(t0);
+    lay_fake(&mut island, t0);
+    (island, t0 + ms(1000))
+}
+
+fn pill_of(island: &Island, key: Key, now: Instant) -> Rect {
+    match island.bar.as_ref().and_then(|b| b.pill_of(key, now)) {
+        Some(r) => r,
+        None => panic!("no pill for {key:?}"),
+    }
+}
+
+#[test]
+fn a_menu_opens_under_its_piece() {
+    let (mut island, t0) = wide_end_island();
+    let capsule = end_capsule(&island);
+    assert!(capsule.w > 320.0 + 40.0, "premise: {capsule:?}");
+    let pill = pill_of(&island, volume(), t0);
+    assert!(open_on(&mut island, volume(), t0));
+    let t = t0 + ms(500);
+    step(&mut island, t);
+    let window = shown_rect(&island, t);
+    // 16 px before its piece, which is the capsule's padding: the window sits
+    // on the capsule's left edge and ends short of its right edge, where the
+    // old rule put it.
+    assert!((window.x - (pill.x - 16.0)).abs() < 0.01, "{window:?}");
+    assert!((window.x - capsule.x).abs() < 0.01, "{window:?}");
+    assert!(
+        window.x + window.w < capsule.x + capsule.w - 1.0,
+        "{window:?}"
+    );
+    // The last piece (the tray's chevron-less row) is not under test; the
+    // brightness piece sits further right and its window follows it.
+    let mut other = wide_end_island().0;
+    let (b_pill, t1) = (pill_of(&other, brightness_key(), t0), t0);
+    let core = brightness_core(&other.theme);
+    assert!(other.open_level_sheet_at(brightness_key(), core, t1));
+    let t2 = t1 + ms(500);
+    step(&mut other, t2);
+    let window = shown_rect(&other, t2);
+    assert!((window.x - (b_pill.x - 16.0)).abs() < 0.01, "{window:?}");
+}
+
+#[test]
+fn a_switch_travels_between_the_two_pieces_rects() {
+    let (mut island, t0) = wide_end_island();
+    assert!(open_on(&mut island, volume(), t0));
+    let t = t0 + ms(500);
+    step(&mut island, t);
+    let old = shown_rect(&island, t);
+    let core = brightness_core(&island.theme);
+    assert!(island.open_level_sheet_at(brightness_key(), core, t));
+    step(&mut island, t);
+    assert!(
+        near(shown_rect(&island, t), old),
+        "starts at the first rect"
+    );
+    let rest = t + ms(900);
+    step(&mut island, rest);
+    let end = shown_rect(&island, rest);
+    let body = island.sheets.body_size().unwrap_or_default();
+    let capsule = end_capsule(&island);
+    let pill = pill_of(&island, brightness_key(), rest);
+    let want = geometry::window(capsule, geometry::Edge::End, pill, body, island.size);
+    assert!(near(end, want), "{end:?} vs {want:?}");
+    assert!(end.x > old.x + 1.0, "the second piece is further right");
+    // Mid-travel the window is between the two rects.
+    let mut seen = false;
+    let (mut island, t0) = wide_end_island();
+    assert!(open_on(&mut island, volume(), t0));
+    let t = t0 + ms(500);
+    step(&mut island, t);
+    let core = brightness_core(&island.theme);
+    assert!(island.open_level_sheet_at(brightness_key(), core, t));
+    for n in [60, 120, 180] {
+        let now = t + ms(n);
+        step(&mut island, now);
+        let x = shown_rect(&island, now).x;
+        seen |= x > old.x + 0.5 && x < end.x - 0.5;
+    }
+    assert!(seen, "a mid-travel frame lies between the two rects");
+}
+
+#[test]
+fn an_open_window_holds_its_x_while_its_pieces_text_changes() {
+    let (mut island, t0) = wide_end_island();
+    assert!(open_on(&mut island, volume(), t0));
+    let t = t0 + ms(500);
+    step(&mut island, t);
+    let before = shown_rect(&island, t);
+    let capsule = end_capsule(&island);
+    // "40 %" widens to "100 %": the capsule grows to the left and the piece
+    // moves with it.
+    island.levels.audio.output = Some(Level {
+        percent: 100,
+        muted: false,
+    });
+    island.invalidate_bar();
+    let t1 = t + ms(20);
+    step(&mut island, t1);
+    assert!(end_capsule(&island).w > capsule.w, "premise: it widened");
+    for n in [0, 16, 100, 300, 600] {
+        let now = t1 + ms(n);
+        step(&mut island, now);
+        let r = shown_rect(&island, now);
+        assert_eq!(r.x, before.x, "+{n} ms");
+        assert_eq!(r.w, before.w, "+{n} ms");
+    }
+    // At rest nothing is asked.
+    let rest = t1 + ms(900);
+    step(&mut island, rest);
+    assert_eq!(shown_rect(&island, rest).x, before.x);
+    assert!(!island.sheets.wants_frame(rest), "no frame at rest");
+}
+
+#[test]
+fn a_tray_slide_carries_an_open_window_with_its_piece() {
+    let (mut island, t0) = wide_end_island();
+    assert!(open_on(&mut island, volume(), t0));
+    let t = t0 + ms(500);
+    step(&mut island, t);
+    let before = shown_rect(&island, t);
+    // Four tray apps hidden: the end capsule narrows from the left and its
+    // first piece slides right with it.
+    island.set_bar(&BarLayout {
+        end: vec![
+            "volume".to_owned(),
+            "brightness".to_owned(),
+            "tray".to_owned(),
+        ],
+        tray_hidden: (0..4).map(|n| format!("app{n}")).collect(),
+        ..BarLayout::default()
+    });
+    island.apply_views(t);
+    step(&mut island, t);
+    let mut now = t;
+    for n in [60, 175, 350, 600, 900, 1200, 1500] {
+        now = t + ms(n);
+        step(&mut island, now);
+    }
+    let capsule = end_capsule(&island);
+    let pill = pill_of(&island, volume(), now);
+    let window = shown_rect(&island, now);
+    assert!(
+        pill.x > before.x + 30.0,
+        "premise: the piece slid right: {pill:?}"
+    );
+    assert!(
+        (window.x - (pill.x - 16.0)).abs() < 0.5,
+        "{window:?} {pill:?}"
+    );
+    assert!(
+        window.x >= capsule.x - 0.5 && window.x + window.w <= capsule.x + capsule.w + 0.5,
+        "{window:?} outside {capsule:?}"
+    );
+}

@@ -1729,7 +1729,8 @@ None has been run and none is closed by an agent.
   and system load pieces, and whose start capsule holds the notifications piece
 - **Note:** since CEL-D-015 a switch inside one capsule is one window that travels
   to the new menu's shape; the "exactly two windows" step is superseded by
-  `VAL-CEL-D-015`
+  `VAL-CEL-D-015`; since CEL-D-017 a window opens next to its piece instead of
+  on its capsule's outer edge (see `VAL-CEL-D-017`)
 - **Procedure:** open the energy menu, then the Bluetooth, brightness and
   system load menus one by one, and read each window's edges and the space
   under its last row. Open a menu on the start capsule (notifications). Open
@@ -2125,3 +2126,28 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-013](docs/evidence/2026-11-27-cel-d-013-drop.md)
+
+## VAL-CEL-D-017 — A menu opens next to its piece
+
+- **Status:** pending
+- **Related implementation:** CEL-D-017 (a menu window opens next to its piece
+  instead of on its capsule's outer edge: an end capsule's window starts 16 px
+  before the piece and moves inward only as far as it must to stay inside the
+  capsule's span; a start capsule's window ends 16 px after the piece by the
+  same rule; a piece at the capsule's outer end keeps the old place)
+- **Requires:** the deployed shell after the landing of CEL-D-017 and a layout
+  whose end capsule holds the system load (CPU, RAM) first, then network,
+  Bluetooth, volume and the session (power) piece last, and whose start capsule
+  holds the notifications bell
+- **Procedure:** open the CPU, RAM menu, a middle piece (Bluetooth) and the
+  last piece of the end capsule (session), one by one, and open the bell's menu
+  on the start capsule; read where each window sits against its piece
+- **Pass condition:** each menu sits next to its piece and inside its capsule's
+  span; the window of the first end piece starts 16 px before its piece,
+  which is the capsule's left edge (the capsule's padding is 16 px), and ends
+  short of the capsule's right edge; the last end piece's menu sits where it
+  did (on the capsule's right edge); an open window keeps its x while a text
+  in the bar changes width (a CPU or battery digit), and at rest nothing moves
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-017](docs/evidence/2026-11-27-cel-d-017-menu-from-icon.md)

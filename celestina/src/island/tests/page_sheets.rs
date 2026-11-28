@@ -1080,6 +1080,12 @@ fn a_tall_page_still_scrolls_at_496() {
             h: 40.0,
         },
         crate::sheet::geometry::Edge::Centre,
+        celestina_paint::Rect {
+            x: 810.0,
+            y: 14.0,
+            w: 28.0,
+            h: 28.0,
+        },
         body,
         surface,
     );

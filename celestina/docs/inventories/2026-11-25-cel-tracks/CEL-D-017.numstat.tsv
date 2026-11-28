@@ -1,0 +1,43 @@
+# CEL-D-017 exact change inventory
+
+Base revision	05cf33ed1fa1baf7e87210556996a4b742742d3a
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-017-menu-from-icon.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-017-menu-from-icon/rest-bell.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-017-menu-from-icon/rest-end-1.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-017-menu-from-icon/rest-end-2.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-017-menu-from-icon/switch.jpg
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-017.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/sheets.rs
+Pathspec	celestina/src/island/tests/open_piece.rs
+Pathspec	celestina/src/island/tests/page_sheets.rs
+Pathspec	celestina/src/island/tests/window.rs
+Pathspec	celestina/src/sheet/geometry.rs
+Pathspec	celestina/src/sheet/mod.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	3bc840f26de4a9885e5f7cb59650c1347d0ee99e4855cdec3244519eaa774caa	celestina/Cargo.lock
+1	1	9e2843306b170b2c31e0b32ac180a6f66059f5524a969343734102f798518246	celestina/Cargo.toml
+27	1	2ae978c9f21fadd5a7185f280cd34c0c7a03bf2ae734c44dee0f10fefd2c1e30	celestina/VALIDATION.md
+41	0	0db53bf23d09cdb55ebc4527c4c840771b0dcc8d323602f51c38742d903c3326	celestina/docs/evidence/2026-11-27-cel-d-017-menu-from-icon.md
+-	-	b8b3361a1a307917825643907aa6d55341d951bffa32201df753b2c27066b754	celestina/docs/evidence/2026-11-27-cel-d-017-menu-from-icon/rest-bell.jpg
+-	-	ea3ee1785dd72fb96903de19b193b8129a06f24ab34a40a596892169cfedca49	celestina/docs/evidence/2026-11-27-cel-d-017-menu-from-icon/rest-end-1.jpg
+-	-	a850bb146d8a1aab6573c1da47e16a31b58220468ed9746a6c8d92497fadedaf	celestina/docs/evidence/2026-11-27-cel-d-017-menu-from-icon/rest-end-2.jpg
+-	-	0d636cb9df03a8954017734e078ebade201e853f7aebf408114f7c8f78410461	celestina/docs/evidence/2026-11-27-cel-d-017-menu-from-icon/switch.jpg
+43	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-017.numstat.tsv
+1	0	d91f9479808aac13f40824571782ee1cbff19fc9d00793ab000c9ba77fd6b263	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+20	8	ac489c42c983a3b7c079b5dbe25f1c2d8c6127c0163555f2b470a136cb806389	celestina/src/island/mod.rs
+1	1	9acfe36271cfab93f354e332d2f551bbfa41017a7a83ab4eb19d544ae9f010f6	celestina/src/island/sheets.rs
+7	1	b9b4bf028ce3bb5e7386f5e549e4b11935634f95ad9bb5a439f01ed9a5e7068f	celestina/src/island/tests/open_piece.rs
+6	0	70a91af6db4f9afb8f41eb80c426aff5fae6e7dde300319678dbaaa8d8af0c19	celestina/src/island/tests/page_sheets.rs
+182	0	534f62193455bcf2c42ac3e1412576aaff0375ac4b2704e0e90c31f77b8a356d	celestina/src/island/tests/window.rs
+155	40	9a85db8e8d53a051499452e537fa3038690e20fe737089b531583e7b8db81144	celestina/src/sheet/geometry.rs
+56	11	658b94a9b9391b107e009cfd8db789bc786480aef46e843b0be1f2d9945fc7f2	celestina/src/sheet/mod.rs
+1	0	587c91a21f3cc87704d837ce3f94db00054e9ae00471aa0e5a40426e34f971f7	docs/version-history.tsv

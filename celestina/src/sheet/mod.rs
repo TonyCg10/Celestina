@@ -52,8 +52,8 @@ fn slide_follows(until: Option<Instant>, now: Instant) -> bool {
 /// A change of a rect under this is no change.
 const EPS: f32 = 0.01;
 
-/// What a window hangs from: its capsule as it is painted now and the edge of
-/// it the window lines up with, the pill of the open piece (its rect in the
+/// What a window hangs from: its capsule as it is painted now and the end of
+/// it the window opens towards, the pill of the open piece (its rect in the
 /// bar: the piece stays in its slot, CEL-D-014) and the surface.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Anchor {
@@ -102,6 +102,10 @@ struct OpenSheet {
     motion: SheetMotion,
     /// The last anchor the bar gave (or the one it opened with).
     anchor: Anchor,
+    /// The anchor the window was placed from, when it opened or last
+    /// travelled to another piece: an end or start window holds its x from it
+    /// while it stays open (CEL-D-017).
+    placed: Anchor,
     /// The target rect the motion last knew.
     target: Rect,
     /// The body's size at the last look.
@@ -111,6 +115,23 @@ struct OpenSheet {
     /// The window the content left sat in: with the live target it sizes the
     /// travel's blur layer, so the layer keeps its size through the travel.
     left: Rect,
+}
+
+impl OpenSheet {
+    /// The window's rect for a body of `size`: an end or start window is
+    /// placed from the anchor it opened with, so a text that changes width in
+    /// the bar does not slide it; the centre follows the live anchor. The
+    /// surface is always the live one.
+    fn place(&self, live: &Anchor, size: (f32, f32)) -> Rect {
+        if self.placed.edge == Edge::Centre {
+            return Sheets::target_of(live, size);
+        }
+        let held = Anchor {
+            surface: live.surface,
+            ..self.placed
+        };
+        Sheets::target_of(&held, size)
+    }
 }
 
 /// The body a travel leaves: it shows (fading and blurring out) where it was
@@ -210,6 +231,9 @@ pub struct Sheets {
     /// The capsule was sliding at the last follow, or the one before: its
     /// changes are the bar's own motion, not a resize to morph to.
     slide_until: Option<Instant>,
+    /// A slide moved the open window's placement and the frame that settles
+    /// it has not been taken yet (CEL-D-017).
+    slide_pending: bool,
     /// The pointer was last over the body.
     hovering: bool,
     /// Counts what changed the look: the Island asks for a frame when it
@@ -343,7 +367,7 @@ impl Sheets {
         let o = self.open.as_ref().filter(|o| !o.motion.is_closing())?;
         let tree = o.body.tree();
         let rect = tree.rect(tree.node_by_key(key)?);
-        let at = Sheets::target_of(anchor, o.body.size());
+        let at = o.place(anchor, o.body.size());
         Some(Rect {
             x: at.x + rect.x,
             y: at.y + rect.y - self.scroll.offset(),
@@ -364,7 +388,7 @@ impl Sheets {
     pub fn body_overflows(&self, anchor: &Anchor) -> bool {
         self.open
             .as_ref()
-            .is_some_and(|o| o.body.size().1 > Sheets::target_of(anchor, o.body.size()).h + EPS)
+            .is_some_and(|o| o.body.size().1 > o.place(anchor, o.body.size()).h + EPS)
     }
 
     /// Something waits for the open thing to close.
@@ -391,7 +415,13 @@ impl Sheets {
     }
 
     fn target_of(anchor: &Anchor, size: (f32, f32)) -> Rect {
-        geometry::window(anchor.capsule, anchor.edge, size, anchor.surface)
+        geometry::window(
+            anchor.capsule,
+            anchor.edge,
+            anchor.pill,
+            size,
+            anchor.surface,
+        )
     }
 
     /// The window's rect at `now`, or `None` when none is shown. While it
@@ -406,7 +436,7 @@ impl Sheets {
     #[must_use]
     pub fn frame(&self, anchor: &Anchor, now: Instant) -> Option<DropFrame> {
         let o = self.open.as_ref().filter(|o| !o.motion.closed(now))?;
-        let target = Sheets::target_of(anchor, o.body.size());
+        let target = o.place(anchor, o.body.size());
         Some(o.motion.frame(now, target, anchor.pill, anchor.surface))
     }
 
@@ -550,6 +580,7 @@ impl Sheets {
                 body,
                 motion,
                 anchor: *anchor,
+                placed: *anchor,
                 target,
                 size,
                 old,
@@ -799,6 +830,15 @@ impl Sheets {
             return;
         }
         o.anchor = *anchor;
+        // A slide carries the window with its piece, to the frame that
+        // settles it (CEL-D-017 holds the placement only against a text that
+        // changes width).
+        if sliding || slide_follows(self.slide_until, now) {
+            o.placed = *anchor;
+            self.slide_pending = true;
+        } else if std::mem::take(&mut self.slide_pending) {
+            o.placed = *anchor;
+        }
         self.retarget(now);
     }
 
@@ -809,7 +849,7 @@ impl Sheets {
             return;
         };
         let size = o.body.size();
-        let target = Sheets::target_of(&o.anchor, size);
+        let target = o.place(&o.anchor, size);
         if !same(target, o.target) {
             if !slide_follows(self.slide_until, now) {
                 let shown = o
@@ -837,8 +877,12 @@ impl Sheets {
         if self.rect(anchor, now).is_none() {
             return BodyOutcome::Keep { changed: false };
         }
-        let size = self.open.as_ref().map_or((0.0, 0.0), |o| o.body.size());
-        let at = Sheets::target_of(anchor, size);
+        let at = self
+            .open
+            .as_ref()
+            .map_or(Sheets::target_of(anchor, (0.0, 0.0)), |o| {
+                o.place(anchor, o.body.size())
+            });
         let (dx, dy) = (at.x, at.y - self.scroll.offset());
         let Some(o) = self.open.as_mut().filter(|o| !o.motion.is_closing()) else {
             return BodyOutcome::Keep { changed: false };
@@ -974,7 +1018,7 @@ impl Sheets {
             if frame.rect.w <= 0.0 || frame.rect.h <= 0.0 {
                 return None;
             }
-            let target = Sheets::target_of(anchor, o.body.size());
+            let target = o.place(anchor, o.body.size());
             let at = (target.x, target.y - self.scroll.offset());
             let layer = if o.motion.is_closing() {
                 blur_layer(
@@ -1598,7 +1642,8 @@ mod tests {
         let t0 = Instant::now();
         let (mut sheets, anchor) = bare_open(Key::named("volume"), t0);
         let settled = t0 + ms(600);
-        let target = Sheets::target_of(&anchor, (100.0, 40.0));
+        let size = sheets.open.as_ref().map_or((0.0, 0.0), |o| o.body.size());
+        let target = Sheets::target_of(&anchor, size);
         sheets.close(&anchor, settled);
         let mut sizes = Vec::new();
         for n in [0, 60, 120, 160] {

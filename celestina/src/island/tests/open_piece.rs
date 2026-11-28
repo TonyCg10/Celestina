@@ -75,7 +75,13 @@ fn hide(island: &mut Island, ids: &[&str], now: Instant) {
 fn header_point(island: &Island, now: Instant) -> (f32, f32) {
     let anchor = island.sheet_anchor(now).expect("an anchor");
     let size = island.sheets.body_size().expect("a body");
-    let at = geometry::window(anchor.capsule, anchor.edge, size, anchor.surface);
+    let at = geometry::window(
+        anchor.capsule,
+        anchor.edge,
+        anchor.pill,
+        size,
+        anchor.surface,
+    );
     let row = island
         .sheets
         .body_node_rect(subtitle::row_key())

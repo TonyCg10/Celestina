@@ -3437,6 +3437,7 @@ mod tests {
                 - geometry::window(
                     zone(island.bar.as_ref().and_then(|b| b.zone_rect(0))),
                     geometry::Edge::Start,
+                    zone(island.sheet_anchor(settle).map(|a| a.pill)),
                     after.unwrap_or_default(),
                     island.size
                 )
@@ -5834,7 +5835,8 @@ mod tests {
         );
         let settle = t0 + ms(460);
         step(&mut island, settle);
-        let target = geometry::window(end, geometry::Edge::End, body, island.size);
+        let pill = zone(island.sheet_anchor(settle).map(|a| a.pill));
+        let target = geometry::window(end, geometry::Edge::End, pill, body, island.size);
         assert!(
             near(shown_rect(&island, settle), target),
             "{:?} vs {target:?}",
@@ -5876,7 +5878,7 @@ mod tests {
     }
 
     #[test]
-    fn a_start_window_lines_up_with_its_capsule_and_every_other_piece_stays_on_the_bar() {
+    fn a_start_window_ends_after_its_piece_and_every_other_piece_stays_on_the_bar() {
         let (mut island, t0) = wide_start_island();
         let bell = Key::named("bell");
         let others = [
@@ -5896,7 +5898,14 @@ mod tests {
             "premise: the capsule is wider than the body"
         );
         let sheet = shown_rect(&island, settle);
-        assert_eq!(sheet.x, start.x, "its left edge is the capsule's left edge");
+        // Rule B: it ends 16 px after the bell, inside the capsule.
+        let bell_pill = bar_rect(&island, bell);
+        let want = (bell_pill.x + bell_pill.w + 16.0 - sheet.w).max(start.x);
+        assert_eq!(sheet.x, want, "its right edge is 16 px after its piece");
+        assert!(
+            sheet.x > start.x,
+            "premise: the bell is not the first piece"
+        );
         assert_eq!(sheet.y, geometry::WINDOW_TOP);
         // Every other piece stays on the bar, where it is hit: the window
         // is under it.
@@ -5930,8 +5939,8 @@ mod tests {
     }
 
     #[test]
-    fn the_window_keeps_its_capsules_edge_while_the_capsule_keeps_its_extent() {
-        // A start window lines up with its capsule's left edge, and the bar
+    fn the_window_keeps_its_place_while_the_capsule_keeps_its_extent() {
+        // A start window ends after its piece, and the bar
         // paints every capsule whatever the window does: at every frame the
         // capsule's extent is one shape and the window another, and the
         // extent does not change with the open.
@@ -5962,7 +5971,9 @@ mod tests {
                 );
             }
             if t >= 460 {
-                assert!((sheet.x - extent.x).abs() < 0.01, "{sheet:?} vs {extent:?}");
+                let pill = bar_rect(&island, Key::named("bell"));
+                let want = (pill.x + pill.w + 16.0 - sheet.w).max(extent.x);
+                assert!((sheet.x - want).abs() < 0.01, "{sheet:?} vs x {want}");
                 assert_eq!(sheet.y, geometry::WINDOW_TOP);
             }
             widths.push(extent.w);
@@ -5971,7 +5982,7 @@ mod tests {
             widths.iter().all(|w| (*w - widths[0]).abs() < 0.01),
             "the capsule kept its width: {widths:?}"
         );
-        // An end window lines up with the right edge at rest, whatever the
+        // An end window keeps its place at rest, whatever the
         // capsule does meanwhile.
         let (mut island, t0) = level_island();
         assert!(open_on(&mut island, volume(), t0));
@@ -6572,7 +6583,8 @@ mod tests {
         let settle = t + ms(500);
         step(&mut island, settle);
         let body = volume_core(&island.theme).size();
-        let want = geometry::window(wider, geometry::Edge::End, body, island.size);
+        let pill = zone(island.sheet_anchor(settle).map(|a| a.pill));
+        let want = geometry::window(wider, geometry::Edge::End, pill, body, island.size);
         assert!(near(shown_rect(&island, settle), want));
         assert!(island.sheets.is_open());
         let _ = before;

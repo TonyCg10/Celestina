@@ -232,7 +232,7 @@ impl Island {
 
     /// The anchor the bar gives at `now` for `piece` in `zone`: the capsule
     /// as it is painted (the pieces beside the open one may be sliding), the
-    /// edge of it its zone lines up with and the pill, which is the piece's
+    /// end of it its zone opens towards and the pill, which is the piece's
     /// rect. `None` when either is gone.
     pub(super) fn live_anchor(&self, zone: usize, piece: Key, now: Instant) -> Option<Anchor> {
         let bar = self.bar.as_ref()?;
