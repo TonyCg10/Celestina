@@ -99,7 +99,7 @@ fn the_open_piece_keeps_its_slot_and_its_capsule_keeps_its_extent() {
         "premise: all are in the bar"
     );
     assert!(open_on(&mut island, volume(), t0));
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     let mut frames: Vec<Instant> = [0, 60, 175, 350, 400].map(|n| t0 + ms(n)).to_vec();
     island.close_sheet(t);
     frames.extend([0, 100, 259, 300].map(|n| t + ms(n)));
@@ -148,7 +148,7 @@ fn the_open_piece_shows_no_hover_or_press_fill() {
     let _ = look(&mut island, volume(), t0);
     assert_eq!(bar(&island).box_roles(volume()).0, Some(Role::ControlHover));
     assert!(open_on(&mut island, volume(), t0));
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     step(&mut island, t);
     feed(
         &mut island,
@@ -185,7 +185,9 @@ fn a_primary_press_on_the_open_piece_closes_its_menu() {
     let at = centre(bar_rect(&island, volume()));
     assert!(click_at(&mut island, at, BTN_LEFT, t).is_empty());
     assert!(!island.sheets.is_open());
-    assert_eq!(island.sheets.held_piece(t), None);
+    // The piece keeps its pill until the drop merges, 320 ms in.
+    assert_eq!(island.sheets.held_piece(t), Some(volume()));
+    assert_eq!(island.sheets.held_piece(t + ms(320)), None);
 }
 
 #[test]
@@ -242,7 +244,7 @@ fn the_header_row_is_shown_through_open_and_close() {
         assert!(shown(&island), "+{t} ms");
     }
     // A press on the row is the body's: no piece action, the menu stays.
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     let at = header_point(&island, t);
     for button in [BTN_LEFT, BTN_RIGHT, BTN_MIDDLE] {
         assert!(
@@ -263,7 +265,7 @@ fn the_header_row_is_shown_through_open_and_close() {
 fn closing_gives_back_the_pill_and_opacity_at_the_restore_moment() {
     let (mut island, t) = settled();
     island.close_sheet(t);
-    let restore = t + ms(260).mul_f32(PIECE_RESTORE_AT);
+    let restore = t + ms(400).mul_f32(PIECE_RESTORE_AT);
     let at = |n: u64| restore + ms(n);
     step(&mut island, restore);
     let alpha = |island: &Island, now| bar(island).pill(now).first().map_or(0.0, |p| p.alpha);
@@ -327,7 +329,7 @@ fn a_vanished_open_piece_leaves_no_plate() {
 fn a_tray_slide_while_open_carries_the_pill_with_its_piece() {
     let (mut island, t0) = tray_level_island();
     assert!(open_on(&mut island, volume(), t0));
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     step(&mut island, t);
     hide(&mut island, &["b", "c"], t);
     step(&mut island, t);
@@ -356,7 +358,7 @@ fn a_tray_slide_while_open_carries_the_pill_with_its_piece() {
 fn the_slide_is_followed_only_for_a_moment() {
     let (mut island, t0) = tray_level_island();
     assert!(open_on(&mut island, volume(), t0));
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     step(&mut island, t);
     hide(&mut island, &["b", "c"], t);
     let mut now = t;
@@ -411,7 +413,7 @@ fn reduced_motion_lights_and_restores_the_pill_at_once() {
     let (plate, held) = look(&mut island, volume(), t0);
     assert!(plate.is_some_and(|p| near(p.alpha, 1.0)));
     assert!(held.is_some_and(|h| near(h.inside, 0.8)));
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     step(&mut island, t);
     island.close_sheet(t);
     step(&mut island, t);
@@ -488,7 +490,7 @@ fn no_frame_is_asked_at_rest() {
 fn the_leaving_window_keeps_its_own_pill() {
     let (mut island, t0) = level_island();
     assert!(open_on(&mut island, volume(), t0));
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     step(&mut island, t);
     let before = island.sheet_anchor(t).map(|a| a.pill);
     // A menu of another capsule: the volume's window closes where it was.

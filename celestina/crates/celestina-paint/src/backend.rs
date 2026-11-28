@@ -14,11 +14,12 @@ use femtovg::imgref::Img;
 use femtovg::renderer::OpenGl;
 use femtovg::rgb::FromSlice;
 use femtovg::{
-    Canvas, CompositeOperation, DrawCommand, GlyphDrawCommands, ImageFilter, ImageFlags, ImageId,
-    ImageSource, Paint, Path, PixelFormat, Quad, RenderTarget,
+    Canvas, CompositeOperation, DrawCommand, FillRule, GlyphDrawCommands, ImageFilter, ImageFlags,
+    ImageId, ImageSource, Paint, Path, PixelFormat, Quad, RenderTarget,
 };
 
 use crate::color::Color;
+use crate::shape::{Seg, ShapePath};
 use celestina_wayland::egl::{femtovg_renderer, EglError};
 use celestina_wayland::Rect;
 
@@ -115,6 +116,44 @@ fn rounded(rect: Rect, radius: f32) -> Path {
     let mut path = Path::new();
     path.rounded_rect(rect.x, rect.y, rect.w, rect.h, radius.max(0.0));
     path
+}
+
+/// One femtovg path call, mirrored so a test can read what `fv_path` draws
+/// without a GL context. Private to the crate.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum PathOp {
+    Move(f32, f32),
+    Line(f32, f32),
+    Bezier(f32, f32, f32, f32, f32, f32),
+    Close,
+}
+
+/// The femtovg calls of `path`, one per segment, in order.
+pub(crate) fn ops(path: &ShapePath) -> Vec<PathOp> {
+    path.segs()
+        .iter()
+        .map(|seg| match *seg {
+            Seg::Move(x, y) => PathOp::Move(x, y),
+            Seg::Line(x, y) => PathOp::Line(x, y),
+            Seg::Cubic { c1, c2, to } => PathOp::Bezier(c1.0, c1.1, c2.0, c2.1, to.0, to.1),
+            Seg::Close => PathOp::Close,
+        })
+        .collect()
+}
+
+/// A femtovg path of `path`'s sub-paths. femtovg keeps each contour's own
+/// winding (no `solidity` verb is emitted), so clockwise sub-paths stack.
+fn fv_path(path: &ShapePath) -> Path {
+    let mut out = Path::new();
+    for op in ops(path) {
+        match op {
+            PathOp::Move(x, y) => out.move_to(x, y),
+            PathOp::Line(x, y) => out.line_to(x, y),
+            PathOp::Bezier(a, b, c, d, x, y) => out.bezier_to(a, b, c, d, x, y),
+            PathOp::Close => out.close(),
+        }
+    }
+    out
 }
 
 /// The femtovg canvas over the shared GL context.
@@ -490,6 +529,34 @@ impl Backend {
             .fill_path(&rounded(rect, radius), &Paint::color(fv_color(color)));
     }
 
+    /// Fills `path` non-zero: its clockwise sub-paths are their union.
+    pub(crate) fn fill_path(&mut self, path: &ShapePath, color: Color) {
+        let paint = Paint::color(fv_color(color)).with_fill_rule(FillRule::NonZero);
+        self.canvas.fill_path(&fv_path(path), &paint);
+    }
+
+    /// Fills `path` non-zero with `image` mapped onto `placement`, multiplied
+    /// by `tint`.
+    pub(crate) fn fill_image_path(
+        &mut self,
+        path: &ShapePath,
+        image: ImageHandle,
+        placement: Rect,
+        tint: Color,
+    ) {
+        let paint = Paint::image_tint(
+            image.0,
+            placement.x,
+            placement.y,
+            placement.w,
+            placement.h,
+            0.0,
+            fv_color(tint),
+        )
+        .with_fill_rule(FillRule::NonZero);
+        self.canvas.fill_path(&fv_path(path), &paint);
+    }
+
     /// A rounded outline of `width` centred on the rect edge.
     pub(crate) fn stroke_rounded(&mut self, rect: Rect, radius: f32, width: f32, color: Color) {
         let paint = Paint::color(fv_color(color)).with_line_width(width);
@@ -646,6 +713,29 @@ fn page_placement(q: &GlyphQuad) -> Option<Rect> {
 mod tests {
     use super::*;
     use crate::theme::{Role, Theme};
+
+    #[test]
+    fn a_path_converts_segment_for_segment() {
+        let mut path = ShapePath::new();
+        path.move_to(1.0, 2.0);
+        path.line_to(3.0, 4.0);
+        path.cubic_to((5.0, 6.0), (7.0, 8.0), (9.0, 10.0));
+        path.close();
+        path.move_to(11.0, 12.0);
+        path.close();
+        assert_eq!(
+            ops(&path),
+            vec![
+                PathOp::Move(1.0, 2.0),
+                PathOp::Line(3.0, 4.0),
+                PathOp::Bezier(5.0, 6.0, 7.0, 8.0, 9.0, 10.0),
+                PathOp::Close,
+                PathOp::Move(11.0, 12.0),
+                PathOp::Close,
+            ]
+        );
+        assert!(ops(&ShapePath::new()).is_empty());
+    }
 
     #[test]
     fn color_converts_to_femtovg_keeping_alpha() {

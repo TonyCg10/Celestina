@@ -18,6 +18,28 @@ fn capsules(island: &Island, now: Instant) -> Vec<Shape> {
         .unwrap_or_default()
 }
 
+/// Whether any band covers `at`.
+fn covers(bands: &[Rect], at: (f32, f32)) -> bool {
+    bands.iter().any(|b| b.contains(at.0, at.1))
+}
+
+fn centre_of(r: Rect) -> (f32, f32) {
+    (r.x + r.w / 2.0, r.y + r.h / 2.0)
+}
+
+/// The drawn windows at `now` with their radii, from the glass the sheets
+/// hand the Island's paths.
+fn windows(island: &Island, now: Instant) -> Vec<(Rect, f32)> {
+    let anchor = island.sheet_anchor(now);
+    island
+        .sheets
+        .glass(anchor.as_ref(), island.size, now)
+        .iter()
+        .filter(|g| g.frame.drawn)
+        .map(|g| (g.frame.rect, g.frame.radius))
+        .collect()
+}
+
 #[test]
 fn the_bar_paints_every_capsule_while_a_window_is_open() {
     let (mut island, t0) = level_island();
@@ -49,12 +71,16 @@ fn the_window_is_its_own_shape() {
     let end = zone(island.bar.as_ref().and_then(|b| b.capsule_extent(3, t)));
     let shapes = island.shapes(t);
     assert!(shapes.contains(&(end, radius)), "the capsule");
-    assert!(shapes.contains(&(window, radius)), "the window");
+    assert!(!shapes.contains(&(window, radius)), "its glass is a path");
+    assert!(
+        covers(&island.blur_bands(t), centre_of(window)),
+        "the window"
+    );
     assert_ne!(end, window);
     assert_eq!(window.y, 56.0, "the capsule's 8 + 40 + a gap of 8");
     assert_eq!(window.x + window.w, end.x + end.w, "right edges agree");
-    // Capsules, the window and the Island's capsule: nothing else.
-    assert_eq!(shapes.len(), capsules(&island, t).len() + 2);
+    // Capsules and the Island's capsule: nothing else.
+    assert_eq!(shapes.len(), capsules(&island, t).len() + 1);
 }
 
 #[test]
@@ -119,13 +145,17 @@ fn a_press_on_another_capsule_opens_its_menu_at_once_while_the_old_closes() {
         old_pill,
         "towards the pill its piece had"
     );
-    let soon = t + ms(50);
-    step(&mut island, soon);
-    let windows = island
-        .sheets
-        .windows(island.sheet_anchor(soon).as_ref(), island.size, soon);
-    assert_eq!(windows.len(), 2, "the closing one and the opening one");
-    let after = t + ms(260);
+    // The old one gathers as a window until 42 % of its close (168 ms); the
+    // new one has none until 52 % of its open (239 ms): each drop's liquid
+    // alone is no window.
+    for (n, want) in [(50, 1), (150, 1), (200, 0), (250, 1)] {
+        let at = t + ms(n);
+        step(&mut island, at);
+        let got = windows(&island, at);
+        assert_eq!(got.len(), want, "+{n} ms");
+        assert!(island.sheets.is_leaving(), "+{n} ms: the old one closes");
+    }
+    let after = t + ms(400);
     step(&mut island, after);
     assert!(!island.sheets.is_leaving());
 }
@@ -142,11 +172,9 @@ fn a_switch_on_the_same_capsule_keeps_one_window_that_travels() {
     for n in [0, 50, 150, 299] {
         let now = t + ms(n);
         step(&mut island, now);
-        let windows = island
-            .sheets
-            .windows(island.sheet_anchor(now).as_ref(), island.size, now);
+        let windows = windows(&island, now);
         assert_eq!(windows.len(), 1, "+{n} ms");
-        assert_eq!(island.shapes(now).len(), bars + 2, "+{n} ms");
+        assert_eq!(island.shapes(now).len(), bars + 1, "+{n} ms");
         if n == 0 {
             assert!(near(windows[0].0, old), "starts where it was shown");
         }
@@ -157,9 +185,7 @@ fn a_switch_on_the_same_capsule_keeps_one_window_that_travels() {
     let rest = t + ms(900);
     step(&mut island, rest);
     assert!(near(at_end, shown_rect(&island, rest)), "the target");
-    let windows = island
-        .sheets
-        .windows(island.sheet_anchor(end).as_ref(), island.size, end);
+    let windows = windows(&island, end);
     assert_eq!(windows[0].1, radius);
 }
 
@@ -174,19 +200,19 @@ fn the_old_content_is_released_at_90_ms_and_nothing_runs_at_rest() {
     let before = t + ms(89);
     step(&mut island, before);
     assert!(island.sheets.is_swapping(), "+89 ms");
-    assert_eq!(island.shapes(before).len(), bars + 2);
+    assert_eq!(island.shapes(before).len(), bars + 1);
     let gone = t + ms(90);
     step(&mut island, gone);
     assert!(!island.sheets.is_swapping(), "+90 ms");
-    assert_eq!(island.shapes(gone).len(), bars + 2);
+    assert_eq!(island.shapes(gone).len(), bars + 1);
     let last = t + ms(299);
     step(&mut island, last);
     assert!(island.sheets.wants_frame(last));
-    assert_eq!(island.shapes(last).len(), bars + 2);
+    assert_eq!(island.shapes(last).len(), bars + 1);
     let rest = t + ms(300);
     step(&mut island, rest);
     assert!(!island.sheets.wants_frame(rest));
-    assert_eq!(island.shapes(rest).len(), bars + 2);
+    assert_eq!(island.shapes(rest).len(), bars + 1);
 }
 
 #[test]
@@ -206,9 +232,7 @@ fn a_second_switch_during_a_travel_travels_from_the_shape_shown() {
     assert!(island.open_level_sheet_at(volume(), core, t1));
     assert!(near(shown_rect(&island, t1), shown), "no jump");
     assert!(!island.sheets.is_leaving());
-    let windows = island
-        .sheets
-        .windows(island.sheet_anchor(t1).as_ref(), island.size, t1);
+    let windows = windows(&island, t1);
     assert_eq!(windows.len(), 1, "one window");
     // The content kept is the one that showed more at the switch frame: the
     // first old content (1/3), not the new body (0).
@@ -281,8 +305,8 @@ fn a_vanished_piece_closes_towards_its_last_pill() {
     let from = shown_rect(&island, t + ms(1));
     assert!(mid.h < from.h);
     let at_end = island.sheets.rect(
-        &island.sheet_anchor(t + ms(260)).expect("the last anchor"),
-        t + ms(259),
+        &island.sheet_anchor(t + ms(400)).expect("the last anchor"),
+        t + ms(399),
     );
     if let (Some(end), Some(pill)) = (at_end, last) {
         // A close goes 70 % of the way to the piece's pill, never past it:
@@ -291,7 +315,7 @@ fn a_vanished_piece_closes_towards_its_last_pill() {
         assert!((end.w - pill.w).abs() < (from.w - pill.w).abs());
     }
     // Then nothing stays hidden or painted.
-    let later = t + ms(300);
+    let later = t + ms(402);
     step(&mut island, later);
     assert!(!island.sheets.is_shown(later));
     assert!(island.sheet_rect(later).is_none());
@@ -307,7 +331,7 @@ fn closing_a_scrolled_window_closes_towards_the_pill() {
     let sent = Rc::new(RefCell::new(Vec::new()));
     let core = sent_core_with(&island.theme, &sent, busy_graph(), true);
     assert!(island.open_level_sheet_at(volume(), core, t0));
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     step(&mut island, t);
     let window = shown_rect(&island, t);
     assert_eq!(window.h, crate::sheet::geometry::max_height(island.size));
@@ -335,7 +359,7 @@ fn closing_a_scrolled_window_closes_towards_the_pill() {
     assert!(scroll > 0.0, "premise: it scrolled");
     island.close_sheet(t);
     // The close ends on the live pill.
-    let end = t + ms(260);
+    let end = t + ms(400);
     step(&mut island, end);
     assert!(island.sheet_rect(end).is_none());
 }
@@ -348,8 +372,7 @@ fn going_back_to_a_capsule_whose_window_still_closes_travels_from_it() {
     assert!(click_at(&mut island, at, BTN_LEFT, t).is_empty());
     let t1 = t + ms(100);
     step(&mut island, t1);
-    let anchor = island.sheet_anchor(t1);
-    let closing = island.sheets.windows(anchor.as_ref(), island.size, t1)[0].0;
+    let closing = windows(&island, t1)[0].0;
     // Back to the volume while its window closes.
     let core = volume_core(&island.theme);
     assert!(island.open_level_sheet_at(volume(), core, t1));
@@ -359,8 +382,7 @@ fn going_back_to_a_capsule_whose_window_still_closes_travels_from_it() {
         near(shown_rect(&island, t1), closing),
         "it travels from the shape the closing window had"
     );
-    let anchor = island.sheet_anchor(t1);
-    let windows = island.sheets.windows(anchor.as_ref(), island.size, t1);
+    let windows = windows(&island, t1);
     assert_eq!(windows.len(), 2, "the bell's closing and the volume's one");
     assert!(island.sheets.is_swapping());
 }
@@ -374,8 +396,6 @@ fn reopening_during_a_close_travels_from_the_shape_shown() {
     let t1 = t + ms(130);
     step(&mut island, t1);
     let shown = shown_rect(&island, t1);
-    let glass = island.sheets.glass(t1).unwrap_or_default();
-    assert!(glass < 1.0, "the glass has begun to fade: {glass}");
     let core = volume_core(&island.theme);
     assert!(island.open_level_sheet_at(volume(), core, t1));
     assert!(island.sheets.is_open());
@@ -388,34 +408,10 @@ fn reopening_during_a_close_travels_from_the_shape_shown() {
             && (now.h - shown.h).abs() < 0.5,
         "{now:?} vs {shown:?}"
     );
-    assert!((island.sheets.glass(t1).unwrap_or_default() - glass).abs() < 1e-4);
-    assert_eq!(island.shapes(t1).len(), bars + 2, "back in the blur region");
+    assert_eq!(island.shapes(t1).len(), bars + 1, "back in the blur region");
     let end = t1 + ms(300);
     step(&mut island, end);
-    assert_eq!(island.sheets.glass(end), Some(1.0));
     assert!(near(shown_rect(&island, end), rest_rect));
-}
-
-#[test]
-fn a_reopen_late_in_a_close_stays_out_of_the_blur_region_until_its_glass_is_back() {
-    let (mut island, t) = settled();
-    let bars = capsules(&island, t).len();
-    island.close_sheet(t);
-    let late = t + ms(230);
-    step(&mut island, late);
-    assert_eq!(island.shapes(late).len(), bars + 1, "glass is under 35 %");
-    let core = volume_core(&island.theme);
-    assert!(island.open_level_sheet_at(volume(), core, late));
-    assert!(island.sheets.glass(late).unwrap_or(1.0) < 0.35);
-    assert_eq!(
-        island.shapes(late).len(),
-        bars + 1,
-        "the backdrop blur cannot fade: no region behind faint glass"
-    );
-    let back = late + ms(60);
-    step(&mut island, back);
-    assert!(island.sheets.glass(back).unwrap_or(0.0) >= 0.35);
-    assert_eq!(island.shapes(back).len(), bars + 2, "the region is back");
 }
 
 #[test]
@@ -424,7 +420,7 @@ fn the_level_the_old_content_held_goes_out_when_the_travel_starts() {
     let sent = Rc::new(RefCell::new(Vec::new()));
     let core = sent_core(&island.theme, &sent, AudioGraph::default());
     assert!(island.open_level_sheet_at(volume(), core, t0));
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     step(&mut island, t);
     let sheet = shown_rect(&island, t);
     let slider = match island.sheets.body_node_rect(crate::osd::popup::slider_key(
@@ -487,33 +483,12 @@ fn reduced_motion_swaps_at_once() {
 }
 
 #[test]
-fn the_blur_region_of_a_closing_window_follows_its_rect_and_leaves_with_its_glass() {
-    let (mut island, t) = settled();
-    let bars = capsules(&island, t).len();
-    island.close_sheet(t);
-    step(&mut island, t + ms(100));
-    let mid = t + ms(100);
-    let shapes = island.shapes(mid);
-    assert_eq!(shapes.len(), bars + 2, "capsules, the window, the Island");
-    let window = shown_rect(&island, mid);
-    assert!(
-        shapes.iter().any(|&(r, _)| r == window),
-        "the region is the window's rect as painted"
-    );
-    // Below 35 % glass (from 199 ms) it is gone, the window still painted.
-    let faint = t + ms(230);
-    step(&mut island, faint);
-    assert!(island.sheets.is_shown(faint));
-    assert_eq!(island.shapes(faint).len(), bars + 1);
-}
-
-#[test]
 fn no_frame_is_asked_once_a_window_has_closed() {
     let (mut island, t) = settled();
     island.close_sheet(t);
-    step(&mut island, t + ms(259));
-    assert!(island.sheets.wants_frame(t + ms(259)));
-    let done = t + ms(260);
+    step(&mut island, t + ms(399));
+    assert!(island.sheets.wants_frame(t + ms(399)));
+    let done = t + ms(400);
     step(&mut island, done);
     assert!(!island.sheets.is_shown(done));
     assert!(!island.sheets.wants_frame(done + ms(1)));

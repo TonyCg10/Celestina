@@ -10,6 +10,9 @@ use crate::island::state::{CAPSULE_H, PAGE_MARGIN, TOP_GAP};
 pub const SIDE_MARGIN: f32 = 16.0;
 /// The gap between the bar's capsules and a window, logical px.
 const WINDOW_GAP: f32 = 8.0;
+/// The capsules' bottom edge, where a drop hangs from and the bar's glass ends
+/// (48).
+pub const CAPSULE_BOTTOM: f32 = TOP_GAP + CAPSULE_H;
 /// The window's top edge: the capsules' top, their height and the gap (56).
 pub const WINDOW_TOP: f32 = TOP_GAP + CAPSULE_H + WINDOW_GAP;
 

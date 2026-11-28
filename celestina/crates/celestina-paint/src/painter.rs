@@ -19,6 +19,7 @@ use crate::icon::{
     default_icon_dirs, device_size, file_path, rasterise_file, semantic_path, theme_path,
     IconCache, IconKey, PixmapId,
 };
+use crate::shape::ShapePath;
 use crate::soft_edge::{self, Cuts, SOFT_SIGMAS};
 use crate::text::{TextRun, TextSystem};
 use crate::theme::Theme;
@@ -64,6 +65,31 @@ pub enum PaintError {
     },
     #[error("a {width}×{height} RGBA wallpaper cannot be {len} bytes")]
     WallpaperTexels { width: u32, height: u32, len: usize },
+}
+
+/// One layer of the Haze, bottom first.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum HazeLayer {
+    /// The grain tile at this alpha, over the placement. The tile is
+    /// anchored at the surface origin, so the grain stays still while the
+    /// shape moves; one texel per logical px.
+    Grain(f32, Rect),
+    Tint(Color),
+}
+
+/// The layers of `plan`: grain then tint, or the fallback alone.
+fn haze_layers(plan: &HazePlan) -> [Option<HazeLayer>; 2] {
+    let tile = GRAIN_SIZE as f32;
+    let placement = Rect {
+        x: 0.0,
+        y: 0.0,
+        w: tile,
+        h: tile,
+    };
+    [
+        plan.grain.map(|alpha| HazeLayer::Grain(alpha, placement)),
+        Some(HazeLayer::Tint(plan.fill)),
+    ]
 }
 
 fn gpu(what: &'static str) -> impl FnOnce(GpuError) -> PaintError {
@@ -405,21 +431,36 @@ impl Painter {
     /// the grain then the glass tint over it; without it, the opaque
     /// fallback. Nothing else: no outline, no edge, no shadow.
     pub fn haze(&mut self, rect: Rect, radius: f32) {
-        let plan = HazePlan::for_(&self.theme, self.blur_available);
-        if let Some(alpha) = plan.grain {
-            // The tile is anchored at the surface origin, so the grain
-            // stays still while the shape moves; one texel per logical px.
-            let tile = GRAIN_SIZE as f32;
-            let placement = Rect {
-                x: 0.0,
-                y: 0.0,
-                w: tile,
-                h: tile,
-            };
-            self.backend
-                .fill_image(rect, radius, self.grain, placement, WHITE.with_alpha(alpha));
+        let layers = haze_layers(&HazePlan::for_(&self.theme, self.blur_available));
+        for layer in layers.into_iter().flatten() {
+            match layer {
+                HazeLayer::Grain(alpha, placement) => self.backend.fill_image(
+                    rect,
+                    radius,
+                    self.grain,
+                    placement,
+                    WHITE.with_alpha(alpha),
+                ),
+                HazeLayer::Tint(color) => self.backend.fill_rounded(rect, radius, color),
+            }
         }
-        self.backend.fill_rounded(rect, radius, plan.fill);
+    }
+
+    /// The Haze material over `path` (CEL-D-013), filled once non-zero: the
+    /// same grain then tint (or fallback alone) as [`Painter::haze`].
+    pub fn haze_path(&mut self, path: &ShapePath) {
+        let layers = haze_layers(&HazePlan::for_(&self.theme, self.blur_available));
+        for layer in layers.into_iter().flatten() {
+            match layer {
+                HazeLayer::Grain(alpha, placement) => self.backend.fill_image_path(
+                    path,
+                    self.grain,
+                    placement,
+                    WHITE.with_alpha(alpha),
+                ),
+                HazeLayer::Tint(color) => self.backend.fill_path(path, color),
+            }
+        }
     }
 
     /// Draws `run` with its top-left corner at (`x`, `y`) in `color`.
@@ -892,6 +933,35 @@ impl Painter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::Role;
+
+    #[test]
+    fn haze_path_uses_the_same_plan_as_haze() {
+        let theme = Theme::dark();
+        let tile = GRAIN_SIZE as f32;
+        let placement = Rect {
+            x: 0.0,
+            y: 0.0,
+            w: tile,
+            h: tile,
+        };
+        let with = HazePlan::for_(&theme, true);
+        assert_eq!(
+            haze_layers(&with),
+            [
+                Some(HazeLayer::Grain(theme.grain_alpha, placement)),
+                Some(HazeLayer::Tint(theme.color(Role::GlassTint))),
+            ]
+        );
+        let without = HazePlan::for_(&theme, false);
+        assert_eq!(
+            haze_layers(&without),
+            [
+                None,
+                Some(HazeLayer::Tint(theme.color(Role::GlassFallback)))
+            ]
+        );
+    }
 
     #[test]
     fn a_strong_blur_is_drawn_at_a_lower_resolution_to_keep_its_sigma() {

@@ -151,8 +151,12 @@ fn overflow_window_centres_under_the_chevron() {
         "centred under the chevron: {window:?} for {chevron:?}"
     );
     assert!(window.x >= 16.0 && window.x + window.w <= 1920.0 - 16.0);
-    // It is the window of CEL-D-009: its own shape beside the capsules.
-    assert!(island.shapes(t).contains(&(window, island.theme.radius_lg)));
+    // It is the window of CEL-D-009: its glass is in the blur region.
+    let centre = (window.x + window.w / 2.0, window.y + window.h / 2.0);
+    assert!(island
+        .blur_bands(t)
+        .iter()
+        .any(|b| b.contains(centre.0, centre.1)));
 }
 
 #[test]

@@ -179,6 +179,8 @@ pub struct Tree {
     /// Boxes painted, clipped and reported at a rect of their own instead
     /// of their layout rect ([`Tree::set_extent`]).
     pub(crate) extents: Vec<(Key, Rect)>,
+    /// Boxes whose Haze is painted by someone else ([`Tree::set_glassless`]).
+    pub(crate) glassless: Vec<Key>,
     /// Plates painted inside boxes ([`Tree::set_plate`]).
     pub(crate) plates: Vec<(Key, Plate)>,
     /// Nodes held open ([`Tree::set_held`]).
@@ -232,6 +234,7 @@ impl Tree {
             slider_metrics: SliderMetrics::of(theme),
             fault: None,
             extents: Vec::new(),
+            glassless: Vec::new(),
             plates: Vec::new(),
             helds: Vec::new(),
             slide_next: None,
@@ -247,6 +250,16 @@ impl Tree {
         self.extents.retain(|(k, _)| *k != key);
         if let Some(rect) = rect {
             self.extents.push((key, rect));
+        }
+    }
+
+    /// While `glassless` is set the box keyed `key` skips its Haze: someone
+    /// else paints the glass under it (a capsule joined to its window,
+    /// CEL-D-013). Its fill, wash and stroke are unchanged.
+    pub fn set_glassless(&mut self, key: Key, glassless: bool) {
+        self.glassless.retain(|k| *k != key);
+        if glassless {
+            self.glassless.push(key);
         }
     }
 

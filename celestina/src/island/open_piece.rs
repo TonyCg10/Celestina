@@ -7,7 +7,9 @@
 //! on the open spring to the next piece of the same capsule, fades out when
 //! the menu closes, and always follows its piece's live rect. A piece's
 //! content goes to the muted opacity while it is open and back to full when
-//! it is left.
+//! it is left. The window of another capsule that is still closing holds its
+//! piece too (CEL-D-013): its pill stays whole where it is, with no slide, and
+//! its content stays muted, until the window gives it back.
 
 use std::time::Instant;
 
@@ -45,6 +47,9 @@ pub struct OpenPiece {
     muted: f32,
     reduced: bool,
     open: Option<Key>,
+    /// The pieces of windows still closing on other capsules, held beside
+    /// the open one until each window's merge.
+    also: Vec<Key>,
     pills: Vec<Pill>,
     /// The content opacity of every piece that is not at full.
     contents: Vec<(Key, Animated)>,
@@ -59,6 +64,7 @@ impl OpenPiece {
             muted: theme.muted_content_opacity,
             reduced,
             open: None,
+            also: Vec::new(),
             pills: Vec::new(),
             contents: Vec::new(),
         }
@@ -128,27 +134,65 @@ impl OpenPiece {
     }
 
     /// The piece and zone a menu is open on from `now`, or `None` when none
-    /// is. `live` gives a piece's rect as the bar has it now.
+    /// is, and the pieces and zones of the windows still closing on other
+    /// capsules, which stay as they are until they are left out of `also`.
+    /// `live` gives a piece's rect as the bar has it now.
     pub fn set(
         &mut self,
         open: Option<(Key, usize)>,
+        also: &[(Key, usize)],
         now: Instant,
         live: &dyn Fn(Key) -> Option<Rect>,
     ) {
         let policy = self.policy();
         let duration = Motion::Exit.duration(&self.ladder);
-        let Some((piece, zone)) = open else {
-            for pill in &mut self.pills {
-                pill.alpha.animate_to(0.0, duration, EXIT, now, policy);
-            }
-            if let Some(old) = self.open.take() {
-                self.content_to(old, 1.0, now);
-            }
-            return;
+        // A held piece of the open one's own zone is no other capsule's: the
+        // open one has that zone's pill.
+        let also: Vec<(Key, usize)> = also
+            .iter()
+            .copied()
+            .filter(|(key, zone)| open.is_none_or(|(k, z)| k != *key && z != *zone))
+            .collect();
+        let was: Vec<Key> = self.open.iter().chain(&self.also).copied().collect();
+        let held_zone = |zone: usize| {
+            open.is_some_and(|(_, z)| z == zone) || also.iter().any(|(_, z)| *z == zone)
         };
-        for pill in self.pills.iter_mut().filter(|p| p.zone != zone) {
+        for pill in self.pills.iter_mut().filter(|p| !held_zone(p.zone)) {
             pill.alpha.animate_to(0.0, duration, EXIT, now, policy);
         }
+        if let Some((piece, zone)) = open {
+            self.set_main(piece, zone, now, live);
+        } else {
+            self.open = None;
+        }
+        for &(key, zone) in &also {
+            self.hold(key, zone);
+        }
+        self.also = also.iter().map(|(key, _)| *key).collect();
+        for key in was {
+            if self.open != Some(key) && !self.also.contains(&key) {
+                self.content_to(key, 1.0, now);
+            }
+        }
+        if let Some(piece) = self.open {
+            self.content_to(piece, self.muted, now);
+        }
+        for key in self.also.clone() {
+            self.content_to(key, self.muted, now);
+        }
+    }
+
+    /// The pill of the open piece: lit, or slid or faded to where it is.
+    fn set_main(
+        &mut self,
+        piece: Key,
+        zone: usize,
+        now: Instant,
+        live: &dyn Fn(Key) -> Option<Rect>,
+    ) {
+        let policy = self.policy();
+        let duration = Motion::Exit.duration(&self.ladder);
+        self.open = Some(piece);
         if let Some(i) = self.pills.iter().position(|p| p.zone == zone) {
             let pill = self.pills[i];
             if pill.piece != piece && pill.alpha.target() <= 0.0 {
@@ -160,7 +204,6 @@ impl OpenPiece {
                     alpha: Animated::new(1.0),
                     slide: None,
                 };
-                self.finish_set(piece, now);
                 return;
             }
             let slide = if pill.piece == piece || self.reduced {
@@ -175,29 +218,42 @@ impl OpenPiece {
         } else {
             // A fresh pill shows at once: it takes over the hover the press
             // already showed, so the piece is never left without a fill.
-            let alpha = Animated::new(1.0);
             self.pills.push(Pill {
                 zone,
                 piece,
-                alpha,
+                alpha: Animated::new(1.0),
                 slide: None,
             });
         }
-        self.finish_set(piece, now);
     }
 
-    /// The content clocks of a menu open on `piece`.
-    fn finish_set(&mut self, piece: Key, now: Instant) {
-        if let Some(old) = self.open.replace(piece).filter(|k| *k != piece) {
-            self.content_to(old, 1.0, now);
+    /// The pill of a held piece: whole and where it is, with no new slide (a
+    /// slide it already runs ends by itself). A pill of another piece, or one
+    /// that is fading out, gives way to a whole one.
+    fn hold(&mut self, piece: Key, zone: usize) {
+        match self.pills.iter().position(|p| p.zone == zone) {
+            Some(i) if self.pills[i].piece == piece && self.pills[i].alpha.target() > 0.0 => {}
+            Some(i) => {
+                self.pills[i] = Pill {
+                    zone,
+                    piece,
+                    alpha: Animated::new(1.0),
+                    slide: None,
+                };
+            }
+            None => self.pills.push(Pill {
+                zone,
+                piece,
+                alpha: Animated::new(1.0),
+                slide: None,
+            }),
         }
-        self.content_to(piece, self.muted, now);
     }
 
-    /// Drops every pill at once, with no fade: the piece's own hover fill
-    /// takes over.
+    /// Drops every pill that is fading out at once, with no fade: the piece's
+    /// own hover fill takes over.
     pub fn cut_pills(&mut self) {
-        for pill in &mut self.pills {
+        for pill in self.pills.iter_mut().filter(|p| p.alpha.target() <= 0.0) {
             pill.alpha.set(0.0);
         }
     }
@@ -206,6 +262,19 @@ impl OpenPiece {
     #[must_use]
     pub fn open(&self) -> Option<Key> {
         self.open
+    }
+
+    /// The pieces of windows still closing on other capsules, held beside
+    /// the open one.
+    pub fn also(&self) -> impl Iterator<Item = Key> + '_ {
+        self.also.iter().copied()
+    }
+
+    /// Whether `key` is held: the open piece, or the piece of a window still
+    /// closing on another capsule.
+    #[must_use]
+    pub fn holds(&self, key: Key) -> bool {
+        self.open == Some(key) || self.also.contains(&key)
     }
 
     /// The pills to paint at `now`, at most one per zone. A pill that has
@@ -258,6 +327,7 @@ impl OpenPiece {
         if self.open.is_some_and(|k| !holds(k)) {
             self.open = None;
         }
+        self.also.retain(|k| holds(*k));
     }
 
     /// Whether a clock is running and the bar needs a frame.
@@ -340,7 +410,7 @@ mod tests {
     fn opening_shows_the_pill_at_once_and_mutes_the_content_in_200_ms() {
         let t0 = Instant::now();
         let mut op = model(false);
-        op.set(Some((a(), 3)), t0, &live);
+        op.set(Some((a(), 3)), &[], t0, &live);
         assert_eq!(op.open(), Some(a()));
         for n in [0, 75, 150] {
             assert!(near(one(&op, at(t0, n)).alpha, 1.0));
@@ -362,10 +432,10 @@ mod tests {
     fn a_switch_in_the_capsule_slides_the_pill_on_the_spring() {
         let t0 = Instant::now();
         let mut op = model(false);
-        op.set(Some((a(), 3)), t0, &live);
+        op.set(Some((a(), 3)), &[], t0, &live);
         let t1 = at(t0, 1000);
         op.settle(t1, &|_| true);
-        op.set(Some((b(), 3)), t1, &live);
+        op.set(Some((b(), 3)), &[], t1, &live);
         let want = lerp_rect(RA, RB, Easing::OutBack(1.15).eval(0.5));
         assert!(near_rect(one(&op, at(t1, 175)).rect, want));
         assert!(near_rect(one(&op, at(t1, 350)).rect, RB));
@@ -381,7 +451,7 @@ mod tests {
         assert!(!op.is_animating(at(t1, 350)));
         // A request for the piece already open slides nothing.
         op.settle(at(t1, 400), &|_| true);
-        op.set(Some((b(), 3)), at(t1, 400), &live);
+        op.set(Some((b(), 3)), &[], at(t1, 400), &live);
         assert!(!op.is_animating(at(t1, 400)));
         assert_eq!(one(&op, at(t1, 400)).rect, RB);
     }
@@ -403,10 +473,10 @@ mod tests {
             })
         };
         let mut op = model(false);
-        op.set(Some((a(), 3)), t0, &moving);
+        op.set(Some((a(), 3)), &[], t0, &moving);
         let t1 = at(t0, 1000);
         op.settle(t1, &|_| true);
-        op.set(Some((b(), 3)), t1, &moving);
+        op.set(Some((b(), 3)), &[], t1, &moving);
         width.set(70.0);
         let end = op.pills(at(t1, 350), &moving);
         assert_eq!(end.len(), 1);
@@ -425,10 +495,10 @@ mod tests {
     fn another_capsule_fades_the_old_pill_and_shows_a_new_one() {
         let t0 = Instant::now();
         let mut op = model(false);
-        op.set(Some((a(), 3)), t0, &live);
+        op.set(Some((a(), 3)), &[], t0, &live);
         let t1 = at(t0, 1000);
         op.settle(t1, &|_| true);
-        op.set(Some((c(), 0)), t1, &live);
+        op.set(Some((c(), 0)), &[], t1, &live);
         let pills = op.pills(at(t1, 75), &live);
         assert_eq!(pills.len(), 2, "{pills:?}");
         let old = pills.iter().find(|p| p.zone == 3).copied();
@@ -452,10 +522,10 @@ mod tests {
     fn closing_fades_the_pill_in_150_ms_and_restores_the_content() {
         let t0 = Instant::now();
         let mut op = model(false);
-        op.set(Some((a(), 3)), t0, &live);
+        op.set(Some((a(), 3)), &[], t0, &live);
         let t1 = at(t0, 1000);
         op.settle(t1, &|_| true);
-        op.set(None, t1, &live);
+        op.set(None, &[], t1, &live);
         assert_eq!(op.open(), None);
         assert!(near(one(&op, at(t1, 75)).alpha, 1.0 - EXIT.eval(0.5)));
         assert!(op.pills(at(t1, 150), &live).is_empty());
@@ -473,15 +543,15 @@ mod tests {
     fn reopening_during_the_fade_out_turns_back_from_where_it_is() {
         let t0 = Instant::now();
         let mut op = model(false);
-        op.set(Some((a(), 3)), t0, &live);
+        op.set(Some((a(), 3)), &[], t0, &live);
         let t1 = at(t0, 1000);
         op.settle(t1, &|_| true);
-        op.set(None, t1, &live);
+        op.set(None, &[], t1, &live);
         let turn = at(t1, 50);
         let before = one(&op, turn).alpha;
         let content_before = op.content(a(), turn).unwrap_or(-1.0);
         assert!(before < 1.0 && before > 0.0);
-        op.set(Some((a(), 3)), turn, &live);
+        op.set(Some((a(), 3)), &[], turn, &live);
         assert!(near(one(&op, turn).alpha, before));
         assert!(near(op.content(a(), turn).unwrap_or(-1.0), content_before));
         assert!(one(&op, at(t1, 100)).alpha > before);
@@ -496,7 +566,7 @@ mod tests {
     fn a_vanished_piece_drops_its_pill_and_opacity() {
         let t0 = Instant::now();
         let mut op = model(false);
-        op.set(Some((a(), 3)), t0, &live);
+        op.set(Some((a(), 3)), &[], t0, &live);
         let now = at(t0, 50);
         assert!(op.is_animating(now));
         op.settle(now, &|k| k != a());
@@ -506,7 +576,7 @@ mod tests {
         assert_eq!(op.open(), None);
         // A pill whose piece has no live rect is not painted, held or not.
         let mut op = model(false);
-        op.set(Some((a(), 3)), t0, &live);
+        op.set(Some((a(), 3)), &[], t0, &live);
         assert!(op.pills(at(t0, 200), &|_| None).is_empty());
     }
 
@@ -514,21 +584,21 @@ mod tests {
     fn reduced_motion_lights_slides_and_restores_at_once() {
         let t0 = Instant::now();
         let mut op = model(true);
-        op.set(Some((a(), 3)), t0, &live);
+        op.set(Some((a(), 3)), &[], t0, &live);
         assert!(near(one(&op, t0).alpha, 1.0));
         assert_eq!(op.content(a(), t0), Some(0.8));
         assert!(!op.is_animating(t0));
-        op.set(Some((b(), 3)), t0, &live);
+        op.set(Some((b(), 3)), &[], t0, &live);
         let look = one(&op, t0);
         assert_eq!((look.piece, look.rect), (b(), RB));
         assert_eq!(op.content(a(), t0).unwrap_or(1.0), 1.0);
         assert_eq!(op.content(b(), t0), Some(0.8));
         assert!(!op.is_animating(t0));
-        op.set(Some((c(), 0)), t0, &live);
+        op.set(Some((c(), 0)), &[], t0, &live);
         op.settle(t0, &|_| true);
         let look = one(&op, t0);
         assert_eq!((look.zone, look.piece), (0, c()));
-        op.set(None, t0, &live);
+        op.set(None, &[], t0, &live);
         op.settle(t0, &|_| true);
         assert!(op.pills(t0, &live).is_empty());
         assert_eq!(op.content(c(), t0), None);
@@ -539,7 +609,7 @@ mod tests {
     fn turning_reduced_motion_on_ends_the_running_clocks() {
         let t0 = Instant::now();
         let mut op = model(false);
-        op.set(Some((a(), 3)), t0, &live);
+        op.set(Some((a(), 3)), &[], t0, &live);
         op.set_reduced(true);
         assert!(!op.is_animating(at(t0, 10)));
         assert!(near(one(&op, at(t0, 10)).alpha, 1.0));
@@ -550,18 +620,18 @@ mod tests {
     fn a_pill_fading_out_is_not_reused_for_another_piece() {
         let t0 = Instant::now();
         let mut op = model(false);
-        op.set(Some((a(), 3)), t0, &live);
-        op.set(None, at(t0, 300), &live);
+        op.set(Some((a(), 3)), &[], t0, &live);
+        op.set(None, &[], at(t0, 300), &live);
         // Another piece of the same capsule, 50 ms into the fade-out.
-        op.set(Some((b(), 3)), at(t0, 350), &live);
+        op.set(Some((b(), 3)), &[], at(t0, 350), &live);
         let look = one(&op, at(t0, 350));
         assert_eq!((look.piece, look.rect), (b(), RB), "no slide from a");
         assert!(near(look.alpha, 1.0), "{}", look.alpha);
         // Another capsule: the old pill keeps fading, the new one is whole.
         let mut op = model(false);
-        op.set(Some((a(), 3)), t0, &live);
-        op.set(None, at(t0, 300), &live);
-        op.set(Some((c(), 0)), at(t0, 350), &live);
+        op.set(Some((a(), 3)), &[], t0, &live);
+        op.set(None, &[], at(t0, 300), &live);
+        op.set(Some((c(), 0)), &[], at(t0, 350), &live);
         let pills = op.pills(at(t0, 350), &live);
         let new = pills.iter().find(|p| p.zone == 0).map(|p| p.alpha);
         assert!(new.is_some_and(|a| near(a, 1.0)), "{pills:?}");
@@ -571,10 +641,101 @@ mod tests {
     fn cutting_the_pills_drops_them_at_once() {
         let t0 = Instant::now();
         let mut op = model(false);
-        op.set(Some((a(), 3)), t0, &live);
-        op.set(None, at(t0, 300), &live);
+        op.set(Some((a(), 3)), &[], t0, &live);
+        op.set(None, &[], at(t0, 300), &live);
         assert!(!op.pills(at(t0, 310), &live).is_empty());
         op.cut_pills();
         assert!(op.pills(at(t0, 310), &live).is_empty());
+    }
+
+    fn pill_of_zone(op: &OpenPiece, zone: usize, now: Instant) -> Option<PillLook> {
+        op.pills(now, &live).into_iter().find(|p| p.zone == zone)
+    }
+
+    #[test]
+    fn a_held_piece_keeps_its_pill_whole_and_its_content_muted_until_released() {
+        let t0 = Instant::now();
+        let mut op = model(false);
+        op.set(Some((a(), 3)), &[], t0, &live);
+        let t1 = at(t0, 1000);
+        op.settle(t1, &|_| true);
+        // A menu opens on another capsule while a's window still closes.
+        op.set(Some((c(), 0)), &[(a(), 3)], t1, &live);
+        assert_eq!(op.open(), Some(c()));
+        assert!(op.holds(a()) && op.holds(c()) && !op.holds(b()));
+        for n in [0, 75, 150, 300, 319] {
+            let now = at(t1, n);
+            let old = pill_of_zone(&op, 3, now).expect("a's pill");
+            assert_eq!((old.piece, old.rect), (a(), RA), "+{n} ms");
+            assert!(near(old.alpha, 1.0), "+{n} ms: {}", old.alpha);
+            assert!(near(op.content(a(), now).unwrap_or(-1.0), 0.8), "+{n} ms");
+            let new = pill_of_zone(&op, 0, now).expect("c's pill");
+            assert!(near(new.alpha, 1.0) && new.piece == c());
+        }
+        // Released at its merge: the existing 150 ms fade and 200 ms return.
+        let t2 = at(t1, 320);
+        op.set(Some((c(), 0)), &[], t2, &live);
+        assert!(!op.holds(a()));
+        assert!(near(
+            pill_of_zone(&op, 3, at(t2, 75)).map_or(-1.0, |p| p.alpha),
+            1.0 - EXIT.eval(0.5)
+        ));
+        assert!(pill_of_zone(&op, 3, at(t2, 150)).is_none());
+        let mid = op.content(a(), at(t2, 100)).unwrap_or(-1.0);
+        assert!(near(mid, 0.8 + 0.2 * ONE_UI.eval(0.5)), "{mid}");
+        assert!(near(op.content(a(), at(t2, 200)).unwrap_or(-1.0), 1.0));
+        // The open one is untouched throughout.
+        assert!(near(op.content(c(), at(t2, 200)).unwrap_or(-1.0), 0.8));
+    }
+
+    #[test]
+    fn a_held_piece_gives_back_at_once_under_reduced_motion() {
+        let t0 = Instant::now();
+        let mut op = model(true);
+        op.set(Some((a(), 3)), &[], t0, &live);
+        op.set(Some((c(), 0)), &[(a(), 3)], t0, &live);
+        assert!(pill_of_zone(&op, 3, t0).is_some());
+        assert_eq!(op.content(a(), t0), Some(0.8));
+        op.set(Some((c(), 0)), &[], t0, &live);
+        op.settle(t0, &|_| true);
+        assert!(pill_of_zone(&op, 3, t0).is_none());
+        assert_eq!(op.content(a(), t0), None);
+        assert!(!op.is_animating(t0));
+    }
+
+    #[test]
+    fn a_held_piece_never_slides_and_never_takes_the_open_ones_zone() {
+        let t0 = Instant::now();
+        let mut op = model(false);
+        op.set(Some((a(), 3)), &[], t0, &live);
+        let t1 = at(t0, 1000);
+        op.settle(t1, &|_| true);
+        // b is on a's zone: a held piece of the open one's own zone is
+        // ignored, so the open piece's slide is the pill's only motion.
+        op.set(Some((b(), 3)), &[(a(), 3)], t1, &live);
+        let looks = op.pills(at(t1, 175), &live);
+        assert_eq!(looks.len(), 1, "{looks:?}");
+        assert_eq!(looks[0].piece, b());
+        assert!(!op.holds(a()));
+        // A held pill that shows for the first time is whole at once, where
+        // its piece is.
+        let mut op = model(false);
+        op.set(Some((c(), 0)), &[(a(), 3)], t0, &live);
+        let old = pill_of_zone(&op, 3, t0).expect("a held pill");
+        assert_eq!((old.piece, old.rect), (a(), RA));
+        assert!(near(old.alpha, 1.0));
+    }
+
+    #[test]
+    fn cutting_the_pills_leaves_the_held_ones() {
+        let t0 = Instant::now();
+        let mut op = model(false);
+        op.set(Some((a(), 3)), &[], t0, &live);
+        op.set(Some((c(), 0)), &[(a(), 3)], at(t0, 400), &live);
+        op.set(None, &[(a(), 3)], at(t0, 500), &live);
+        op.cut_pills();
+        let now = at(t0, 510);
+        assert!(pill_of_zone(&op, 0, now).is_none(), "the fading one is cut");
+        assert!(pill_of_zone(&op, 3, now).is_some(), "the held one stays");
     }
 }

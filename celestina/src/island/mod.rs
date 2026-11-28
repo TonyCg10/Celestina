@@ -32,7 +32,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use celestina_paint::{Painter, PixmapId, Rect, TextStyle, Theme};
+use celestina_paint::{slices_of_path, Painter, PixmapId, Rect, TextStyle, Theme};
 use celestina_shell::{
     connectivity::Action, glance::Today, notifications::Notification, phone::PhoneState,
     settings::BarLayout,
@@ -75,7 +75,7 @@ use pages::{
     tray::{self as tray_page, IconCache, Pixmaps, TrayList, TrayRow},
     HistoryRow, NameOwner, PageCx,
 };
-use state::{IslandState, STRIP_W};
+use state::{IslandState, SILHOUETTE_STEP, STRIP_W};
 use workspaces::{rows_for, Row};
 
 /// What the Island asks the app to do: talk to the compositor, open a menu.
@@ -1364,6 +1364,12 @@ impl Island {
         }
         let (surface_w, island_w) = (self.size.0, self.state.rect(now, self.size.0).w);
         let open = self.sheets.held_piece(now);
+        let also: Vec<Key> = self
+            .sheets
+            .held_pieces(now)
+            .into_iter()
+            .filter(|k| Some(*k) != open)
+            .collect();
         let overflow = self.sheets.kind() == Some(SheetKind::TrayOverflow)
             && self.sheets.piece() == Some(pieces::tray::chevron_key());
         if overflow != self.overflow_shown {
@@ -1371,7 +1377,7 @@ impl Island {
             self.invalidate_bar();
         }
         let fault = self.with_bar(|bar, cx| {
-            bar.set_open(open, now);
+            bar.set_open(open, &also, now);
             bar.update(cx, surface_w, island_w, now, lay);
             bar.take_fault()
         });
@@ -1381,27 +1387,35 @@ impl Island {
     }
 
     /// The painted silhouettes at `now`: each of the bar's capsules, then
-    /// the Island's rect.
+    /// the Island's rect. A menu window's glass is no silhouette here: its
+    /// bands come from its path ([`Island::blur_bands`]).
     fn shapes(&self, now: Instant) -> Vec<Shape> {
         let radius = self.theme.radius_lg;
         let mut shapes = self
             .bar
             .as_ref()
             .map_or_else(Vec::new, |bar| bar.shapes(now, radius));
-        shapes.extend(self.sheet_windows(now));
         if self.paints_capsule(now) {
             shapes.push((self.state.rect(now, self.size.0), radius));
         }
         shapes
     }
 
-    /// The bar's capsules, then the Haze at the Island's rect, then the
-    /// capsule and the page, each under its opacity and clipped to that
-    /// rect.
+    /// The glass of the menu windows and of the capsules they hang from,
+    /// each path under its opacity; then the bar's capsules (without the
+    /// glass those paths hold), the Haze at the Island's rect, the capsule
+    /// and the page, each under its opacity and clipped to that rect; last
+    /// the windows' bodies.
     fn paint(&mut self, painter: &mut Painter, now: Instant, blur_available: bool) {
         let rect = self.state.rect(now, self.size.0);
         let radius = self.theme.radius_lg;
         painter.begin(self.size, self.dpr, blur_available);
+        for glass in self.prepare_glass(now) {
+            painter.push_state();
+            painter.opacity(glass.opacity);
+            painter.haze_path(&glass.path);
+            painter.pop_state();
+        }
         if let Some(bar) = self.bar.as_mut() {
             bar.paint(painter, now);
         }
@@ -1427,6 +1441,35 @@ impl Island {
         painter.end();
     }
 
+    /// The blur region at `now`: the bands of the capsules and of the
+    /// Island's rect, and the bands of every glass path (a window, its drop,
+    /// its neck and the capsule they hang from, CEL-D-013). A capsule joined
+    /// to a path is left out of the first set, for its path holds it: the
+    /// region would cover it twice and spend rects on the bound. Every frame
+    /// covers every pixel the glass paints. The one exception is a window
+    /// whose glass fades under reduced motion: below
+    /// [`sheets::BLUR_REGION_MIN_GLASS`] it is out of the region.
+    pub(super) fn blur_bands(&self, now: Instant) -> Vec<Rect> {
+        let paths = self.glass_paths(now);
+        let joined: Vec<usize> = paths.iter().filter_map(|p| p.joined).collect();
+        let radius = self.theme.radius_lg;
+        let mut shapes = self
+            .bar
+            .as_ref()
+            .map_or_else(Vec::new, |bar| bar.shapes_without(now, radius, &joined));
+        if self.paints_capsule(now) {
+            shapes.push((self.state.rect(now, self.size.0), radius));
+        }
+        let mut bands = silhouette::union(&shapes);
+        for p in &paths {
+            if p.joined.is_none() && p.opacity < sheets::BLUR_REGION_MIN_GLASS {
+                continue;
+            }
+            bands.extend(slices_of_path(&p.path, SILHOUETTE_STEP));
+        }
+        bands
+    }
+
     /// Blur and input regions plus keyboard interactivity for `now`: the
     /// blur follows the painted silhouettes every frame (the Island's, and
     /// the bar's capsules while the bar is on); the input region is those
@@ -1440,7 +1483,7 @@ impl Island {
     fn sync_ctl(&self, ctl: &mut SurfaceCtl<'_>, now: Instant) {
         let shapes = self.shapes(now);
         let open = self.anything_shown(now);
-        ctl.set_blur_region(&silhouette::union(&shapes));
+        ctl.set_blur_region(&self.blur_bands(now));
         ctl.set_input_region(&silhouette::input_region(&shapes, open, self.size));
         ctl.set_keyboard_interactivity(self.keyboard_interactivity(now));
     }
@@ -3170,7 +3213,7 @@ mod tests {
         );
         // The piece asking again closes it (the piece itself is out of the
         // row while its sheet is open).
-        let later = t0 + ms(400);
+        let later = t0 + ms(500);
         assert_eq!(
             island.sheet_request(
                 session,
@@ -3189,7 +3232,7 @@ mod tests {
         let at = centre(bar_rect(&island, Key::named("workspaces")));
         assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
         step(&mut island, t0);
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         step(&mut island, t);
         (island, t)
     }
@@ -3263,7 +3306,7 @@ mod tests {
             None
         );
         step(&mut island, t0);
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         step(&mut island, t);
         assert_eq!(
             island.sheets.kind(),
@@ -3387,7 +3430,7 @@ mod tests {
             .is_some());
         assert!(island.sheets.is_open());
         // The height follows on the resize motion.
-        let settle = t + ms(400);
+        let settle = t + ms(500);
         step(&mut island, settle);
         assert!(
             (shown_rect(&island, settle).h
@@ -3410,7 +3453,7 @@ mod tests {
         let at = centre(bar_rect(&island, session));
         assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
         step(&mut island, t0);
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         step(&mut island, t);
         (island, t)
     }
@@ -3529,7 +3572,7 @@ mod tests {
         assert!(click_at(&mut island, bell, BTN_LEFT, t0).is_empty());
         assert!(!island.state.is_open(), "one thing at a time");
         assert!(island.sheets.has_queued());
-        let t1 = t0 + ms(400);
+        let t1 = t0 + ms(500);
         step(&mut island, t1);
         assert_eq!(island.sheets.page(), Some(PageId::NOTIFICATIONS));
         // The wheel on the tray icon scrolls and keeps the sheet.
@@ -3550,7 +3593,7 @@ mod tests {
         );
         assert!(!island.sheets.is_open());
         // A right click on the icon asks for its menu and closes the page.
-        let t2 = t1 + ms(400);
+        let t2 = t1 + ms(500);
         step(&mut island, t2);
         island.open(PageId::ACTIVITY, t2);
         let actions = click_at(&mut island, icon, BTN_RIGHT, t2);
@@ -5664,7 +5707,7 @@ mod tests {
     fn settled() -> (Island, Instant) {
         let (mut island, t0) = level_island();
         assert!(open_on(&mut island, volume(), t0));
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         step(&mut island, t);
         (island, t)
     }
@@ -5717,7 +5760,7 @@ mod tests {
         );
         assert!(island.level_sheet_open());
         // The piece asking again closes it (it stays in its row, under the pill).
-        let later = t0 + ms(400);
+        let later = t0 + ms(500);
         assert_eq!(
             island.sheet_request(
                 brightness_key(),
@@ -5734,7 +5777,7 @@ mod tests {
     fn switching_the_volume_sheet_to_the_brightness_sheet_morphs_in_place() {
         let (mut island, t0) = level_island();
         assert!(open_on(&mut island, volume(), t0));
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         step(&mut island, t);
         let core = brightness_core(&island.theme);
         assert!(island.open_level_sheet_at(brightness_key(), core, t));
@@ -5772,7 +5815,13 @@ mod tests {
         let end = end_capsule(&island);
         let piece = bar_rect(&island, volume());
         assert!(open_on(&mut island, volume(), t0));
-        assert!(near(shown_rect(&island, t0), piece), "starts at the pill");
+        // The drop starts as a bulb on the capsule's edge, under its piece.
+        let start = shown_rect(&island, t0);
+        assert!(
+            (start.x + start.w / 2.0 - (piece.x + piece.w / 2.0)).abs() < 0.01
+                && start.w <= piece.w,
+            "starts under the pill: {start:?}"
+        );
         let body = volume_core(&island.theme).size();
         assert_eq!(
             body,
@@ -5783,7 +5832,7 @@ mod tests {
                 Default::default()
             )
         );
-        let settle = t0 + ms(350);
+        let settle = t0 + ms(460);
         step(&mut island, settle);
         let target = geometry::window(end, geometry::Edge::End, body, island.size);
         assert!(
@@ -5793,7 +5842,7 @@ mod tests {
         );
         assert_eq!(target.w, SHEET_W);
         // Midway it is between the two.
-        let mid = shown_rect(&island, t0 + ms(120));
+        let mid = shown_rect(&island, t0 + ms(300));
         assert!(mid.h > piece.h && mid.h <= target.h * 1.2);
         assert_eq!(target.y, geometry::WINDOW_TOP);
         assert_eq!(target.x + target.w, end.x + end.w, "the right edges agree");
@@ -5837,7 +5886,7 @@ mod tests {
         ];
         let before = start_zone(&island);
         assert!(open_on(&mut island, bell, t0));
-        let settle = t0 + ms(400);
+        let settle = t0 + ms(500);
         run_frames(&mut island, t0, settle);
         // The bell stays in its capsule: the capsule keeps its extent.
         let start = start_zone(&island);
@@ -5865,7 +5914,7 @@ mod tests {
         // sheet to its own list.
         let (mut island, t0) = wide_start_island();
         assert!(open_on(&mut island, bell, t0));
-        let settle = t0 + ms(400);
+        let settle = t0 + ms(500);
         step(&mut island, settle);
         let sheet = shown_rect(&island, settle);
         let near = centre(bar_rect(&island, Key::indexed("dot", 30)));
@@ -5889,7 +5938,7 @@ mod tests {
         let (mut island, t0) = wide_start_island();
         assert!(open_on(&mut island, Key::named("bell"), t0));
         let mut widths = Vec::new();
-        for t in [0, 16, 60, 120, 175, 250, 349, 400] {
+        for t in [0, 16, 60, 120, 175, 250, 349, 400, 460] {
             let now = t0 + ms(t);
             step(&mut island, now);
             let extent = zone(island.bar.as_ref().and_then(|b| b.capsule_extent(0, now)));
@@ -5900,12 +5949,19 @@ mod tests {
                 1,
                 "+{t} ms: the capsule keeps its glass"
             );
-            assert_eq!(
-                shapes.iter().filter(|s| s.0 == sheet).count(),
-                1,
-                "+{t} ms: the window has its own"
-            );
-            if t >= 400 {
+            // The window is no shape: its glass is a path, and the region
+            // holds its bands from 52 % of the open.
+            assert_eq!(shapes.iter().filter(|s| s.0 == sheet).count(), 0);
+            if t >= 250 {
+                let bands = island.blur_bands(now);
+                assert!(
+                    bands
+                        .iter()
+                        .any(|b| b.contains(sheet.x + sheet.w / 2.0, sheet.y + sheet.h / 2.0)),
+                    "+{t} ms: the window's bands"
+                );
+            }
+            if t >= 460 {
                 assert!((sheet.x - extent.x).abs() < 0.01, "{sheet:?} vs {extent:?}");
                 assert_eq!(sheet.y, geometry::WINDOW_TOP);
             }
@@ -5919,13 +5975,19 @@ mod tests {
         // capsule does meanwhile.
         let (mut island, t0) = level_island();
         assert!(open_on(&mut island, volume(), t0));
-        for t in [0, 16, 60, 120, 175, 250, 349, 400] {
+        for t in [0, 16, 60, 120, 175, 250, 349, 400, 460] {
             let now = t0 + ms(t);
             step(&mut island, now);
             let extent = zone(island.bar.as_ref().and_then(|b| b.capsule_extent(3, now)));
-            assert!(island.shapes(now).iter().any(|s| s.0 == extent), "+{t} ms");
+            assert!(
+                island
+                    .blur_bands(now)
+                    .iter()
+                    .any(|b| b.contains(extent.x + extent.w / 2.0, extent.y + extent.h / 2.0)),
+                "+{t} ms"
+            );
         }
-        let end = t0 + ms(400);
+        let end = t0 + ms(500);
         let extent = zone(island.bar.as_ref().and_then(|b| b.capsule_extent(3, end)));
         let sheet = shown_rect(&island, end);
         assert!((sheet.x + sheet.w - (extent.x + extent.w)).abs() < 0.01);
@@ -5971,7 +6033,7 @@ mod tests {
                 .iter()
                 .all(|s| [s.0.x, s.0.y, s.0.w, s.0.h].iter().all(|v| v.is_finite())));
         }
-        let now = t0 + ms(400);
+        let now = t0 + ms(500);
         // The capsule keeps its width: the piece stays in it.
         let extent = zone(island.bar.as_ref().and_then(|b| b.capsule_extent(0, now)));
         assert_eq!(Some(extent), start_before);
@@ -6027,8 +6089,8 @@ mod tests {
         );
         assert!(!island.sheets.is_open(), "closing");
         assert!(island.sheets.is_shown(t0 + ms(10)), "still painted");
-        step(&mut island, t0 + ms(260));
-        assert!(island.sheet_rect(t0 + ms(260)).is_none(), "gone");
+        step(&mut island, t0 + ms(400));
+        assert!(island.sheet_rect(t0 + ms(400)).is_none(), "gone");
     }
 
     #[test]
@@ -6105,7 +6167,7 @@ mod tests {
         lay_fake(&mut island, t0);
         let t0 = t0 + Duration::from_secs(1);
         assert!(open_on(&mut island, volume(), t0));
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         step(&mut island, t);
         let sheet = shown_rect(&island, t);
         let capsule = island.state.rect(t, island.size.0);
@@ -6141,10 +6203,10 @@ mod tests {
         assert!(island.sheets.has_queued());
         step(&mut island, t0 + ms(100));
         assert!(!island.state.is_open(), "still closing at +100 ms");
-        step(&mut island, t0 + ms(260));
-        assert!(island.state.is_open(), "the page opens at +260 ms");
+        step(&mut island, t0 + ms(400));
+        assert!(island.state.is_open(), "the page opens at +400 ms");
         assert_eq!(island.page(), Some(PageId::CLOCK), "the clock page");
-        assert!(!island.sheets.is_shown(t0 + ms(260)));
+        assert!(!island.sheets.is_shown(t0 + ms(400)));
     }
 
     #[test]
@@ -6152,7 +6214,7 @@ mod tests {
         let (mut island, t0) = level_island();
         island.open(PageId::ACTIVITY, t0);
         step(&mut island, t0 + ms(400));
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         let at = centre(bar_rect(&island, volume()));
         let asked = click_at(&mut island, at, BTN_LEFT, t);
         assert_eq!(
@@ -6183,8 +6245,8 @@ mod tests {
         let (mut island, t0) = settled();
         assert!(island.command_at(&Verb::IslandClose, t0));
         assert!(!island.sheets.is_open());
-        step(&mut island, t0 + ms(260));
-        assert!(!island.sheets.is_shown(t0 + ms(260)));
+        step(&mut island, t0 + ms(400));
+        assert!(!island.sheets.is_shown(t0 + ms(400)));
 
         let (mut island, t0) = settled();
         assert!(island.command_at(&Verb::IslandToggle, t0));
@@ -6195,7 +6257,7 @@ mod tests {
         assert!(island.command_at(&Verb::IslandOpen(PageId::ACTIVITY), t0));
         assert!(!island.state.is_open(), "the sheet closes first");
         assert!(!island.sheets.is_open());
-        step(&mut island, t0 + ms(260));
+        step(&mut island, t0 + ms(400));
         assert_eq!(island.page(), Some(PageId::ACTIVITY));
         // Toggle with nothing open opens the last page.
         step(&mut island, t0 + ms(800));
@@ -6315,24 +6377,22 @@ mod tests {
         assert!(!island.anything_shown(t0));
         let rest = island.shapes(t0);
         assert!(open_on(&mut island, volume(), t0));
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         step(&mut island, t);
         assert!(island.anything_shown(t), "keyboard OnDemand, whole input");
         let sheet = shown_rect(&island, t);
         let shapes = island.shapes(t);
-        assert!(shapes.contains(&(sheet, radius)), "the window's own shape");
+        assert!(
+            !shapes.contains(&(sheet, radius)),
+            "the window's glass is a path"
+        );
         let extent = zone(island.bar.as_ref().and_then(|b| b.capsule_extent(3, t)));
         assert!(
             shapes.contains(&(extent, radius)),
             "the end capsule keeps its glass"
         );
-        assert_eq!(
-            shapes.iter().filter(|&&(r, _)| r == sheet).count(),
-            1,
-            "one shape for the window"
-        );
         let _ = end;
-        let bands = silhouette::union(&shapes);
+        let bands = island.blur_bands(t);
         // A band covers the window and another the capsule.
         let covered = |x: f32, y: f32| bands.iter().any(|b| b.contains(x, y));
         assert!(covered(sheet.x + sheet.w / 2.0, sheet.y + sheet.h / 2.0));
@@ -6353,7 +6413,7 @@ mod tests {
         );
         // Closed again: today's regions.
         island.close_sheet(t);
-        let gone = t + ms(260);
+        let gone = t + ms(400);
         step(&mut island, gone);
         assert!(!island.anything_shown(gone));
         // The piece gives back its pill and the capsule keeps its extent.
@@ -6394,7 +6454,7 @@ mod tests {
         let sent = Rc::new(RefCell::new(Vec::new()));
         let core = sent_core_with(&island.theme, &sent, busy_graph(), true);
         assert!(island.open_level_sheet_at(volume(), core, t0));
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         step(&mut island, t);
         let sheet = shown_rect(&island, t);
         assert!(
@@ -6489,9 +6549,9 @@ mod tests {
         // It flies to the last capsule rect it had and is gone.
         let r = shown_rect(&island, t + ms(75));
         assert!(r.w > 0.0);
-        step(&mut island, t + ms(260));
-        assert!(island.sheet_rect(t + ms(260)).is_none());
-        assert!(!island.sheets.is_shown(t + ms(260)));
+        step(&mut island, t + ms(400));
+        assert!(island.sheet_rect(t + ms(400)).is_none());
+        assert!(!island.sheets.is_shown(t + ms(400)));
     }
 
     #[test]
@@ -6509,7 +6569,7 @@ mod tests {
         step(&mut island, t);
         let wider = end_capsule(&island);
         assert!(wider.w >= capsule.w);
-        let settle = t + ms(400);
+        let settle = t + ms(500);
         step(&mut island, settle);
         let body = volume_core(&island.theme).size();
         let want = geometry::window(wider, geometry::Edge::End, body, island.size);
@@ -6527,7 +6587,7 @@ mod tests {
             busy_graph(),
         );
         assert!(island.open_level_sheet_at(volume(), core, t0));
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         step(&mut island, t);
         let sheet = shown_rect(&island, t);
         let header = match island
@@ -6578,7 +6638,7 @@ mod tests {
         let sent = Rc::new(RefCell::new(Vec::new()));
         let core = sent_core(&island.theme, &sent, AudioGraph::default());
         assert!(island.open_level_sheet_at(volume(), core, t0));
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         step(&mut island, t);
         let sheet = shown_rect(&island, t);
         let slider = match island.sheets.body_node_rect(crate::osd::popup::slider_key(
@@ -6628,7 +6688,7 @@ mod tests {
         let sent = Rc::new(RefCell::new(Vec::new()));
         let core = sent_core(&island.theme, &sent, AudioGraph::default());
         assert!(island.open_level_sheet_at(volume(), core, t0));
-        let mut t = t0 + ms(400);
+        let mut t = t0 + ms(500);
         step(&mut island, t);
         let output_level = |sent: &Rc<RefCell<Vec<LevelRequest>>>| {
             sent.borrow().iter().rev().find_map(|r| match r {
@@ -6677,7 +6737,7 @@ mod tests {
         let sent = Rc::new(RefCell::new(Vec::new()));
         let core = sent_core(&island.theme, &sent, AudioGraph::default());
         assert!(island.open_level_sheet_at(volume(), core, t0));
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         step(&mut island, t);
         let sheet = shown_rect(&island, t);
         let slider = match island.sheets.body_node_rect(crate::osd::popup::slider_key(
@@ -6730,7 +6790,7 @@ mod tests {
         // The window fades out (nothing flies), and what waited opens once
         // it has.
         assert!(island.sheets.is_shown(t0 + ms(1)), "it still fades");
-        let done = t0 + ms(260);
+        let done = t0 + ms(400);
         step(&mut island, done);
         assert!(!island.sheets.is_shown(done));
         assert!(island.state.is_open(), "the page opens when it has faded");
@@ -6744,9 +6804,9 @@ mod tests {
             assert!(island.sheets.has_queued());
             feed(&mut island, ev, t0 + ms(20));
             assert!(!island.sheets.has_queued());
-            step(&mut island, t0 + ms(300));
+            step(&mut island, t0 + ms(400));
             assert!(!island.state.is_open(), "the page never opened");
-            assert!(!island.sheets.is_shown(t0 + ms(300)));
+            assert!(!island.sheets.is_shown(t0 + ms(400)));
         }
     }
 
@@ -6754,7 +6814,7 @@ mod tests {
     fn the_keyboard_dropping_does_not_drop_the_sheet_that_waits_for_the_page() {
         let (mut island, t0) = level_island();
         island.open(PageId::ACTIVITY, t0);
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         step(&mut island, t);
         let at = centre(bar_rect(&island, volume()));
         assert_eq!(click_at(&mut island, at, BTN_LEFT, t).len(), 1);
@@ -6813,7 +6873,7 @@ mod tests {
         // The newer request wins: the page that waited is given up, so it
         // does not open on its own when that sheet closes.
         assert!(!island.sheets.has_queued(), "the page no longer waits");
-        let later = t + ms(400);
+        let later = t + ms(500);
         island.close_sheet(later);
         step(&mut island, later + ms(1));
         step(&mut island, later + ms(400));
@@ -6822,6 +6882,7 @@ mod tests {
         assert!(!island.anything_open());
     }
 
+    mod drop;
     mod lent;
     mod notice_card;
     mod open_piece;

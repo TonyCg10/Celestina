@@ -1920,6 +1920,9 @@ None has been run and none is closed by an agent.
 - **Note:** since CEL-D-015 a switch inside one capsule is one window that travels,
   not an old window blurring out while a new one grows; that switch step is
   superseded by `VAL-CEL-D-015`
+- **Note:** since CEL-D-013 a menu window closes by gathering into a drop that
+  rises into its capsule, not by blurring and shrinking towards its piece; the
+  close step is superseded by `VAL-CEL-D-013`
 - **Procedure:** open the energy menu and close it by pressing outside it;
   open the system load menu and close it with Escape; with one of them open,
   press another piece of the same capsule (a switch); open and close a menu
@@ -2078,3 +2081,47 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-015](docs/evidence/2026-11-27-cel-d-015-travelling-switch.md)
+
+## VAL-CEL-D-013 — A menu opens and closes as a drop
+
+- **Status:** pending
+- **Related implementation:** CEL-D-013 (a menu window swells out of its piece
+  as a round drop that hangs from the capsule on a thinning thread; the thread
+  breaks, the drop falls a little, rounds off and opens into the window in 460
+  ms, the content sharpening in from a blur; a close gathers the window into a
+  round drop in 400 ms, the drop rises, meets a cone the capsule reaches down,
+  merges and is absorbed, the open pill returning at 320 ms; the capsule, the
+  thread and the window are one glass shape and the blur follows it; with
+  reduced motion there is no drop and the window and its content fade in or out
+  in 150 ms)
+- **Requires:** the deployed shell after the landing of CEL-D-013 and a layout
+  whose end capsule holds network, Bluetooth, volume, brightness, power profile
+  and system load, whose start capsule holds the notifications bell, and which
+  has a tray chevron; niri's blur on; a busy window or wallpaper behind the
+  bar. The shell has one theme (dark), so there is no theme step
+- **Procedure:** (1) open and close the menu of every piece of the end
+  capsule, slowly and at your own pace, and the bell's menu and the tray
+  chevron's window; watch the capsule's edge while a drop hangs from it and
+  after; (2) with a menu open, press another piece of the same capsule during
+  the swell, during the fall and after the window has opened; (3) with a menu
+  open in the end capsule, press the bell; press the end capsule's piece
+  again; (4) press outside to close a menu and press its piece again before
+  the close ends; (5) press a piece and press it again at once, ten times;
+  (6) repeat (1) once with reduced motion on; (7) repeat (1) on each of the
+  three monitors, whatever their scales; (8) leave the shell alone for ten
+  seconds after the last close
+- **Pass condition:** the drop is one round shape that hangs from the capsule,
+  with no seam, no darker band and no doubled tint where it meets the capsule
+  or the thread; the capsule's straight edges keep their thickness with a menu
+  open and with none; the thread breaks, the drop rounds off and opens into the window
+  with the content sharpening in; a close gathers into a drop that rises and
+  is absorbed, leaving the capsule bare; the blur behind the drop, the thread
+  and the window follows their outline, with no blurred rectangle or dark halo
+  around them; a switch during any phase travels from the shape shown, with no
+  thread, tip or drop left behind; a menu on another capsule opens at once
+  while the first one closes, each with its own drop; with reduced motion
+  there is no drop and no neck and the window and its content fade together;
+  the result is the same on every monitor; at rest nothing moves
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-013](docs/evidence/2026-11-27-cel-d-013-drop.md)

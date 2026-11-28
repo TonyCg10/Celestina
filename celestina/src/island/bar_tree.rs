@@ -202,13 +202,18 @@ impl BarTree {
     /// Opens the look of `piece` from `now` (`None` lets the open one go):
     /// the pill lights behind it, or slides or fades to where it is, and its
     /// content goes to the muted opacity. It changes no layout and marks no
-    /// view stale. A piece the bar does not hold is no open piece.
-    pub fn set_open(&mut self, piece: Option<Key>, now: Instant) {
-        let open = piece.and_then(|key| self.zone_of(key).map(|zone| (key, zone)));
+    /// view stale. A piece the bar does not hold is no open piece. `also`
+    /// are the pieces of windows still closing on other capsules: each keeps
+    /// its pill, whole and where it is, and its muted content until it is left
+    /// out (CEL-D-013).
+    pub fn set_open(&mut self, piece: Option<Key>, also: &[Key], now: Instant) {
+        let zoned = |key: Key| self.zone_of(key).map(|zone| (key, zone));
+        let open = piece.and_then(zoned);
+        let also: Vec<(Key, usize)> = also.iter().copied().filter_map(zoned).collect();
         let was = self.open.open();
         let (tree, views) = (&self.tree, &self.views);
         self.open
-            .set(open, now, &|key| pill_in(tree, views, key, now));
+            .set(open, &also, now, &|key| pill_in(tree, views, key, now));
         // The piece the pointer is on gives its pill up at once at the
         // restore moment: its hover fill takes over, so two fills never
         // stack while the pill fades.
@@ -458,14 +463,15 @@ impl BarTree {
             });
             self.tree.set_plate(key, plate);
         }
-        let open = self.open.open();
         let mut keys: Vec<Key> = std::mem::take(&mut self.held);
-        if let Some(key) = open.filter(|k| !keys.contains(k)) {
-            keys.push(key);
+        for key in self.open.open().into_iter().chain(self.open.also()) {
+            if !keys.contains(&key) {
+                keys.push(key);
+            }
         }
         for key in keys {
             let held = self.open.content(key, now).map(|inside| Held {
-                quiet: open == Some(key),
+                quiet: self.open.holds(key),
                 inside,
             });
             self.tree.set_held(key, held);
@@ -473,6 +479,34 @@ impl BarTree {
                 self.held.push(key);
             }
         }
+    }
+
+    /// Takes the glass of the capsules of `zones` out of the painted tree
+    /// and gives it back for the others: a capsule joined to a menu window
+    /// has its glass painted once, in the window's Haze path, under the bar
+    /// (CEL-D-013). Fill, wash, stroke and the pieces are unchanged.
+    pub fn set_joined(&mut self, zones: &[usize]) {
+        for (zone, key) in zone_keys().into_iter().enumerate() {
+            self.tree.set_glassless(key, zones.contains(&zone));
+        }
+    }
+
+    /// The opacity the tree paints zone `zone`'s capsule at `now`: its node's
+    /// own, with its ancestors'. 1 when the zone has no node, so a glass
+    /// joined to a capsule that is gone shows whole.
+    #[must_use]
+    pub fn capsule_opacity(&self, zone: usize, now: Instant) -> f32 {
+        self.zone_node(zone)
+            .map_or(1.0, |id| self.tree.effective_opacity(id, now))
+    }
+
+    /// Whether the painted tree draws zone `zone`'s capsule glass itself
+    /// (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn tree_paints_glass(&self, zone: usize) -> bool {
+        self.zone_node(zone)
+            .is_some_and(|id| self.tree.paints_haze(id))
     }
 
     /// Hands the tree the extents the capsules are painted at `now`.
@@ -648,7 +682,15 @@ impl BarTree {
     /// the haze's corner `radius`: what the blur and input regions cover.
     #[must_use]
     pub fn shapes(&self, now: Instant, radius: f32) -> Vec<Shape> {
+        self.shapes_without(now, radius, &[])
+    }
+
+    /// [`BarTree::shapes`] without the capsules of the zones in `skip`: the
+    /// ones whose glass a Haze path holds, with its own bands.
+    #[must_use]
+    pub fn shapes_without(&self, now: Instant, radius: f32, skip: &[usize]) -> Vec<Shape> {
         (0..zone_keys().len())
+            .filter(|zone| !skip.contains(zone))
             .filter(|&zone| {
                 self.zone_node(zone)
                     .is_some_and(|id| self.tree.effective_opacity(id, now) > 0.0)
@@ -833,6 +875,30 @@ mod tests {
             assert_eq!(Some(painted[0].0), placed);
             assert!(placed
                 .is_some_and(|r| r.w > 0.0 && r.x == crate::bar::layout::edge_margin(cx.theme)));
+        });
+    }
+
+    #[test]
+    fn a_joined_capsule_gives_its_glass_up_and_takes_it_back() {
+        with_cx(|cx| {
+            let t0 = Instant::now();
+            let mut bar = BarTree::new(&only(&["notifications"], &["brightness"]), cx.theme, false);
+            bar.update(cx, 1920.0, 140.0, t0, &mut lay());
+            let zones = [0, 3];
+            assert!(zones.iter().all(|&z| bar.tree_paints_glass(z)));
+            bar.set_joined(&[3]);
+            assert!(bar.tree_paints_glass(0), "only the joined zone");
+            assert!(!bar.tree_paints_glass(3));
+            // Its fill and its pieces are still the tree's: the opacity is
+            // the node's own.
+            assert_eq!(bar.capsule_opacity(3, t0), 1.0);
+            bar.set_joined(&[0]);
+            assert!(!bar.tree_paints_glass(0) && bar.tree_paints_glass(3));
+            bar.set_joined(&[]);
+            assert!(zones.iter().all(|&z| bar.tree_paints_glass(z)));
+            // A zone with no capsule has none to join and shows whole.
+            assert_eq!(bar.capsule_opacity(1, t0), 1.0);
+            assert!(!bar.tree_paints_glass(1));
         });
     }
 

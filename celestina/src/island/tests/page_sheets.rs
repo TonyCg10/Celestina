@@ -40,7 +40,7 @@ fn open_page_sheet(island: &mut Island, page: PageId, t: Instant) -> Instant {
         island.sheet_request(bell(), SheetKind::Page(page), t, &mut fake_measure),
         None
     );
-    let t = t + ms(400);
+    let t = t + ms(500);
     step(island, t);
     t
 }
@@ -289,7 +289,7 @@ fn a_dismissed_menu_closes_the_sheet_and_reopen_grows_it_again() {
         start.w <= capsule.w + 1.0 && start.h <= capsule.h + 1.0,
         "{start:?} grows from {capsule:?}"
     );
-    let later = t + ms(400);
+    let later = t + ms(500);
     step(&mut island, later);
     let natural = island.page_content_size(PageId::NETWORK, t0, &mut fake_measure);
     assert_eq!(
@@ -466,7 +466,7 @@ fn the_phone_sheet_closes_when_the_duty_goes_off() {
     island.phone_duty_off(t);
     assert!(!island.sheets.is_open());
     // The page does not exist without its duty: no sheet opens either.
-    let later = t + ms(400);
+    let later = t + ms(500);
     step(&mut island, later);
     assert_eq!(
         island.sheet_request(
@@ -499,7 +499,7 @@ fn a_piece_asking_for_its_page_again_closes_the_sheet_and_another_switches_it() 
     // A click on the network piece opens its page as a sheet.
     let at = centre(bar_rect(&island, network));
     assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     step(&mut island, t);
     assert_eq!(island.sheets.page(), Some(PageId::NETWORK));
     assert_eq!(island.sheets.piece(), Some(network));
@@ -515,7 +515,7 @@ fn a_piece_asking_for_its_page_again_closes_the_sheet_and_another_switches_it() 
     assert!(!island.sheets.is_leaving());
     // The same piece asking again closes it (it stays in its row while its
     // sheet is open).
-    let t = t + ms(400);
+    let t = t + ms(500);
     step(&mut island, t);
     assert_eq!(
         island.sheet_request(
@@ -578,7 +578,7 @@ fn a_page_sheet_that_waited_for_the_island_page_is_built_again_when_it_opens() {
     let (mut island, t0) = new_island();
     island.set_reduced_motion(true);
     island.open(PageId::ACTIVITY, t0);
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     assert_eq!(
         island.sheet_request(
             bell(),
@@ -683,7 +683,7 @@ fn the_catcher_exists_exactly_while_something_is_shown() {
     // A request that waits keeps it.
     let (mut island, t0) = new_island();
     island.open(PageId::ACTIVITY, t0);
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     assert_eq!(
         island.sheet_request(
             bell(),
@@ -705,7 +705,7 @@ fn a_notifications_sheet_that_opens_from_the_queue_is_seen_when_it_opens() {
     let (mut island, t0) = new_island();
     island.set_reduced_motion(true);
     island.open(PageId::ACTIVITY, t0);
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     assert_eq!(
         island.sheet_request(
             bell(),
@@ -729,7 +729,7 @@ fn a_notifications_sheet_that_opens_from_the_queue_is_seen_when_it_opens() {
 fn a_phone_sheet_that_waits_is_given_up_when_the_duty_goes_off() {
     let (mut island, t0) = new_island();
     island.open(PageId::ACTIVITY, t0);
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     assert_eq!(
         island.sheet_request(bell(), SheetKind::Page(PageId::PHONE), t, &mut fake_measure),
         None
@@ -835,7 +835,7 @@ fn network_open() -> (Island, Instant, Key, Key) {
     lay_fake(&mut island, t0);
     let at = centre(bar_rect(&island, network));
     assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     step(&mut island, t);
     (island, t, network, bluetooth)
 }
@@ -853,7 +853,7 @@ fn the_open_piece_stays_in_its_row_and_the_others_keep_their_hover() {
     let before = bar_rect(&island, network);
     let at = centre(before);
     assert!(click_at(&mut island, at, BTN_LEFT, t0).is_empty());
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     step(&mut island, t);
     assert_eq!(island.sheets.piece(), Some(network));
     let bar = island.bar.as_ref();
@@ -919,17 +919,21 @@ fn after_close_the_piece_lets_go_of_its_pill_and_shows_its_hover_again() {
     let (mut island, t, network, _bluetooth) = network_open();
     island.close_sheet(t);
     assert!(!island.sheets.is_open());
-    // The restore moment is the first frame of the close: the pill fades
-    // out and the content comes back.
+    // The restore moment is the drop's merge, 320 ms into the close: until
+    // then the pill stays and the content stays muted.
     step(&mut island, t + ms(10));
     let bar = island.bar.as_ref();
-    assert_eq!(bar.and_then(|b| b.open_piece()), None);
+    assert_eq!(bar.and_then(|b| b.open_piece()), Some(network));
     assert!(bar.is_some_and(|b| b.content_opacity(network, t + ms(10)) < 1.0));
-    // The pill's 150 ms run from that first frame.
-    let gone = t + ms(160);
+    step(&mut island, t + ms(330));
+    let bar = island.bar.as_ref();
+    assert_eq!(bar.and_then(|b| b.open_piece()), None);
+    assert!(bar.is_some_and(|b| b.content_opacity(network, t + ms(330)) < 1.0));
+    // The pill's 150 ms run from the merge.
+    let gone = t + ms(480);
     step(&mut island, gone);
     assert!(island.bar.as_ref().is_some_and(|b| b.pill(gone).is_empty()));
-    let t = t + ms(400);
+    let t = t + ms(600);
     step(&mut island, t);
     let bar = island.bar.as_ref();
     assert_eq!(bar.map(|b| b.content_opacity(network, t)), Some(1.0));
@@ -1101,14 +1105,14 @@ fn the_level_session_and_workspaces_windows_keep_their_widths() {
     island.set_reduced_motion(true);
     let core = volume_core(&island.theme);
     assert!(island.open_level_sheet_at(volume(), core, t0));
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     step(&mut island, t);
     assert_eq!(shown_rect(&island, t).w, 320.0, "volume");
     let (mut island, t0) = level_island();
     island.set_reduced_motion(true);
     let core = brightness_core(&island.theme);
     assert!(island.open_level_sheet_at(brightness_key(), core, t0));
-    let t = t0 + ms(400);
+    let t = t0 + ms(500);
     step(&mut island, t);
     assert_eq!(shown_rect(&island, t).w, 320.0, "brightness");
     for (piece, kind) in [
@@ -1121,7 +1125,7 @@ fn the_level_session_and_workspaces_windows_keep_their_widths() {
             island.sheet_request(Key::named(piece), kind, t0, &mut fake_measure),
             None
         );
-        let t = t0 + ms(400);
+        let t = t0 + ms(500);
         step(&mut island, t);
         assert_eq!(shown_rect(&island, t).w, 240.0, "{piece}");
     }

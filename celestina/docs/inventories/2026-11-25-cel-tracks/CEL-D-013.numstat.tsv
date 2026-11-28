@@ -1,0 +1,111 @@
+# CEL-D-013 exact change inventory
+
+Base revision	00781a5d53ea735075510acc7c1b0e7319b2624d
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-paint/src/backend.rs
+Pathspec	celestina/crates/celestina-paint/src/lib.rs
+Pathspec	celestina/crates/celestina-paint/src/painter.rs
+Pathspec	celestina/crates/celestina-paint/src/shape.rs
+Pathspec	celestina/crates/celestina-ui/src/paint.rs
+Pathspec	celestina/crates/celestina-ui/src/tree.rs
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/d1/gate-d1-nub-fix.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/d1/gate-d1-preview-vs-nest.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/d1/gate-d1-zoom.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/g1-rejected/gate-g1-preview-vs-nest.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1-ends/sheet-power-close-v3.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1-ends/sheet-power-open-v3.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1-ends/x8-sheet-power-v3.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/bulb-x8.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/ends-x8.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s1-open-energy.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s10-other-capsule-in-fall.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s11-reopen-in-close.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s12-reduced-open.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s13-reduced-close.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s14-open-energy-scale-1.25.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s15-close-energy-scale-1.25.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s16-close-parked-pill.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s2-close-energy.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s3-open-network.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s4-close-network.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s5-switch-in-open.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s6-switch-in-swell.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s7-switch-in-fall.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s8-switch-in-fall-8ms.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s9-other-capsule-in-open.jpg
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-013.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/island/bar_tree.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/open_piece.rs
+Pathspec	celestina/src/island/sheets.rs
+Pathspec	celestina/src/island/tests/drop.rs
+Pathspec	celestina/src/island/tests/open_piece.rs
+Pathspec	celestina/src/island/tests/page_sheets.rs
+Pathspec	celestina/src/island/tests/tray_overflow.rs
+Pathspec	celestina/src/island/tests/window.rs
+Pathspec	celestina/src/sheet/drop.rs
+Pathspec	celestina/src/sheet/geometry.rs
+Pathspec	celestina/src/sheet/liquid.rs
+Pathspec	celestina/src/sheet/mod.rs
+Pathspec	celestina/src/sheet/motion.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	c8bc36720f5eb41fde28007303d7257c69e775d08b601a2563e7cf9ceac23b91	celestina/Cargo.lock
+1	1	4f72bf910618de1a1ed895f61985ecdfb6b0653cfcfe0a45db18a5092a9b04c5	celestina/Cargo.toml
+47	0	4e8315bca2c63fc53a1db045abf110dee3d3a503988549d949074be95f4a45d0	celestina/VALIDATION.md
+92	2	69ba74056e8cb4b218a6a32e29c7cfc2a668dd3e1bacf4cdcd1ed658730d0a60	celestina/crates/celestina-paint/src/backend.rs
+2	0	6754e7a3fa60fd3fbabe466cbc3b83baf0666359abec738df197cc50e4b9e614	celestina/crates/celestina-paint/src/lib.rs
+84	14	4fb0e743ffa0cf4a2f5d35ec49f7edde4d0c3c340a40361cdb2ed014b1724ec6	celestina/crates/celestina-paint/src/painter.rs
+553	0	6acd3c3909db407bd7b387f8d53b058d451157ce596f3d6c4dc1f855f90d6615	celestina/crates/celestina-paint/src/shape.rs
+43	7	6526c732367831054a00a8fc12f04a65ec55d6e999f535420f570d42cdc19a22	celestina/crates/celestina-ui/src/paint.rs
+13	0	c45fc5d60b5a6e77312a87eb207e295e07e208991684114deff7dcb796e0a3cb	celestina/crates/celestina-ui/src/tree.rs
+103	0	6aba6becf2dfd310e950de6fbded7798dadbadd482cb38720ffac0a30ebd118b	celestina/docs/evidence/2026-11-27-cel-d-013-drop.md
+-	-	af96c8c90c0452dc5bcd0701d4b04f57ba9920648efbc9c5838583ff6ba98f42	celestina/docs/evidence/2026-11-27-cel-d-013-drop/d1/gate-d1-nub-fix.jpg
+-	-	ffc6e1bb77d8c22d22fc5573ecf35874d994707573f6f489c54c5d8ae9717fcd	celestina/docs/evidence/2026-11-27-cel-d-013-drop/d1/gate-d1-preview-vs-nest.jpg
+-	-	91b9bad0c87c7828b8d7cf78c7969b35a1e8252844179c246a9743a389a06b78	celestina/docs/evidence/2026-11-27-cel-d-013-drop/d1/gate-d1-zoom.jpg
+-	-	a4ace58e2f3b1ab1127ab6918d06945ede93e179d11deb97ce0ebb430c28645a	celestina/docs/evidence/2026-11-27-cel-d-013-drop/g1-rejected/gate-g1-preview-vs-nest.jpg
+-	-	0a53c6c5e8ebcbb6a1c106674352c8e44decd7a0e3ee2e12853e5a55f2cd5aa2	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1-ends/sheet-power-close-v3.jpg
+-	-	5e50eed1723571d6d0577b89f0e9064df03d64422f38b7890fe407851b67ef35	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1-ends/sheet-power-open-v3.jpg
+-	-	0eeed97b2a119fc3adf3a9de2663d101742c08655368a5c4116f04c65f704890	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1-ends/x8-sheet-power-v3.jpg
+-	-	75010baf7ad99ceba463c3d929de90631859bb1fdd3ddb1cd1d840d78a8d4d18	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/bulb-x8.jpg
+-	-	943772d15e70bf58b228fcd723da222514376d58d9f989dbe10ce098059d04a8	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/ends-x8.jpg
+-	-	db3a3033d13b5576ee98d07997e15643ec719ce0be1bd9c169d01fa50b9335a8	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s1-open-energy.jpg
+-	-	2712232f80672292653b92547cfd8d203dd315ff7cb0ed2fb4706f913a1bff23	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s10-other-capsule-in-fall.jpg
+-	-	53df4e4cad0a2806052431bc29203cd2ade636a8a32a1d4ec0078cf6ab1d8940	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s11-reopen-in-close.jpg
+-	-	59a498b8f3d720764a545a1fb5e522104cff652b4427cd1400344a06064e6055	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s12-reduced-open.jpg
+-	-	3341375aa5edb729657944edb205fb9521833b21820dfe7389f01a0d216bf864	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s13-reduced-close.jpg
+-	-	13fee78c39d2e1eea0a978f61b6b744387fd7bdbad70842906b038a6f1682418	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s14-open-energy-scale-1.25.jpg
+-	-	56076c33b0baf9e073799ec74fd7019f67f4c7e9347afb5e1a0b400644382dfc	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s15-close-energy-scale-1.25.jpg
+-	-	63aaaba3fb557e25446eb9ae092f99130fe91ed0b64f7e47000adf8e240fcec7	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s16-close-parked-pill.jpg
+-	-	b3254b8866049e43015215c6164f489dee9190cc978d555091aa0c6ea4e51b17	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s2-close-energy.jpg
+-	-	a0c6aa19fb30462fc8cebf1954c33d195fc30f0e8fcfea0c6a511c9f0321ada9	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s3-open-network.jpg
+-	-	663ffe7dc48f04abc7e1779522af8e06ceb14753009fc4d9d5853f153e992c4a	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s4-close-network.jpg
+-	-	6e0d1a9112f2e4bdad7dc659543df832abd9704c2928b2e25df4918eb1be6121	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s5-switch-in-open.jpg
+-	-	addfdf013757f4f8fb03bd24e15e9a5cff7fabb305b4cf67ee3e8e1b76fc06d0	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s6-switch-in-swell.jpg
+-	-	61511aad41f79c0fe6086b93344eaf015706ba24590c85b65d270ebfdd3cfade	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s7-switch-in-fall.jpg
+-	-	c380adbefab172b363d84d822d4034dd035bb7571fd4cd638aaaf69d3cd7b9af	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s8-switch-in-fall-8ms.jpg
+-	-	e0af1ecf6d19599df9437c8832d004b88e236d743add64666e41cdd62506b293	celestina/docs/evidence/2026-11-27-cel-d-013-drop/nest-d1/s9-other-capsule-in-open.jpg
+111	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-013.numstat.tsv
+1	0	341f4d000195be895ff4b33553f51c8e0829083ebd2cc331b5b6e11ec2d60fdf	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+74	8	30b91e1d947f367a05e5b776017bde0b20735943c8012b5983a6f38e78b55fe1	celestina/src/island/bar_tree.rs
+129	68	f65214f2566812397fa14dd0eacb3cb323d227f3f6eaf2c7cdd2931bf1e38193	celestina/src/island/mod.rs
+212	51	15c5f08ea47a5479fad6d03592266b98adb8a1491d8d03cd94259a4beb8781d3	celestina/src/island/open_piece.rs
+101	10	839f6879fbc5afe59b849179bad7a61c922639acda8c1ea8e7e0eab282d7f3b0	celestina/src/island/sheets.rs
+932	0	08d713192ebf2d907cf893950a40f7768527e3aabe538e53c13c6a2b9dc426cd	celestina/src/island/tests/drop.rs
+11	9	9450677538f27e2d7f5f082448f8df0fb5b2595cdbcb5a1e7632238b3684c2c9	celestina/src/island/tests/open_piece.rs
+24	20	6fd5bb97cdfa126b472051f2040138d9505af661b3f9a987c93c25d62d2a76cf	celestina/src/island/tests/page_sheets.rs
+6	2	d63dfd8dddc5d2d709476ca543cfbd6c004484db31e887a85a400fc2d586f867	celestina/src/island/tests/tray_overflow.rs
+60	85	a08446d746e17f2f02f2d96e5ac5e57fca67c9340b9a5550f7563d0951154587	celestina/src/island/tests/window.rs
+1126	0	354e5ad1524737a0e95d07a3877f9dedfaae0bcb8c3a8ddd6f9f4f5b28f67529	celestina/src/sheet/drop.rs
+3	0	0e856c3ef6b56bde1dc9e886f6f69400f41f2639a592d71e9bad037b867a44fb	celestina/src/sheet/geometry.rs
+608	0	2634798f24550fccc882a386acd3ff947eb340ee2b5cc672ee94554d09a7c9af	celestina/src/sheet/liquid.rs
+432	232	add2f7b62e089992678b563e7b6d1a077b19ffd5a5019362d3ffc5b311d7f416	celestina/src/sheet/mod.rs
+448	434	96e75ebf35b365f9258984a0b6027615576ed954b6bbc3bc2e5db93a9b97bf58	celestina/src/sheet/motion.rs
+1	0	3eb233547ff259158933a0d94a6d8bf98d33bedc16097d0573cdb6654e848269	docs/version-history.tsv

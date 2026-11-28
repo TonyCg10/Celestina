@@ -12,7 +12,7 @@
 
 use std::time::Instant;
 
-use celestina_paint::{Painter, Rect};
+use celestina_paint::{Painter, Rect, ShapePath};
 use celestina_ui::Key;
 use celestina_wayland::{InputEvent, KeyboardInteractivity, SurfaceCtl};
 
@@ -27,11 +27,29 @@ use crate::{
     pieces::{tray as tray_piece, Gesture, PageId, PieceAction, SheetKind},
     session_menu::SessionCore,
     sheet::{
+        drop::{self, DropFrame, Source},
         geometry::{self, Edge, Hit},
         workspaces::workspaces_view,
-        Anchor, BodyOutcome, Next, Request, SheetBody, TrayOverflowBody, WorkspacesBody,
+        Anchor, BodyOutcome, Next, Request, SheetBody, TrayOverflowBody, WindowGlass,
+        WorkspacesBody,
     },
 };
+
+/// One Haze fill of the glass under the bar (CEL-D-013).
+#[derive(Debug)]
+pub(super) struct GlassPath {
+    /// The bar zone whose capsule glass this path holds, so the bar's tree
+    /// does not paint it too; `None` for a window's own glass.
+    pub joined: Option<usize>,
+    pub path: ShapePath,
+    pub opacity: f32,
+}
+
+/// A window's glass below this opacity (only a reduced-motion fade is ever
+/// there) leaves the compositor's blur region: the backdrop blur cannot fade,
+/// so a region over glass that is nearly clear shows as a sharp blurred box.
+/// A path joined to its capsule is whole and always in the region.
+pub(super) const BLUR_REGION_MIN_GLASS: f32 = 0.35;
 
 /// The Escape key.
 pub(super) const XKB_KEY_ESCAPE: u32 = 0xff1b;
@@ -235,11 +253,76 @@ impl Island {
         })
     }
 
-    /// The windows painted at `now` with their corner radii, for the glass
-    /// and the regions.
-    pub(super) fn sheet_windows(&self, now: Instant) -> Vec<(Rect, f32)> {
+    /// The glass of the menu windows painted at `now`, as Haze paths. A
+    /// capsule with windows (or drops) hanging from it is one path with them,
+    /// so its glass is painted once and no seam lies between them; a window
+    /// whose glass fades (reduced motion) is a path of its own at that
+    /// opacity. While a capsule itself fades (its pieces are leaving) it
+    /// keeps the tree's glass and its windows are paths of their own: the
+    /// window's glass fades with nothing but reduced motion. Every path is
+    /// built `0.5 / dpr` px inside, as the painted geometry the blur's bands
+    /// follow.
+    pub(super) fn glass_paths(&self, now: Instant) -> Vec<GlassPath> {
         let anchor = self.sheet_anchor(now);
-        self.sheets.windows(anchor.as_ref(), self.size, now)
+        let glass = self.sheets.glass(anchor.as_ref(), self.size, now);
+        let inset = 0.5 / self.dpr;
+        let radius = self.theme.radius_lg;
+        let opacity_of = |zone: usize| {
+            self.bar
+                .as_ref()
+                .map_or(1.0, |bar| bar.capsule_opacity(zone, now))
+        };
+        let joins = |g: &&WindowGlass| g.frame.glass >= 1.0 && opacity_of(g.zone) >= 1.0;
+        let mut out: Vec<GlassPath> = Vec::new();
+        for g in &glass {
+            if !joins(&g) {
+                if g.frame.glass > 0.0 {
+                    out.push(GlassPath {
+                        joined: None,
+                        path: drop::shape(None, &[(g.frame, g.source)], inset),
+                        opacity: g.frame.glass,
+                    });
+                }
+                continue;
+            }
+            if out.iter().any(|p| p.joined == Some(g.zone)) {
+                continue;
+            }
+            let frames: Vec<(DropFrame, Source)> = glass
+                .iter()
+                .filter(joins)
+                .filter(|w| w.zone == g.zone)
+                .map(|w| (w.frame, w.source))
+                .collect();
+            let capsule = self
+                .bar
+                .as_ref()
+                .and_then(|bar| bar.capsule_extent(g.zone, now))
+                .filter(|r| r.w > 0.0 && r.h > 0.0)
+                .map(|r| (r, radius));
+            let path = drop::shape(capsule, &frames, inset);
+            if !path.is_empty() {
+                out.push(GlassPath {
+                    joined: Some(g.zone),
+                    path,
+                    opacity: 1.0,
+                });
+            }
+        }
+        out
+    }
+
+    /// Computes [`Island::glass_paths`] for the frame at `now` and hands the
+    /// bar's tree the zones they hold, so it paints no glass for them (and
+    /// gives it back to the others). Called once per frame, before the bar
+    /// paints.
+    pub(super) fn prepare_glass(&mut self, now: Instant) -> Vec<GlassPath> {
+        let paths = self.glass_paths(now);
+        let zones: Vec<usize> = paths.iter().filter_map(|p| p.joined).collect();
+        if let Some(bar) = self.bar.as_mut() {
+            bar.set_joined(&zones);
+        }
+        paths
     }
 
     /// The window's rect at `now`, when one is shown (tests).
@@ -611,8 +694,8 @@ impl Island {
         }
     }
 
-    /// Paints the windows over the bar, the Island's capsule and its page:
-    /// each one's glass and body.
+    /// Paints the windows' bodies over the bar, the Island's capsule and its
+    /// page. Their glass is painted before the bar ([`Island::prepare_glass`]).
     pub(super) fn paint_sheet(&mut self, painter: &mut Painter, now: Instant) {
         let Some(anchor) = self.sheet_anchor(now) else {
             return;
@@ -650,7 +733,8 @@ impl Island {
         measure: &mut Measure<'_>,
     ) -> Option<Vec<IslandAction>> {
         let anchor = self.sheet_anchor(now)?;
-        let rect = self.sheets.rect(&anchor, now)?;
+        let frame = self.sheets.frame(&anchor, now)?;
+        let rect = frame.rect;
         match *ev {
             InputEvent::FocusLost => {
                 self.sheets.drop_queue();
@@ -718,7 +802,14 @@ impl Island {
                     let outcome = self.sheets.input(ev, &anchor, now, measure);
                     return Some(self.apply_outcome(outcome, now));
                 }
-                match geometry::hit(rect, x, y) {
+                // The drop's liquid alone (the swell, the fall, the close's
+                // rise) has no window yet: its bulb's box takes nothing.
+                let hit = if frame.drawn {
+                    geometry::hit(rect, x, y)
+                } else {
+                    Hit::Outside
+                };
+                match hit {
                     Hit::Body => {
                         self.pointer_is_the_sheets(now);
                         if let Some(actions) = self.overflow_pointer(ev, &anchor, now) {

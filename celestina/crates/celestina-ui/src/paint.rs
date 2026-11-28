@@ -86,6 +86,17 @@ impl Tree {
         )
     }
 
+    /// Whether the walk paints a Haze for the box `id`: it has one and
+    /// nobody took it over ([`Tree::set_glassless`]). `false` for a stale id
+    /// or a node that is not a box.
+    #[must_use]
+    pub fn paints_haze(&self, id: NodeId) -> bool {
+        self.slot(id).is_some_and(|slot| {
+            matches!(slot.kind, ViewKind::Box { haze: true, .. })
+                && !self.glassless.contains(&slot.key)
+        })
+    }
+
     /// The node `id`'s rect as it is painted at `now`: its layout rect moved
     /// by its slide and its ancestors', or the rect [`Tree::set_extent`] gave
     /// it. An empty rect for a stale id.
@@ -261,13 +272,8 @@ impl Tree {
             painter.opacity(opacity.max(0.0));
         }
         match &slot.kind {
-            ViewKind::Box {
-                stroke,
-                haze,
-                radius,
-                ..
-            } => {
-                if *haze {
+            ViewKind::Box { stroke, radius, .. } => {
+                if self.paints_haze(id) {
                     painter.haze(rect, *radius);
                 }
                 let (shown, wash) = self.box_roles(id);
@@ -539,6 +545,36 @@ mod tests {
         tree.set_extent(Key::named("cap"), None);
         assert_eq!(tree.painted_rect(cap, t0), rect);
         assert_eq!(tree.painted_rect(usize::MAX, t0).w, 0.0);
+    }
+
+    #[test]
+    fn a_glassless_box_paints_no_haze_but_keeps_its_fill() {
+        use crate::testing::{fake_measure, id, AVAILABLE};
+        let now = Instant::now();
+        let mut tree = Tree::new(false, &Theme::dark());
+        let key = Key::named("cap");
+        tree.apply(
+            crate::view::row(key)
+                .absolute(100.0, 8.0)
+                .size(90.0, 40.0)
+                .haze(20.0)
+                .fill(Role::ControlFill)
+                .stroke(Role::ControlHover),
+            now,
+        );
+        tree.layout_measured(AVAILABLE, fake_measure);
+        let cap = id(&tree, key);
+        let (fill, wash) = tree.box_roles(cap);
+        assert!(tree.paints_haze(cap));
+        tree.set_glassless(key, true);
+        assert!(!tree.paints_haze(cap), "the glass is someone else's");
+        assert_eq!(tree.box_roles(cap), (fill, wash), "the fill stays");
+        assert!(fill.is_some(), "premise: the box has a fill");
+        // Only the box keyed so, and until it is given back.
+        tree.set_glassless(Key::named("other"), true);
+        tree.set_glassless(key, false);
+        assert!(tree.paints_haze(cap));
+        assert!(!tree.paints_haze(usize::MAX), "a stale id paints nothing");
     }
 
     #[test]
