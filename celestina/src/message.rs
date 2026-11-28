@@ -71,6 +71,12 @@ pub enum Message {
     /// The shell's own entry (hide or show) was chosen in the menu of this
     /// tray item; the app writes `bar.tray_hidden`.
     TrayShellEntry(crate::tray::ItemId, crate::tray::menu::ShellEntry),
+    /// The window of this surface still waits for the menu of this tray item,
+    /// but another output asked for a menu first-come and took the one
+    /// request the app keeps: the window gets the shell's entry alone, or
+    /// closes. Sent by the loop to itself, as an action cannot reach another
+    /// surface.
+    TrayMenuStranded(SurfaceId, crate::tray::ItemId),
     /// The wallpaper worker's news: a decoded picture, a fallback, a failure,
     /// an output another client holds, the folder's names.
     Wallpaper(crate::providers::wallpaper::WallpaperEvent),

@@ -1767,7 +1767,8 @@ None has been run and none is closed by an agent.
   an empty slot. (2) each right click shows a menu under the pointer: the
   shell's own for apps with a dbusmenu, the app's for Steam and Discord. (3)
   the left click shows the menu and does not raise a window. (4) the menu
-  opens and closes each time, with no second menu beside it. (5) a theme
+  opens and closes each time, as a window or a card and never as a second
+  menu beside it (see `VAL-CEL-D-016`). (5) a theme
   installed after the shell started is not seen until the shell restarts: that
   is the known limit (the `freedesktop-icons` cache), not a failure
 - **Result:** not run
@@ -1870,7 +1871,8 @@ None has been run and none is closed by an agent.
 
 - **Status:** pending
 - **Related implementation:** CEL-I-012 (a chevron at the tray's left end opens
-  a 240 px window of the hidden apps, lined up with the right capsule's right
+  a 240 px window of the hidden apps (280 px since
+  CEL-D-016), lined up with the right capsule's right
   edge; every app's menu ends with an entry that hides it from the bar or shows
   it again; the 7 px attention dot on the chevron)
 - **Requires:** the deployed shell after the landing of CEL-I-012, with Steam,
@@ -1885,7 +1887,8 @@ None has been run and none is closed by an agent.
   (5) Make an app that is hidden ask for attention (a Discord message, or
   nm-applet with a pending connection): the 7 px dot shows on the chevron and
   the row carries the attention label. (6) Open the menu of a row and press
-  Escape: the menu closes first, the window stays; press Escape again. (7) On
+  Escape: the card folds first, the window stays (since CEL-D-016 an app's
+  menu is a card under its row; see `VAL-CEL-D-016`); press Escape again. (7) On
   two outputs press the chevron of one: the window opens on that output only;
   hide an app there and look at the other bar. (8) Show every hidden app: the
   window and the chevron go. (9) Repeat steps (2) and (3) with reduced motion
@@ -1898,7 +1901,7 @@ None has been run and none is closed by an agent.
   is a card holding only that entry. (4) the row leaves the window and the
   icon enters the bar. (5) the dot shows only while a hidden app asks for
   attention, and the row's attention label shows whole (a long title ends
-  in an ellipsis). (6) Escape closes the menu level
+  in an ellipsis). (6) Escape folds the card
   first. (7) the window lives on the pressed output, and the other bar follows
   the new list. (8) the last show closes the window and folds the chevron out.
   (9) with reduced motion the glyph flips and nothing springs
@@ -2151,3 +2154,57 @@ None has been run and none is closed by an agent.
 - **Result:** not run
 - **Evidence:** none; the unit's automated evidence is
   [CEL-D-017](docs/evidence/2026-11-27-cel-d-017-menu-from-icon.md)
+
+## VAL-CEL-D-016 — An app's menu is a window or a card
+
+- **Status:** pending
+- **Related implementation:** CEL-D-016 (a tray icon's menu on the bar opens as
+  a capsule menu window next to its icon, 300 px wide, with the drop of
+  `VAL-CEL-D-013`; in the hidden-apps window (now 280 px) an app's menu is a
+  card that unfolds under its row while the other rows blur by distance, and
+  on the Tray page it is a card under its row; submenus slide in with a back
+  row; a long menu scrolls with the wheel and a thin bar, and the keyboard
+  keeps the focused row in view; the shell entry "Ocultar de la barra" or
+  "Mostrar en la barra" ends the first level; a menu that is slow to answer
+  holds the drop, and one that never fills gives the shell entry alone after
+  500 ms; no tray menu uses `xdg_popup` any more)
+- **Requires:** the deployed shell after the landing of CEL-D-016, with Steam
+  running and at least two more tray apps, one of them listed in
+  `bar.tray_hidden` (nm-applet or blueman) and one app that has a submenu;
+  a copy of `shell.json` to restore
+- **Procedure:** (1) right click Steam's icon on the bar: read the window; open
+  a submenu, go back with Left and with the back row, press Escape at the
+  root. (2) open the menu again and press its icon: it closes, and the same
+  press does not reopen it. (3) open a menu and press another icon of the same
+  capsule. (4) choose an entry: the app acts and the window closes. (5) open
+  the chevron's window and right click a hidden app's row: a card unfolds under
+  it and the other rows blur more the further they are; open a submenu in the
+  card, press Escape three times (back, fold, close). (6) with a card open,
+  right click another row; choose "Mostrar en la barra" from a card: the app
+  goes to the bar. (7) open and close menus from the bar and from the window
+  twenty times each, and use the shell for a day with the journal open
+  (`journalctl --user -f | grep -i dismissed`). (8) `celestina island open
+  tray` and right click a row: a card unfolds in the page under the row;
+  Escape folds it and the page stays. With ten or more tray apps, right click
+  the last row. (9) repeat (1) and (5) with reduced motion on
+- **Pass condition:** (1) the window is 300 px wide with 40 px rows, a check
+  column, chevrons on submenus and the shell entry last after a divider; a
+  submenu slides in and its first row is the back row; Left and Escape go back
+  one level and Escape at the root closes. (2) a press on the icon closes the
+  menu and does not reopen it. (3) the first window travels to the second
+  icon's menu; where the second menu is slow to answer, the window keeps
+  its size, empty, until the menu comes, and never folds away. (4)
+  the entry reaches the app once, then the window closes. (5) the card is 264
+  px wide under its row with a small gap, unfolds with a blur that sharpens,
+  the rows stay sharp while the app answers and then blur at three levels, a long card scrolls with a thin bar, and the
+  Escapes act in that order. (6) the first card goes at once; the app moves
+  from the window to the bar. (7) no line "tray menu: dismissed by the
+  compositor" appears (the Tray page's overflow menu may still log "menu:
+  dismissed by the compositor"), and nothing animates at rest afterwards. (8)
+  the page never shrinks while the card unfolds, the rows past the card leave
+  as it reaches them, and it all comes back when it folds; on the last row of
+  a full page the app's own menu opens instead of a card. (9) with reduced
+  motion there is no drop, no slide, and the card appears and goes at once
+- **Result:** not run
+- **Evidence:** none; the unit's automated evidence is
+  [CEL-D-016](docs/evidence/2026-11-27-cel-d-016-app-menus.md)

@@ -217,8 +217,9 @@ impl Piece for Tray {
         )
     }
 
-    /// The tray opens no sheet: its items act on their own and their menus
-    /// are popups.
+    /// The tray opens no sheet of its own face: its items act on their own,
+    /// and an icon's menu is a window the Island opens from the icon
+    /// ([`PieceAction::TrayMenu`]).
     fn face(&self, _cx: &BarCx<'_>) -> Option<Face> {
         None
     }

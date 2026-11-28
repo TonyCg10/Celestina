@@ -25,7 +25,7 @@ use celestina_shell::phone::PhoneState;
 use celestina_shell::settings::{BarLayout, Duties, Duty, Settings};
 use celestina_wayland::{
     Anchoring, FrameCx, InputEvent, KeyboardInteractivity, Layer, LayerSpec, OutputEvent, OutputId,
-    OutputInfo, PopupId, RuntimeCtl, RuntimeError, Sender, Shell, SurfaceCtl, SurfaceId,
+    OutputInfo, RuntimeCtl, RuntimeError, Sender, Shell, SurfaceCtl, SurfaceId,
 };
 
 use crate::notifications::{
@@ -85,13 +85,7 @@ use crate::{
         tray::TrayProvider,
         weather::WeatherReading,
     },
-    tray::{
-        menu::{
-            AskSink, Chain, ChoiceSlot as TrayChoiceSlot, MenuContext, MenuModel,
-            ShellChoiceSlot as TrayShellSlot, ShellEntry, TrayMenu,
-        },
-        ItemId, MenuTree, TrayCommand, TrayEvent,
-    },
+    tray::{menu::ShellEntry, ItemId, MenuTree, TrayCommand, TrayEvent},
 };
 
 /// The Island's layer-shell namespace.
@@ -494,14 +488,12 @@ fn fresh_choice(slot: &ChoiceSlot) -> ChoiceSlot {
     Rc::clone(slot)
 }
 
-/// A tray menu asked for and not yet delivered: where to hang it once the
-/// host answers.
+/// A tray menu asked for and not yet delivered: the Island whose window
+/// waits for it once the host answers.
 #[derive(Debug)]
 struct PendingMenu {
     surface: SurfaceId,
     item: ItemId,
-    row: Rect,
-    keyboard: bool,
     /// When an empty menu stops waiting for its late layout; set by the
     /// first empty one.
     until: Option<Instant>,
@@ -544,16 +536,34 @@ impl Pending {
         }
     }
 
-    /// Puts `request` in `pending`; the request it replaces, when that was
-    /// for another item.
-    fn replace(pending: &mut Option<PendingMenu>, request: PendingMenu) -> Option<PendingMenu> {
-        pending
-            .replace(request)
-            .filter(|old| pending.as_ref().is_some_and(|new| new.item != old.item))
+    /// Puts `request` in `pending`. The request it replaces whose own window
+    /// still waits on its item (`held` is every window that holds a tray
+    /// menu: another output's Island) is handed back, for the caller to
+    /// answer with the shell's entry or a failure, as nothing else will. One
+    /// whose window let go of its item needs no answer: [`App::sync_tray_menus`]
+    /// closes the item.
+    fn replace(
+        pending: &mut Option<PendingMenu>,
+        request: PendingMenu,
+        held: &[(SurfaceId, ItemId)],
+    ) -> Option<PendingMenu> {
+        let same = pending
+            .as_ref()
+            .is_some_and(|old| old.surface == request.surface && old.item == request.item);
+        let old = pending.replace(request)?;
+        let waits = Pending::still_waits(held, old.surface, &old.item);
+        (!same && waits).then_some(old)
+    }
+
+    /// Whether the window `surface` still holds `item`'s menu (`held` is
+    /// every window that holds a tray menu): a window of another surface
+    /// holding the same item does not wait for this request.
+    fn still_waits(held: &[(SurfaceId, ItemId)], surface: SurfaceId, item: &ItemId) -> bool {
+        held.iter().any(|(s, i)| *s == surface && i == item)
     }
 
     /// The item of the request that waited past its time, left in `pending`
-    /// (its card may still open, with the shell's entry alone).
+    /// until the host's `NoMenu` message takes it.
     fn due(pending: &Option<PendingMenu>, now: Instant) -> Option<ItemId> {
         pending
             .as_ref()
@@ -561,10 +571,29 @@ impl Pending {
             .map(|p| p.item.clone())
     }
 
-    /// The request that waited past its time, taken out of `pending`.
-    fn expired(pending: &mut Option<PendingMenu>, now: Instant) -> Option<PendingMenu> {
-        pending.take_if(|p| p.until.is_some_and(|until| until <= now))
+    /// Forgets the request when its own window no longer holds its item
+    /// (`held` is every window that holds a tray menu; another window holding
+    /// the same item does not answer for it): its menu, if it still comes, is
+    /// nobody's. Whether it was dropped.
+    fn forget_unheld(pending: &mut Option<PendingMenu>, held: &[(SurfaceId, ItemId)]) -> bool {
+        pending
+            .take_if(|p| !Pending::still_waits(held, p.surface, &p.item))
+            .is_some()
     }
+}
+
+/// The items of `before` that no surface of `after` holds any more: the tray
+/// menus whose window is gone, in `before`'s order and each once. The app
+/// tells the host to stop following each of them.
+fn closed_tray_menus(before: &[(SurfaceId, ItemId)], after: &[(SurfaceId, ItemId)]) -> Vec<ItemId> {
+    let mut closed: Vec<ItemId> = Vec::new();
+    for (_, item) in before {
+        let held = after.iter().any(|(_, kept)| kept == item);
+        if !held && !closed.contains(item) {
+            closed.push(item.clone());
+        }
+    }
+    closed
 }
 
 /// Writes `bar.tray_hidden` for the shell's `entry` on the item whose `Id`
@@ -576,17 +605,6 @@ fn apply_shell_entry(
     entry: ShellEntry,
 ) -> Result<bool, crate::providers::settings::ShellSettingsError> {
     settings.set_tray_hidden(sni_id, entry == ShellEntry::Hide)
-}
-
-/// The tray menu chain that is open: its Island, its item, the model its
-/// levels show and its popups, so a republished menu reaches the levels
-/// and the host hears when the chain is gone.
-#[derive(Debug)]
-struct OpenTrayMenu {
-    surface: SurfaceId,
-    item: ItemId,
-    root: PopupId,
-    cx: MenuContext,
 }
 
 /// The product's `Shell`.
@@ -645,14 +663,12 @@ pub struct App {
     tray: Rc<OnceCell<TrayProvider>>,
     /// The tray's items, shared by every Island.
     tray_items: TrayList,
-    /// Where the open tray menu leaves the entry chosen in it.
-    tray_choice: TrayChoiceSlot,
-    /// Where a tray menu leaves the shell's own entry it chose.
-    tray_shell_choice: TrayShellSlot,
-    /// The menu the last right click asked for.
+    /// The menu the last gesture asked for, until the host answers.
     pending_menu: Option<PendingMenu>,
-    /// The tray menu chain open right now.
-    open_tray_menu: Option<OpenTrayMenu>,
+    /// The tray menus held by an Island's window as of the last
+    /// [`App::sync_tray_menus`]: what it compares with to find the ones that
+    /// closed.
+    tray_menus_held: Vec<(SurfaceId, ItemId)>,
     tray_refusal_logged: bool,
     /// The wallpaper duty: its surfaces, textures and requests.
     wallpapers: crate::wallpaper::surface::Wallpapers,
@@ -760,10 +776,8 @@ impl App {
             metrics,
             tray: Rc::new(OnceCell::new()),
             tray_items: TrayList::default(),
-            tray_choice: TrayChoiceSlot::default(),
-            tray_shell_choice: TrayShellSlot::default(),
             pending_menu: None,
-            open_tray_menu: None,
+            tray_menus_held: Vec::new(),
             tray_refusal_logged: false,
             wallpapers: crate::wallpaper::surface::Wallpapers::default(),
             energy: Rc::new(OnceCell::new()),
@@ -2278,26 +2292,38 @@ impl App {
                         ctl.request_redraw();
                     }
                 }
-                IslandAction::OpenTrayMenu {
-                    item,
-                    row,
-                    keyboard,
-                    at,
-                } => {
+                IslandAction::AskTrayMenu { item, at } => {
+                    // Only a window that holds the menu has a use for it: a
+                    // row of the hidden-apps window or of the Tray page has
+                    // none until its card exists.
+                    let held = self
+                        .islands
+                        .get_mut(surface)
+                        .is_some_and(|island| island.tray_menus_held().contains(&item));
+                    if !held {
+                        tracing::debug!("a tray menu asked for with no window to hold it");
+                        continue;
+                    }
+                    // The old request needs no give-up when its window is not
+                    // held any more (the sync closes its item); one whose
+                    // window still waits on it, on another output, would wait
+                    // for ever: it gets the shell's entry or its failure.
                     let request = PendingMenu {
                         surface,
                         item: item.clone(),
-                        row,
-                        keyboard,
                         until: None,
                     };
-                    // A request for another item replaces the old one: its
-                    // item must not stay followed with an `opened` and no
-                    // `closed`.
-                    if let Some(old) = Pending::replace(&mut self.pending_menu, request) {
-                        self.give_up_menu(old);
+                    let held = self.held_tray_menus();
+                    if let Some(stranded) = Pending::replace(&mut self.pending_menu, request, &held)
+                    {
+                        self.post(Message::TrayMenuStranded(stranded.surface, stranded.item));
                     }
                     self.tray_command(TrayCommand::OpenMenu(item, at.0, at.1));
+                }
+                IslandAction::TrayShellEntry(item, entry) => {
+                    // The shell's own entry is not the app's: the loop
+                    // writes the list and every bar follows.
+                    self.post(Message::TrayShellEntry(item, entry));
                 }
                 IslandAction::Audio(_) | IslandAction::Brightness(_) => {
                     self.level_action(action, surface);
@@ -2504,41 +2530,37 @@ impl App {
                     self.redraw_all(ctl);
                 }
             }
-            TrayEvent::Menu(item, menu) => self.open_tray_menu(&item, menu, ctl),
+            TrayEvent::Menu(item, menu) => self.tray_menu_event(&item, menu, ctl),
             TrayEvent::NoMenu(item) => {
                 // The host already asked the app for its own menu; the shell
-                // adds its card with the one entry (an app that shows its
-                // menu takes the grab and the card closes).
+                // shows its window with the one entry, or closes it when
+                // there is none (an app that shows its own menu takes the
+                // pointer anyway).
                 if let Some(pending) = self.pending_menu.take_if(|p| p.item == item) {
-                    self.open_tray_card(pending, MenuTree::default(), ctl);
+                    self.shell_entry_alone(&pending, ctl);
                 }
             }
         }
     }
 
-    /// A menu of `item` from the host: the open chain of that item shows
-    /// it (a republished menu, or the submenu an `AboutToShow` filled);
-    /// else it hangs below the row that asked for it, if one did and its
-    /// Island still shows the Tray page.
-    fn open_tray_menu(&mut self, item: &ItemId, menu: MenuTree, ctl: &mut RuntimeCtl<'_>) {
-        if let Some(open) = self.open_tray_menu.as_ref().filter(|o| o.item == *item) {
-            open.cx.shared.borrow_mut().replace(menu);
-            let popups: Vec<PopupId> = std::iter::once(open.root)
-                .chain(open.cx.chain.borrow().iter().copied())
-                .collect();
-            for popup in popups {
-                if let Some(mut surface) = ctl.popup_surface(popup).and_then(|s| ctl.surface(s)) {
-                    surface.request_redraw();
-                }
-            }
+    /// A menu of `item` from the host: a window that shows it already
+    /// refreshes in place (a republished menu, or the submenu an
+    /// `AboutToShow` filled); else the window waiting for it opens to its
+    /// size, if one asked.
+    fn tray_menu_event(&mut self, item: &ItemId, menu: MenuTree, ctl: &mut RuntimeCtl<'_>) {
+        let now = Instant::now();
+        let shown = self
+            .islands
+            .iter()
+            .find(|slot| slot.island.tray_menu_shown(item))
+            .map(|slot| slot.surface);
+        if let Some(surface) = shown {
+            let shell = self.tray_shell_entry_for(item);
+            self.deliver_tray_menu(surface, item, menu, shell, ctl);
             return;
         }
-        let pending = match Pending::of(
-            &mut self.pending_menu,
-            item,
-            menu.entries.is_empty(),
-            Instant::now(),
-        ) {
+        let pending = match Pending::of(&mut self.pending_menu, item, menu.entries.is_empty(), now)
+        {
             Pending::Unasked => {
                 tracing::debug!("a menu nobody asked for is dropped");
                 return;
@@ -2552,12 +2574,68 @@ impl App {
                 return;
             }
             Pending::GiveUp(gone) => {
-                self.give_up_menu_or_card(gone, ctl);
+                self.shell_entry_alone(&gone, ctl);
                 return;
             }
             Pending::Open(pending) => pending,
         };
-        self.open_tray_card(pending, menu, ctl);
+        let shell = self.tray_shell_entry_for(&pending.item);
+        self.deliver_tray_menu(pending.surface, &pending.item, menu, shell, ctl);
+    }
+
+    /// Gives `menu` to the window of `item` on `surface` and asks for its
+    /// frame. A window that is gone leaves the item to [`App::sync_tray_menus`],
+    /// which closes it once nothing holds it.
+    fn deliver_tray_menu(
+        &mut self,
+        surface: SurfaceId,
+        item: &ItemId,
+        menu: MenuTree,
+        shell: Option<ShellEntry>,
+        ctl: &mut RuntimeCtl<'_>,
+    ) {
+        let arrived = self
+            .islands
+            .get_mut(surface)
+            .is_some_and(|island| island.tray_menu_arrived(item, menu, shell, Instant::now()));
+        if arrived {
+            if let Some(mut surface) = ctl.surface(surface) {
+                surface.request_redraw();
+            }
+        } else {
+            // No window to give it to: the one `CloseMenu` is the sync's, once
+            // nothing holds the item any more.
+            tracing::debug!("no window holds the menu that arrived; it is dropped");
+        }
+    }
+
+    /// The menu of `gone`'s item did not come (the app has none, its layout
+    /// failed or it stayed empty past [`MENU_LATE_LAYOUT`]): the window
+    /// shows the shell's entry alone, or closes when the app cannot be
+    /// listed. The item stays followed, so a late layout refreshes the
+    /// window in place.
+    fn shell_entry_alone(&mut self, gone: &PendingMenu, ctl: &mut RuntimeCtl<'_>) {
+        match self.tray_shell_entry_for(&gone.item) {
+            Some(entry) => {
+                tracing::debug!("the item has no menu to show; the shell's entry alone");
+                self.deliver_tray_menu(
+                    gone.surface,
+                    &gone.item,
+                    MenuTree::default(),
+                    Some(entry),
+                    ctl,
+                );
+            }
+            None => {
+                tracing::debug!("the item has no menu and cannot be hidden; the window closes");
+                if let Some(island) = self.islands.get_mut(gone.surface) {
+                    island.tray_menu_failed(&gone.item, Instant::now());
+                }
+                if let Some(mut surface) = ctl.surface(gone.surface) {
+                    surface.request_redraw();
+                }
+            }
+        }
     }
 
     /// The shell's entry for `item`'s menu: hide it while it is in the bar,
@@ -2578,103 +2656,19 @@ impl App {
         }
     }
 
-    /// Hangs the card of `pending` with `menu` as the app's entries (none
-    /// for an app without a menu, which then holds only the shell's entry),
-    /// if its Island still shows what asked for it.
-    fn open_tray_card(&mut self, pending: PendingMenu, menu: MenuTree, ctl: &mut RuntimeCtl<'_>) {
-        let shell_entry = self.tray_shell_entry_for(&pending.item);
-        if menu.entries.is_empty() && shell_entry.is_none() {
-            tracing::debug!("the item has no menu and cannot be hidden; no card");
-            return;
-        }
-        let (Some(shared), Some(mut surface)) =
-            (self.painter.clone(), ctl.surface(pending.surface))
-        else {
-            return;
-        };
-        let Ok(painter) = shared.try_borrow() else {
-            tracing::warn!("the painter is in use; the tray menu is not opened");
-            return;
-        };
-        let theme = painter.theme().clone();
-        drop(painter);
-        *self.tray_choice.borrow_mut() = None;
-        *self.tray_shell_choice.borrow_mut() = None;
-        let ask: AskSink = {
-            let tray = Rc::clone(&self.tray);
-            Rc::new(move |command| {
-                if let Some(refused) = tray.get().and_then(|t| t.command(command).err()) {
-                    tracing::debug!(?refused, "the tray host refused a menu's request");
-                }
-            })
-        };
-        let cx = MenuContext {
-            painter: shared,
-            item: pending.item.clone(),
-            shared: Rc::new(RefCell::new(MenuModel {
-                tree: menu,
-                generation: 1,
-            })),
-            choice: Rc::clone(&self.tray_choice),
-            ask,
-            chain: Chain::default(),
-            reduced: self.appearance.reduced_motion,
-            shell: shell_entry,
-            shell_choice: Rc::clone(&self.tray_shell_choice),
-        };
-        let shell = TrayMenu::new(&cx, &theme, Vec::new(), pending.keyboard);
-        let size = shell.size();
-        let Some(island) = self.islands.get_mut(pending.surface) else {
-            return;
-        };
-        if let Some(root) = island.open_tray_menu(pending.row, size, Box::new(shell), &mut surface)
-        {
-            self.open_tray_menu = Some(OpenTrayMenu {
-                surface: pending.surface,
-                item: pending.item,
-                root,
-                cx,
-            });
-        }
-    }
-
     /// An empty menu that waited for its layout past [`MENU_LATE_LAYOUT`]
-    /// is dropped, and the host stops following it.
-    /// An app that can be hidden or shown still gets its card, with the
-    /// shell's entry alone: the same card an app without a menu gets, posted
-    /// as the host's `NoMenu` so the frame needs no popup context.
+    /// stops waiting: its window gets the shell's entry alone, or closes,
+    /// as the host's `NoMenu` does. Posted as that message so the frame
+    /// needs no runtime context.
     fn expire_pending_menu(&mut self, now: Instant) {
         let Some(item) = Pending::due(&self.pending_menu, now) else {
             return;
         };
-        if self.tray_shell_entry_for(&item).is_some() {
-            self.tray_command(TrayCommand::CloseMenu(item.clone()));
-            if let Some(waiting) = self.pending_menu.as_mut() {
-                // Handled once: the message takes the request.
-                waiting.until = None;
-            }
-            self.post(Message::Tray(TrayEvent::NoMenu(item)));
-        } else if let Some(gone) = Pending::expired(&mut self.pending_menu, now) {
-            self.give_up_menu(gone);
+        if let Some(waiting) = self.pending_menu.as_mut() {
+            // Handled once: the message takes the request.
+            waiting.until = None;
         }
-    }
-
-    /// [`App::give_up_menu`], except that an app that can be hidden or shown
-    /// gets its card with the shell's entry alone.
-    fn give_up_menu_or_card(&mut self, gone: PendingMenu, ctl: &mut RuntimeCtl<'_>) {
-        if self.tray_shell_entry_for(&gone.item).is_some() {
-            self.tray_command(TrayCommand::CloseMenu(gone.item.clone()));
-            self.open_tray_card(gone, MenuTree::default(), ctl);
-        } else {
-            self.give_up_menu(gone);
-        }
-    }
-
-    /// An item's menu stayed empty past [`MENU_LATE_LAYOUT`]: nothing opens
-    /// and the item's menu is no longer followed.
-    fn give_up_menu(&mut self, gone: PendingMenu) {
-        tracing::debug!("the item's menu stayed empty; nothing opens");
-        self.tray_command(TrayCommand::CloseMenu(gone.item));
+        self.post(Message::Tray(TrayEvent::NoMenu(item)));
     }
 
     /// The shell's entry chosen in `item`'s menu: writes `bar.tray_hidden`
@@ -2703,12 +2697,34 @@ impl App {
         }
     }
 
-    /// The open chain is gone (its root popup closed, or its Island's
-    /// output went away): the host stops following the item's menu.
-    fn tray_menu_gone(&mut self) {
-        if let Some(open) = self.open_tray_menu.take() {
-            self.tray_command(TrayCommand::CloseMenu(open.item));
+    /// Tells the host to stop following every tray menu whose window is
+    /// gone, and forgets the request of one nobody holds. The one place in
+    /// the app that sends `CloseMenu`: whatever closed a window (a choice,
+    /// Escape, a press outside, another capsule's menu, the icon leaving, the
+    /// output going), the item hears it once, after the `MenuEvent` of a
+    /// choice, which the Island's action carried first.
+    /// Every tray menu an Island holds, with the surface it is on.
+    fn held_tray_menus(&self) -> Vec<(SurfaceId, ItemId)> {
+        self.islands
+            .iter()
+            .flat_map(|slot| {
+                slot.island
+                    .tray_menus_held()
+                    .into_iter()
+                    .map(|item| (slot.surface, item))
+            })
+            .collect()
+    }
+
+    fn sync_tray_menus(&mut self) {
+        let after = self.held_tray_menus();
+        for item in closed_tray_menus(&self.tray_menus_held, &after) {
+            self.tray_command(TrayCommand::CloseMenu(item));
         }
+        if Pending::forget_unheld(&mut self.pending_menu, &after) {
+            tracing::debug!("the window of a tray menu asked for is gone; the request is dropped");
+        }
+        self.tray_menus_held = after;
     }
 
     fn request(&mut self, request: NiriRequest) {
@@ -3276,8 +3292,8 @@ impl PromptHost for PolkitHost<'_, '_> {
             if slot.island.anything_open() {
                 slot.island.command(&Verb::IslandClose, &mut surface);
             }
-            // A menu hanging from the bar (a tray icon's) survives the page
-            // closing and may hold a popup grab: it goes too (N-25).
+            // The page's overflow menu is a popup with a grab: it goes too
+            // (N-25). A tray icon's menu is a sheet and closed above.
             slot.island.close_menu(&mut surface);
         }
         // The overview's panel holds the keyboard exclusively too: the wait
@@ -3539,13 +3555,7 @@ impl Shell for App {
                 if let Some(released) = self.controls.surfaces_gone(&gone) {
                     self.post(Message::OsdSuppressed(released));
                 }
-                if self
-                    .open_tray_menu
-                    .as_ref()
-                    .is_some_and(|o| gone.contains(&o.surface))
-                {
-                    self.tray_menu_gone();
-                }
+                self.sync_tray_menus();
                 tracing::info!(
                     output = output.0,
                     islands = self.islands.len(),
@@ -3738,6 +3748,9 @@ impl Shell for App {
         // A sheet that opened from the queue in this frame is seen too.
         self.mark_read_if_viewed();
         self.catchers_due();
+        // A window the frame closed (its icon left the bar, a page opened)
+        // tells the host.
+        self.sync_tray_menus();
     }
 
     fn input(&mut self, ev: InputEvent, ctl: &mut SurfaceCtl<'_>) {
@@ -3808,8 +3821,10 @@ impl Shell for App {
                 return;
             }
         };
-        let tray_menu_open = island.tray_menu_open();
         self.act(actions, surface, &shared, ctl);
+        // A window closed by this input (a choice, Escape, a press outside)
+        // tells the host after what the input sent.
+        self.sync_tray_menus();
         // The pointer over the card holds the server's clock; the page may
         // have opened or closed.
         self.send_card_holds();
@@ -3822,26 +3837,6 @@ impl Shell for App {
         if closed {
             if let Some(choice) = self.menu_choice.take() {
                 self.menu_chose(choice, surface, ctl);
-            }
-            // A tray menu's chosen entry goes to its item once the chain
-            // is gone, and the host hears that the chain closed.
-            let chosen = self.tray_choice.borrow_mut().take();
-            if let Some((item, entry)) = chosen {
-                self.tray_command(TrayCommand::MenuEvent(item, entry));
-            }
-            // The shell's own entry is not the app's: the loop writes the
-            // list and every bar follows.
-            let shell_chosen = self.tray_shell_choice.borrow_mut().take();
-            if let Some((item, entry)) = shell_chosen {
-                self.post(Message::TrayShellEntry(item, entry));
-            }
-            if !tray_menu_open
-                && self
-                    .open_tray_menu
-                    .as_ref()
-                    .is_some_and(|o| o.surface == surface)
-            {
-                self.tray_menu_gone();
             }
         }
     }
@@ -3946,6 +3941,17 @@ impl Shell for App {
             }
             Message::Tray(event) => self.tray_event(event, ctl),
             Message::TrayShellEntry(item, entry) => self.tray_shell_entry(&item, entry, ctl),
+            Message::TrayMenuStranded(surface, item) => {
+                // The window may have let go of the item since the post.
+                if Pending::still_waits(&self.held_tray_menus(), surface, &item) {
+                    let gone = PendingMenu {
+                        surface,
+                        item,
+                        until: None,
+                    };
+                    self.shell_entry_alone(&gone, ctl);
+                }
+            }
             Message::Wallpaper(event) => {
                 self.wallpapers
                     .message(event, &mut self.settings, ctl, self.painter.as_ref());
@@ -4297,8 +4303,6 @@ mod tests {
         Some(PendingMenu {
             surface: SurfaceId(10),
             item: self::item(item),
-            row: Rect::whole((1.0, 1.0)),
-            keyboard: false,
             until: None,
         })
     }
@@ -4358,20 +4362,18 @@ mod tests {
     fn empty_root_gives_up_after_500_ms() {
         let t0 = Instant::now();
         let mut request = pending(1);
-        assert!(
-            Pending::expired(&mut request, t0).is_none(),
-            "not waiting yet"
-        );
         assert!(matches!(
             Pending::of(&mut request, &item(1), true, t0),
             Pending::Wait(_)
         ));
-        let before = t0 + Duration::from_millis(499);
-        assert!(Pending::expired(&mut request, before).is_none());
-        // The frame at the deadline drops it...
+        assert_eq!(
+            Pending::due(&request, t0 + Duration::from_millis(499)),
+            None
+        );
+        // The frame at the deadline is due (the message takes the request
+        // and the window gets the shell's entry alone, or closes)...
         let at = t0 + MENU_LATE_LAYOUT;
-        assert!(Pending::expired(&mut request, at).is_some());
-        assert!(request.is_none());
+        assert_eq!(Pending::due(&request, at), Some(item(1)));
         // ...and so does an empty root that comes in late.
         let mut late = pending(1);
         assert!(matches!(
@@ -4386,14 +4388,171 @@ mod tests {
     }
 
     #[test]
-    fn a_request_for_another_item_gives_up_the_old_one() {
+    fn a_request_for_another_item_replaces_the_old_without_giving_it_up() {
         let mut slot = None;
-        assert!(Pending::replace(&mut slot, pending(1).expect("a request")).is_none());
-        // The same item again (two quick clicks): nothing to give up.
-        assert!(Pending::replace(&mut slot, pending(1).expect("a request")).is_none());
-        let old = Pending::replace(&mut slot, pending(2).expect("a request"));
-        assert_eq!(old.map(|o| o.item), Some(item(1)));
-        assert_eq!(slot.map(|p| p.item), Some(item(2)));
+        let none: [(SurfaceId, ItemId); 0] = [];
+        assert!(Pending::replace(&mut slot, pending(1).expect("a request"), &none).is_none());
+        assert_eq!(slot.as_ref().map(|p| &p.item), Some(&item(1)));
+        // The same item again (two quick clicks) keeps the one request.
+        let open = [(SurfaceId(10), item(1))];
+        assert!(Pending::replace(&mut slot, pending(1).expect("a request"), &open).is_none());
+        assert_eq!(slot.as_ref().map(|p| &p.item), Some(&item(1)));
+        // Another item takes its place: the old one is not closed here (its
+        // window is not held any more, and the sync closes it once).
+        let after = [(SurfaceId(10), item(2))];
+        assert!(Pending::replace(&mut slot, pending(2).expect("a request"), &after).is_none());
+        assert_eq!(slot.as_ref().map(|p| &p.item), Some(&item(2)));
+        let before = [(SurfaceId(10), item(1))];
+        assert_eq!(closed_tray_menus(&before, &after), [item(1)]);
+    }
+
+    #[test]
+    fn a_request_replaced_while_its_own_window_still_waits_is_handed_back() {
+        // Surface 10 waits on item 1; surface 20 asks for item 2 before the
+        // app answers. Nobody else will answer surface 10's window.
+        let mut slot = pending(1);
+        let held = [held(10, 1), held(20, 2)];
+        let second = PendingMenu {
+            surface: SurfaceId(20),
+            item: item(2),
+            until: None,
+        };
+        let stranded = Pending::replace(&mut slot, second, &held);
+        assert_eq!(
+            stranded.map(|p| (p.surface, p.item)),
+            Some((SurfaceId(10), item(1)))
+        );
+        assert_eq!(slot.as_ref().map(|p| p.surface), Some(SurfaceId(20)));
+        // The same item asked again from another output: still the old
+        // window's to be answered.
+        let mut slot = pending(1);
+        let again = PendingMenu {
+            surface: SurfaceId(20),
+            item: item(1),
+            until: None,
+        };
+        let held = [self::held(10, 1), self::held(20, 1)];
+        assert!(Pending::replace(&mut slot, again, &held).is_some());
+        // The same request again hands nothing back.
+        let mut slot = pending(1);
+        assert!(Pending::replace(&mut slot, pending(1).expect("a request"), &held).is_none());
+    }
+
+    #[test]
+    fn a_request_is_kept_only_while_its_own_window_holds_its_item() {
+        // Surface 20 asked for item 1; surface 10 holds item 1 too, but
+        // surface 20's window is gone: the request is nobody's.
+        let mut request = Some(PendingMenu {
+            surface: SurfaceId(20),
+            item: item(1),
+            until: None,
+        });
+        assert!(Pending::forget_unheld(&mut request, &[held(10, 1)]));
+        assert!(request.is_none());
+        // Held by its own surface (and another): it stays.
+        let mut request = Some(PendingMenu {
+            surface: SurfaceId(20),
+            item: item(1),
+            until: None,
+        });
+        assert!(!Pending::forget_unheld(
+            &mut request,
+            &[held(10, 1), held(20, 1)]
+        ));
+        assert!(request.is_some());
+    }
+
+    #[test]
+    fn a_stranded_request_is_answered_only_while_its_own_window_holds_its_item() {
+        let held = [held(10, 1), held(20, 2)];
+        assert!(Pending::still_waits(&held, SurfaceId(10), &item(1)));
+        // Another window holds the item, or the window holds another item.
+        assert!(!Pending::still_waits(&held, SurfaceId(20), &item(1)));
+        assert!(!Pending::still_waits(&held, SurfaceId(10), &item(2)));
+        assert!(!Pending::still_waits(&[], SurfaceId(10), &item(1)));
+    }
+
+    fn held(surface: u32, n: u32) -> (SurfaceId, ItemId) {
+        (SurfaceId(surface), item(n))
+    }
+
+    #[test]
+    fn closed_tray_menus_names_each_item_once() {
+        let (s1, s2) = (10, 20);
+        // Two windows of one Island, one gone: that item once.
+        assert_eq!(
+            closed_tray_menus(&[held(s1, 1), held(s1, 2)], &[held(s1, 2)]),
+            [item(1)]
+        );
+        // The same item held on another surface is still held.
+        assert_eq!(
+            closed_tray_menus(&[held(s1, 1)], &[held(s2, 1)]),
+            Vec::<ItemId>::new()
+        );
+        // The same item held twice before and gone from both: named once.
+        assert_eq!(
+            closed_tray_menus(&[held(s1, 1), held(s2, 1)], &[]),
+            [item(1)]
+        );
+        // Nothing before, nothing closed; what opens is not named.
+        assert!(closed_tray_menus(&[], &[held(s1, 1)]).is_empty());
+        assert!(closed_tray_menus(&[held(s1, 1)], &[held(s1, 1)]).is_empty());
+    }
+
+    #[test]
+    fn a_late_layout_after_the_drop_closed_opens_nothing_and_closes_the_menu_once() {
+        let t0 = Instant::now();
+        // The drop of item 1 is held and its layout is asked for.
+        let mut request = pending(1);
+        let open = [held(10, 1)];
+        assert!(!Pending::forget_unheld(&mut request, &open));
+        assert!(request.is_some(), "a held window keeps its request");
+        // Escape closes the window before the app answers: the sync names
+        // the item once and forgets the request.
+        let after: [(SurfaceId, ItemId); 0] = [];
+        assert_eq!(closed_tray_menus(&open, &after), [item(1)]);
+        assert!(Pending::forget_unheld(&mut request, &after));
+        assert!(request.is_none());
+        // The layout that comes late is nobody's: nothing opens, and the
+        // sync after it has nothing more to close.
+        assert!(matches!(
+            Pending::of(&mut request, &item(1), false, t0),
+            Pending::Unasked
+        ));
+        assert!(closed_tray_menus(&after, &after).is_empty());
+        // Opening another icon's menu before the answer is the same: the
+        // first item is no longer held anywhere.
+        let mut request = pending(1);
+        let (first, second) = ([held(10, 1)], [held(10, 2)]);
+        assert_eq!(closed_tray_menus(&first, &second), [item(1)]);
+        assert!(Pending::forget_unheld(&mut request, &second));
+        assert!(matches!(
+            Pending::of(&mut request, &item(1), false, t0),
+            Pending::Unasked
+        ));
+    }
+
+    #[test]
+    fn an_empty_root_past_500_ms_gets_the_shell_entry_alone() {
+        let t0 = Instant::now();
+        let mut request = pending(1);
+        // The empty root waits for its layout...
+        assert!(matches!(
+            Pending::of(&mut request, &item(1), true, t0),
+            Pending::Wait(left) if left == MENU_LATE_LAYOUT
+        ));
+        // ...and at the deadline the request is due: the message that takes
+        // it hands the window the empty menu and the shell's entry.
+        let at = t0 + MENU_LATE_LAYOUT;
+        assert_eq!(Pending::due(&request, at), Some(item(1)));
+        let item = item(1);
+        assert!(request.take_if(|p| p.item == item).is_some());
+        // The item stays followed: a layout that comes later reaches the
+        // window as a refresh, not as a request, so nothing is pending.
+        assert!(matches!(
+            Pending::of(&mut request, &item, false, at),
+            Pending::Unasked
+        ));
     }
 
     #[test]

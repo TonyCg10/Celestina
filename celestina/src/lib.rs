@@ -31,6 +31,7 @@ pub mod phone;
 pub mod pieces;
 pub mod polkit;
 pub mod providers;
+pub mod scrolling;
 pub mod session_menu;
 pub mod sheet;
 #[cfg(test)]

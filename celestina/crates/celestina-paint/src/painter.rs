@@ -267,6 +267,13 @@ fn layer_px(rect: Rect, dpr: f32, max_side: u32) -> Option<(u32, u32, (f32, f32)
     ))
 }
 
+/// Whether a blur or a cut row begun while `depth` of them are open draws
+/// plainly: femtovg's offscreen targets do not nest (ending one sets the
+/// target back to the screen), so only the outermost layer is made.
+fn blur_nested(depth: u32) -> bool {
+    depth > 0
+}
+
 /// The one painter of the process.
 pub struct Painter {
     backend: Backend,
@@ -291,6 +298,8 @@ pub struct Painter {
     row_warned: bool,
     /// Whether the missing blur images were already warned about.
     blur_warned: bool,
+    /// How many offscreen layers (blurs and cut rows) are being drawn.
+    blur_depth: u32,
 }
 
 impl std::fmt::Debug for Painter {
@@ -353,6 +362,7 @@ impl Painter {
             blur_available: false,
             row_warned: false,
             blur_warned: false,
+            blur_depth: 0,
         })
     }
 
@@ -786,7 +796,12 @@ impl Painter {
         if !(window.w > 0.0 && window.h > 0.0) {
             return;
         }
-        if let Some(layers) = self.row_layers(row) {
+        let layers = if blur_nested(self.blur_depth) {
+            None
+        } else {
+            self.row_layers(row)
+        };
+        if let Some(layers) = layers {
             let dpr = self.dpr;
             let (ox, oy) = (
                 (row.image.x * dpr).floor() / dpr,
@@ -795,7 +810,9 @@ impl Painter {
             self.push_state();
             self.backend.begin_row(&layers, (ox, oy), dpr);
             self.alpha.current = 1.0;
+            self.blur_depth += 1;
             draw(self);
+            self.blur_depth -= 1;
             self.backend.end_row();
             self.pop_state();
             let band = soft_edge::band_width(window.w);
@@ -833,13 +850,14 @@ impl Painter {
     /// reach (about 3 `sigma`).
     pub fn blurred(&mut self, rect: Rect, sigma: f32, draw: &mut dyn FnMut(&mut Painter)) {
         let sigma_px = sigma * self.dpr;
-        let plan = (sigma_px.is_finite() && sigma_px >= MIN_BLUR_PX)
-            .then(|| blur_plan(sigma_px))
-            .and_then(|(k, sigma_layer)| {
-                let scale = self.dpr / k as f32;
-                self.blur_layer(rect, scale)
-                    .map(|(layer, origin)| (layer, origin, scale, sigma_layer))
-            });
+        let plan =
+            (!blur_nested(self.blur_depth) && sigma_px.is_finite() && sigma_px >= MIN_BLUR_PX)
+                .then(|| blur_plan(sigma_px))
+                .and_then(|(k, sigma_layer)| {
+                    let scale = self.dpr / k as f32;
+                    self.blur_layer(rect, scale)
+                        .map(|(layer, origin)| (layer, origin, scale, sigma_layer))
+                });
         let Some((layer, origin, scale, sigma_layer)) = plan else {
             draw(self);
             return;
@@ -847,7 +865,9 @@ impl Painter {
         self.push_state();
         self.backend.begin_blur(&layer, origin, scale);
         self.alpha.current = 1.0;
+        self.blur_depth += 1;
         draw(self);
+        self.blur_depth -= 1;
         self.backend.end_blur();
         self.pop_state();
         let (w, h) = layer.size();
@@ -961,6 +981,15 @@ mod tests {
                 Some(HazeLayer::Tint(theme.color(Role::GlassFallback)))
             ]
         );
+    }
+
+    #[test]
+    fn a_blur_inside_a_blur_draws_plain() {
+        // Only the outermost layer is made: femtovg's offscreen targets do
+        // not nest.
+        assert!(!blur_nested(0));
+        assert!(blur_nested(1));
+        assert!(blur_nested(2));
     }
 
     #[test]

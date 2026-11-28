@@ -1,0 +1,145 @@
+# CEL-D-016 exact change inventory
+
+Base revision	7c400adcf33b9559ed21806917985706adc59e33
+Pathspec	celestina/Cargo.lock
+Pathspec	celestina/Cargo.toml
+Pathspec	celestina/VALIDATION.md
+Pathspec	celestina/crates/celestina-paint/src/painter.rs
+Pathspec	celestina/crates/celestina-ui/src/paint.rs
+Pathspec	celestina/crates/celestina-ui/src/reconcile.rs
+Pathspec	celestina/crates/celestina-ui/src/tree.rs
+Pathspec	celestina/crates/celestina-ui/tests/leaving.rs
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus.md
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s01-bar-open-drop.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s02-bar-drill-in.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s03-bar-late-submenu.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s04-bar-empty-shell-entry-alone.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s05-bar-held-drop-slow.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s06-bar-switch-slow-to-menu.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s07-bar-switch-menu-to-slow.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s08-bar-long-open.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s09-bar-long-keyboard-shell-entry.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s10-window-slow-card-unfold.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s11-window-card-fold.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s12-window-card-scroll-thumb.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s13-window-states.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s14-tray-page-card.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s15-reduced-bar-open.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s16-reduced-window-card.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s17-reduced-round1.jpg
+Pathspec	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s18-page-switch.jpg
+Pathspec	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-016.numstat.tsv
+Pathspec	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+Pathspec	celestina/src/app.rs
+Pathspec	celestina/src/island/mod.rs
+Pathspec	celestina/src/island/page_sheets.rs
+Pathspec	celestina/src/island/pages/activity.rs
+Pathspec	celestina/src/island/pages/bluetooth.rs
+Pathspec	celestina/src/island/pages/clipboard.rs
+Pathspec	celestina/src/island/pages/clock.rs
+Pathspec	celestina/src/island/pages/media.rs
+Pathspec	celestina/src/island/pages/mod.rs
+Pathspec	celestina/src/island/pages/network.rs
+Pathspec	celestina/src/island/pages/notifications.rs
+Pathspec	celestina/src/island/pages/phone.rs
+Pathspec	celestina/src/island/pages/power.rs
+Pathspec	celestina/src/island/pages/sysmon.rs
+Pathspec	celestina/src/island/pages/tray.rs
+Pathspec	celestina/src/island/sheets.rs
+Pathspec	celestina/src/island/state.rs
+Pathspec	celestina/src/island/tests/tray_menu.rs
+Pathspec	celestina/src/island/tests/tray_overflow.rs
+Pathspec	celestina/src/island/tests/tray_page_card.rs
+Pathspec	celestina/src/island/tray_card.rs
+Pathspec	celestina/src/launcher/mod.rs
+Pathspec	celestina/src/launcher/scrolling.rs
+Pathspec	celestina/src/launcher/state.rs
+Pathspec	celestina/src/launcher/view.rs
+Pathspec	celestina/src/lib.rs
+Pathspec	celestina/src/message.rs
+Pathspec	celestina/src/pieces/mod.rs
+Pathspec	celestina/src/pieces/tray.rs
+Pathspec	celestina/src/scrolling.rs
+Pathspec	celestina/src/sheet/body.rs
+Pathspec	celestina/src/sheet/mod.rs
+Pathspec	celestina/src/sheet/motion.rs
+Pathspec	celestina/src/sheet/tray_menu.rs
+Pathspec	celestina/src/sheet/tray_overflow.rs
+Pathspec	celestina/src/tray/card.rs
+Pathspec	celestina/src/tray/menu.rs
+Pathspec	celestina/src/tray/mod.rs
+Pathspec	celestina/src/tray/pane.rs
+Pathspec	docs/version-history.tsv
+Calculation	tracked paths use git diff --numstat --no-renames; new paths use /dev/null
+Hashes	SHA-256 of final bytes
+
+added	deleted	content	path
+1	1	6f4d6166ee707a67a2930976db98f8e31a929ebb10b09016f2578e3b9033f50f	celestina/Cargo.lock
+1	1	f0d11a2ba5288cd228ac3dfd8f25276e9ce39ccbc603563439efdbed51cc0492	celestina/Cargo.toml
+61	4	c34c4d5e19b40b5e260c9b86e7c27c6f64fda169074475461a425ae96609bf66	celestina/VALIDATION.md
+37	8	8711a721d23a7a054ab4e7497b6c5afda69b53927949f7034d0183e49686e4d2	celestina/crates/celestina-paint/src/painter.rs
+16	2	75d43209294019679b485d90de7e9d7d906dbd32354c889ecee4664952e125a2	celestina/crates/celestina-ui/src/paint.rs
+8	3	3aab7d38f16a6bce7e2284fa15447abca4f19cf867208b903d6d6d04bd3f92c5	celestina/crates/celestina-ui/src/reconcile.rs
+26	31	e01d8ca57ee7c9ae7724fd848a1d9fdc6ef3153bf19bf6cf0566b53d18c7cbe8	celestina/crates/celestina-ui/src/tree.rs
+18	0	ef96b22d18607c49d730b661469df55839a409ac68e4575f787fe2ec655c6e1f	celestina/crates/celestina-ui/tests/leaving.rs
+105	0	0d8b36bc9110fd4c8dff997e393e8c0da479acc64df9c58078b7985e57aa1984	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus.md
+-	-	50cfcd73b74ded7178c952ee975986b1f1e527747322c7d1164ce2ca582e840b	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s01-bar-open-drop.jpg
+-	-	d40046af25de9fa0bfb166e1f04f0b0b4805a8afeacb73ef2f766a53ba0bc5a4	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s02-bar-drill-in.jpg
+-	-	c528c4a6213280ab1ccaeab80acaf0fffa436ea0b8726f686464ec3594612939	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s03-bar-late-submenu.jpg
+-	-	ac6bf04b22bade3e9dacc1a893f2490aac2315e54b6c7a0b37e4adcf7cc1f83f	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s04-bar-empty-shell-entry-alone.jpg
+-	-	5cc62ef700c135c0a1da30ec6c4d4b85a51b8639899797db960177087687e013	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s05-bar-held-drop-slow.jpg
+-	-	ffaefd7638530cf867a905703418c346758d6f7930410e6321f80012b361cc03	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s06-bar-switch-slow-to-menu.jpg
+-	-	3ddf0c55c3ab1bdb4f608c5c4c746034316f96f0737439aad4de7d9c6a921a36	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s07-bar-switch-menu-to-slow.jpg
+-	-	1337eff69f589008942978341ee4f827b46bc9bb156c9909bac326d227707819	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s08-bar-long-open.jpg
+-	-	63306be217f3512c054f094f6aab326e5320e89115f936c46670fdddc35a45f5	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s09-bar-long-keyboard-shell-entry.jpg
+-	-	a93be4ebd4d0bcee74942d812d1c94dd64dcc02fc08950ae06c57dada4252e29	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s10-window-slow-card-unfold.jpg
+-	-	a2fcf4faa5af1b8629a608e40cf832b8b9e17eadd960ba2e8db5f0647cdb9dc0	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s11-window-card-fold.jpg
+-	-	e25db97b3a730a8445191b26f4d8db1c5d8dc94aebbd8cacbdd784da01356347	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s12-window-card-scroll-thumb.jpg
+-	-	3c8231518255d94d291cc81eaac879dfb78267ece0f2064082df37ede95ad56d	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s13-window-states.jpg
+-	-	39869affa091cef0df81ec8c68e68f30366fd6bef6e267790b263f928687326b	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s14-tray-page-card.jpg
+-	-	094689f1d042be0945d7fe18f790c31aafe5563769e53b81feee3ec40fb771a1	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s15-reduced-bar-open.jpg
+-	-	31b1725e42ce3589e9bab154fc589af68c0d2353cca6a42800600e9faf74c3d7	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s16-reduced-window-card.jpg
+-	-	ce96f6e0f3ff010c46db6b9bcfa3e5b8fe4c058346c73fcc3e08e49b821de57f	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s17-reduced-round1.jpg
+-	-	eded2277a53e3fe16323c909700f214a509fca4050ca982218ce834b9b333fa5	celestina/docs/evidence/2026-11-27-cel-d-016-app-menus/s18-page-switch.jpg
+145	0	self	celestina/docs/inventories/2026-11-25-cel-tracks/CEL-D-016.numstat.tsv
+1	0	1c16d69c92fc187f0f07ec47681cc8a547b27dd89e0aee707974c29851310d25	celestina/docs/plans/active/2026-11-25-cel-tracks.md
+386	227	29770790094259478d5838ceba24b64d6a98ef821eb12ab876ed75de96062a31	celestina/src/app.rs
+179	344	f14dab582facbd2f5b2b1c1ffdff70140c6f79093ddb0efd9ebce7e9b90e6b9c	celestina/src/island/mod.rs
+3	0	f77bf84b1bf968554fde8291f41e85ebe34768b40a5af748720e5098d1ef31dd	celestina/src/island/page_sheets.rs
+3	0	5bdc6d4571213f2dfa788ef8e9b16d3559a9420464a2fa722fa068534e4563cf	celestina/src/island/pages/activity.rs
+1	0	7c7a5fe9d3c05331fcfeedad936c031014b8771611f19d616d2b0c81cfb6057c	celestina/src/island/pages/bluetooth.rs
+1	0	361beac110b64f975dd27690bbbba096996fcf1200e60f9efa3c2c4717db895b	celestina/src/island/pages/clipboard.rs
+2	0	98ab60fefdfc371a15d4e511e14182fc459e495031e3bdcacad908e424907ab9	celestina/src/island/pages/clock.rs
+2	0	7d235da1e94477ff109865cff8f466f215a069901cf91819660d74fc12883ba9	celestina/src/island/pages/media.rs
+9	0	c49c6b402b9a99f35b94ab6fb0a484fed0254b7bb8db88c80623e11dbdd2f045	celestina/src/island/pages/mod.rs
+2	0	3a9092b035fbd7c937c3b063dcdaf148e8a1fa2c8c57a170b5a6fb00e862bd67	celestina/src/island/pages/network.rs
+3	0	eae8f400b411d479c04a5fccba38541fa01b4d4af942f5df4d1a915b32e161cf	celestina/src/island/pages/notifications.rs
+1	0	c0d0d1b90016a185671b97c904a41e073c52c579240b788651820a27ca740321	celestina/src/island/pages/phone.rs
+1	0	5de0cb3c7c48c54c37ea8e652091363b3f6570fd0c44bde18b829fd101355273	celestina/src/island/pages/power.rs
+1	0	2540921b187a456d8386f12caea6133606d5acb0c4178fa702be9a9fde7a7ce9	celestina/src/island/pages/sysmon.rs
+91	18	ea1c37b8a7b5e8e3c7c5a397f823b388e3c2d08e648d7f95f2a29ec6a91cfbd4	celestina/src/island/pages/tray.rs
+155	13	3794953f1bbbc9ef21e1a46b9960cf36d774e0eec48269e5a0ed2e812cc91565	celestina/src/island/sheets.rs
+12	0	1f38dcce3ebbc2c3747746fba73c5086239a1767cdf02358a295ff2f7f04cc97	celestina/src/island/state.rs
+605	0	4e36ad374e6185034ea58a7bce6ea7881d0e37036f83b143e13c859b5aeddbcd	celestina/src/island/tests/tray_menu.rs
+592	71	828a7759620d0177c1420e0f060654c97b92e97f71b6432f71f9beae58c4eef6	celestina/src/island/tests/tray_overflow.rs
+909	0	5c428165d9d034a2c5d111617436a511018c5d4be19bd99af8fe564aa6c907fc	celestina/src/island/tests/tray_page_card.rs
+311	0	d152b03bc6db7995f137180acc43b59fa0911653fd25115abccb8b9412fcbb1f	celestina/src/island/tray_card.rs
+1	2	3ebd1974e8c281a8994929204f6b658d6779716843174c2118859840e4b10b1f	celestina/src/launcher/mod.rs
+0	144	deleted	celestina/src/launcher/scrolling.rs
+1	1	6cd9cb96a17092eb76f282e8be5f393400bd68148554203ab963981663a6c0ec	celestina/src/launcher/state.rs
+6	7	0caabae47aee8c5e11507075ceaea215c45e572bd5dc199d08ebe7b6c4eac841	celestina/src/launcher/view.rs
+1	0	8a4c52eecbd71701f3d19c667423eb58dbccdbbb100d2ad100369c040ea12430	celestina/src/lib.rs
+6	0	9581a425968cefddf165ee1f19571abf40d6b59ece04c1f74c1f760de213fc03	celestina/src/message.rs
+4	0	fade2e7c5cba59e3286360db7e775c2ffc8ddc5f014e02d7fd0d0430e4c45a35	celestina/src/pieces/mod.rs
+3	2	12fed6e10be46db8f21b46ce241858a5765d65f2eedfb1a6a1f0aef438417141	celestina/src/pieces/tray.rs
+150	0	191b58dc3eae23303d0623ed32c68b3ee36b4d974db8a7a147d478c2c44f8c44	celestina/src/scrolling.rs
+529	45	3583da39be2447955191ddb075b519e401426a7a8f4e5641fe457f5b54cb4b69	celestina/src/sheet/body.rs
+221	9	652d704a96863ae34c75b86930029f091f63d52dd0706823315c6aaa8180a640	celestina/src/sheet/mod.rs
+219	1	60c57b1653ea63264eb5b6383a9bc4ced8572b8554336777c178ce303e26b8c1	celestina/src/sheet/motion.rs
+430	0	1fbb7fa45791e3e0a19b924cd5b83eb2416b337e212af1102b73c1055ad12912	celestina/src/sheet/tray_menu.rs
+234	28	254460c98a53dc51b1e0f39b2dae6fcd7791c1a6b10a53c91a40b2ebbbd28c04	celestina/src/sheet/tray_overflow.rs
+1116	0	d4c76b67bdd6ca7bbf4116d7b8015824daab1fc1801d1d1f04b531376a38a598	celestina/src/tray/card.rs
+81	1319	c31d5bfb988025db71e0877fa3c67e9a6af00999d88383a2655781295339715d	celestina/src/tray/menu.rs
+4	2	3602123d1d61abbf3eb6e08f0d09bd3068db89d6f27c4d032abfcfc1ac024030	celestina/src/tray/mod.rs
+2113	0	5a5268de7f42a9032ab1b3b3e60c74ac1a462e4908ea5191af28bbfd45c4c9ec	celestina/src/tray/pane.rs
+1	0	b1c2f0e3834bc45f36dae659a56b1aaaf485731d993c87d6ca8052de20a14aa8	docs/version-history.tsv

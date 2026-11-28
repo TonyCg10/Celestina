@@ -24,6 +24,7 @@ mod page_sheets;
 pub mod pages;
 mod sheets;
 pub mod state;
+mod tray_card;
 pub mod view;
 pub mod workspaces;
 
@@ -63,7 +64,11 @@ use crate::{
     },
     session_menu::SessionAction,
     sheet::{Measure, Next, Sheets},
-    tray::{scroll_steps, ItemId, Orientation, TrayCommand},
+    tray::{
+        card::{CardSlot, CardToggle, CardView},
+        menu::ShellEntry,
+        scroll_steps, ItemId, Orientation, TrayCommand,
+    },
 };
 use bar_tree::BarTree;
 use cadence::{Cadence, Offer, Redraws, Wake, SYSMON_BAR_PERIOD};
@@ -85,18 +90,19 @@ pub enum IslandAction {
     FocusWindow(u64),
     /// Something the tray host does: activate, secondary activate, scroll.
     Tray(TrayCommand),
-    /// The menu of tray item `item` was asked for from its page `row` (a
-    /// rect of the surface), by the pointer or the `keyboard`: the app asks
-    /// the host for the menu and hands the popup to
-    /// [`Island::open_tray_menu`] once it arrives.
-    OpenTrayMenu {
+    /// The menu of tray item `item` was asked for (a bar icon, a window row
+    /// or a Tray page row): the app asks the host for the menu and gives it
+    /// to the Island that holds it ([`Island::tray_menu_arrived`]) once it
+    /// arrives.
+    AskTrayMenu {
         item: ItemId,
-        row: Rect,
-        keyboard: bool,
         /// Where the pointer was, in output coordinates: what the item
         /// hears in `ContextMenu` when its dbusmenu cannot be had.
         at: (i32, i32),
     },
+    /// The shell's own entry was chosen in `item`'s menu: the app writes
+    /// the bar's hidden list.
+    TrayShellEntry(ItemId, ShellEntry),
     /// The overflow button at `more` (a rect of the surface) was chosen,
     /// from the `keyboard` or the pointer: the app builds the menu and
     /// hands it to [`Island::open_menu`].
@@ -327,6 +333,9 @@ pub struct Island {
     connectivity: ConnectivityState,
     /// The page slide the page view was built with.
     applied_slide: f32,
+    /// The page's tree takes its next layout's moves as steps: the last
+    /// apply moved nodes that must not slide.
+    page_steps: bool,
     /// The theme the views were built with.
     theme: Theme,
     reduced: bool,
@@ -339,10 +348,13 @@ pub struct Island {
     moving: bool,
     /// The overflow menu, while it is open.
     menu: Option<PopupId>,
-    /// The first level of a tray item's menu, while it is open.
-    tray_menu: Option<PopupId>,
     /// The tray's items as the page shows them.
     tray_rows: Vec<TrayRow>,
+    /// The open app's menu as a card under its row on the Tray page, and
+    /// the other rows' blur.
+    tray_card: CardSlot,
+    /// The card the page views were last built with.
+    tray_card_shown: Option<CardView>,
     /// The tray's overflow window is open: the chevron is turned.
     overflow_shown: bool,
     /// The generation of the tray list `tray_rows` was made from.
@@ -388,17 +400,6 @@ pub struct Island {
     sheets: Sheets,
     /// What the Volume and Brightness pieces read.
     levels: Levels,
-    /// The open tray menu hangs from the bar, not from the Tray page, so it
-    /// outlives the page.
-    tray_menu_on_bar: bool,
-    /// The last tray menu asked for was a bar icon's.
-    bar_menu_asked: bool,
-    /// The item whose menu was asked for from a row of the tray's overflow
-    /// window.
-    overflow_menu_asked: Option<ItemId>,
-    /// The item whose open tray card hangs from its row in the overflow
-    /// window: the card goes when the window closes or loses that row.
-    tray_menu_from_window: Option<ItemId>,
     /// The last pointer position seen, in the surface's logical coordinates.
     /// The surface is anchored to the output's whole top edge, so these are
     /// the output's coordinates too.
@@ -472,14 +473,16 @@ impl Island {
             cleared: Vec::new(),
             connectivity: ConnectivityState::default(),
             applied_slide: 0.0,
+            page_steps: false,
             theme,
             reduced: false,
             stale: true,
             page_sheet_stale: false,
             moving: false,
             menu: None,
-            tray_menu: None,
             tray_rows: Vec::new(),
+            tray_card: CardSlot::default(),
+            tray_card_shown: None,
             tray_generation: 0,
             overflow_shown: false,
             tray_dpr: 1.0,
@@ -502,10 +505,6 @@ impl Island {
             bar: None,
             sheets: Sheets::default(),
             levels: Levels::default(),
-            tray_menu_on_bar: false,
-            bar_menu_asked: false,
-            overflow_menu_asked: None,
-            tray_menu_from_window: None,
             pointer: (0.0, 0.0),
             bar_sysmon: Cadence::new(SYSMON_BAR_PERIOD),
             page_sysmon: None,
@@ -916,9 +915,6 @@ impl Island {
         }
         if self.menu.is_some() && self.page_shown().is_none() {
             // The sheet went by another way than a press: its menu goes too.
-            self.close_page_menus(&mut cx.ctl);
-        }
-        if self.tray_card_orphaned() {
             self.close_menu(&mut cx.ctl);
         }
         self.hold_sysmon(sysmon, now, &mut cx.ctl);
@@ -943,6 +939,7 @@ impl Island {
         if moving
             || self.capsule.is_animating(now)
             || self.page.is_animating(now)
+            || self.tray_card_animating(now)
             || bar_moving
             || self.sheets.wants_frame(now)
         {
@@ -1284,6 +1281,8 @@ impl Island {
     fn apply_views(&mut self, now: Instant) {
         let w = self.size.0;
         self.capsule.apply(self.capsule_view(), now);
+        let card_before = self.tray_card_shown;
+        self.tray_card_shown = self.tray_card_view(now);
         let shown = self.state.shown_page();
         let page = page_view(shown);
         let wants = page.wants(&self.page_cx());
@@ -1296,11 +1295,42 @@ impl Island {
             None => self.lead,
         };
         let wants = (wants.0, wants.1 + self.lead);
-        self.state.request_page_size(wants, now, self.reduced);
+        if self.tray_card_unfolding(now) {
+            // Rows leave in whole steps while the box grows: the page does
+            // not fall with each one.
+            let held = self.state.page_size().1;
+            self.state.follow_page_size((wants.0, wants.1.max(held)));
+        } else if self.tray_card_follows(now) {
+            self.state.follow_page_size(wants);
+        } else {
+            self.state.request_page_size(wants, now, self.reduced);
+        }
         let slide = self.state.slide(now);
-        let moving = slide != 0.0 || self.applied_slide != 0.0;
-        if moving {
+        // A card that goes at once leaves with no fade, and the rows under
+        // a moving card follow it frame by frame.
+        let card_left = card_before.filter(CardView::shown).is_some_and(|before| {
+            self.tray_card_shown
+                .is_none_or(|now| !now.shown() || now.index != before.index)
+        });
+        // The rows under a box that moves follow it frame by frame.
+        let box_moved = matches!(
+            (card_before, self.tray_card_shown),
+            (Some(old), Some(new)) if old.index == new.index && old.box_h != new.box_h
+        );
+        // What moves now moves at once: the tree's switch stays on until the
+        // layout has started its slides (see [`Island::layout_with`]), or
+        // they would start from the old layout, one frame behind.
+        if slide != 0.0 || self.applied_slide != 0.0 || card_left || box_moved {
+            self.page_steps = true;
             self.page.set_reduced_motion(true);
+        }
+        // The rows a box leaves no room for go as it reaches them: a fade
+        // would paint them over the box.
+        // (A waiting card hangs from the row before: `before` is then `Some`
+        // with no box, so each side is asked alone.)
+        if card_before.is_some_and(|c| c.shown()) || self.tray_card_shown.is_some_and(|c| c.shown())
+        {
+            self.page.cut_exits();
         }
         self.page.apply(
             view::page_with_card(
@@ -1320,9 +1350,6 @@ impl Island {
             ),
             now,
         );
-        if moving {
-            self.page.set_reduced_motion(self.reduced);
-        }
         self.apply_page_sheet();
         self.apply_workspaces_sheet(now);
         self.apply_tray_overflow_sheet(now);
@@ -1350,6 +1377,10 @@ impl Island {
     fn layout_with(&mut self, now: Instant, lay: &mut dyn FnMut(&mut Tree, (f32, f32))) {
         lay(&mut self.capsule, self.size);
         lay(&mut self.page, self.size);
+        if std::mem::take(&mut self.page_steps) {
+            self.page.set_reduced_motion(self.reduced);
+        }
+        self.layout_tray_card(lay);
         self.sheets.layout(lay);
         for tree in [&mut self.capsule, &mut self.page] {
             if let Some(fault) = tree.take_fault() {
@@ -1423,17 +1454,19 @@ impl Island {
         if capsule {
             painter.haze(rect, radius);
             painter.push_clip(rect, radius);
-            let layers = [
-                (&mut self.capsule, self.state.capsule_opacity(now)),
-                (&mut self.page, self.state.page_opacity(now)),
-            ];
-            for (tree, opacity) in layers {
-                if opacity > 0.0 {
-                    painter.push_state();
-                    painter.opacity(opacity);
-                    tree.paint(painter, now);
-                    painter.pop_state();
-                }
+            let capsule_opacity = self.state.capsule_opacity(now);
+            if capsule_opacity > 0.0 {
+                painter.push_state();
+                painter.opacity(capsule_opacity);
+                self.capsule.paint(painter, now);
+                painter.pop_state();
+            }
+            let page_opacity = self.state.page_opacity(now);
+            if page_opacity > 0.0 {
+                painter.push_state();
+                painter.opacity(page_opacity);
+                self.paint_page_tree(painter, now);
+                painter.pop_state();
             }
             painter.pop_clip();
         }
@@ -1518,6 +1551,7 @@ impl Island {
         if page != self.state.shown_page() {
             self.stale = true;
             self.forget_confirmation();
+            self.drop_tray_card();
         }
         if self.state.is_open() {
             self.state.switch(page, now, self.reduced);
@@ -1535,6 +1569,7 @@ impl Island {
 
     fn close(&mut self, now: Instant) {
         self.forget_page_state();
+        self.drop_tray_card();
         if self.state.is_open() {
             self.page_input
                 .pointer(&mut self.page, &InputEvent::PointerLeave, now);
@@ -1598,7 +1633,7 @@ impl Island {
             }
             // The popup's grab still delivers presses on the Island (the
             // same client): like a native menu, such a press only closes it.
-            InputEvent::PointerPress { .. } if self.menu.is_some() || self.tray_menu.is_some() => {
+            InputEvent::PointerPress { .. } if self.menu.is_some() => {
                 self.close_menu(ctl);
                 true
             }
@@ -1633,9 +1668,6 @@ impl Island {
         let actions = self.dispatch(ev, now, measure);
         // The page or sheet is closing: its menus go with it.
         if self.page_shown().is_none() {
-            self.close_page_menus(ctl);
-        }
-        if self.tray_card_orphaned() {
             self.close_menu(ctl);
         }
         let after = (
@@ -1709,6 +1741,11 @@ impl Island {
             }
         }
         let mut actions = Vec::new();
+        let card_routed = if open && !on_bar {
+            self.tray_card_route(&ev, now)
+        } else {
+            None
+        };
         let events = match &ev {
             _ if on_bar => {
                 actions.extend(self.bar_input(&ev, open, now, measure));
@@ -1720,6 +1757,12 @@ impl Island {
                 }
                 Vec::new()
             }
+            // The Tray page's open menu card: its keys, and the pointer and
+            // the wheel over it, before the page's.
+            _ if open && card_routed.is_some() => {
+                actions.extend(card_routed.unwrap_or_default());
+                Vec::new()
+            }
             InputEvent::Key {
                 keysym,
                 modifiers,
@@ -1728,7 +1771,7 @@ impl Island {
             } if open
                 && (*keysym == XKB_KEY_MENU || (*keysym == XKB_KEY_F10 && modifiers.shift)) =>
             {
-                actions.extend(self.menu_key());
+                actions.extend(self.menu_key(now));
                 Vec::new()
             }
             InputEvent::Key {
@@ -1795,7 +1838,7 @@ impl Island {
             // The tray rows' other buttons: the page's pointer handling
             // only knows the left one.
             InputEvent::PointerRelease { x, y, button, .. } if open && *button != BTN_LEFT => {
-                actions.extend(self.other_button(*x, *y, *button));
+                actions.extend(self.other_button(*x, *y, *button, now));
                 Vec::new()
             }
             _ if open => self.page_input.pointer(&mut self.page, &ev, now),
@@ -1810,20 +1853,12 @@ impl Island {
                     continue;
                 }
             }
-            let tray = self.tray_actions(&event);
+            let tray = self.tray_actions(&event, now);
             if !tray.is_empty() {
                 actions.extend(tray);
             } else if let Some(action) = self.on_event(event, now) {
                 actions.push(action);
             }
-        }
-        // A Tray row's menu was asked for last, not a bar icon's.
-        if !on_bar
-            && actions
-                .iter()
-                .any(|a| matches!(a, IslandAction::OpenTrayMenu { .. }))
-        {
-            self.bar_menu_asked = false;
         }
         actions
     }
@@ -1875,7 +1910,20 @@ impl Island {
         let mut out = Vec::new();
         for (key, gesture, action) in asked {
             let scroll = matches!(gesture, Gesture::Scroll(..));
-            let request = matches!(action, PieceAction::OpenPage(_) | PieceAction::Sheet(_));
+            let request = matches!(
+                action,
+                PieceAction::OpenPage(_) | PieceAction::Sheet(_) | PieceAction::TrayMenu(_)
+            );
+            // A press on the icon whose menu is open only closes the menu:
+            // the app under it is not activated.
+            if gesture == Gesture::Primary
+                && matches!(action, PieceAction::Tray(TrayCommand::Activate(_)))
+                && self.closes_its_tray_menu(key)
+            {
+                self.sheets.drop_queue();
+                self.close_sheet(now);
+                continue;
+            }
             let action = match gesture {
                 Gesture::Scroll(Axis::Vertical, steps) if key == workspaces_piece::key() => {
                     self.workspace_wheel_action(steps, now)
@@ -1890,18 +1938,7 @@ impl Island {
                 PieceAction::Sheet(kind) => out.extend(self.sheet_request(key, kind, now, measure)),
                 PieceAction::FocusWorkspace(id) => out.push(IslandAction::FocusWorkspace(id)),
                 PieceAction::Tray(command) => out.push(IslandAction::Tray(command)),
-                PieceAction::TrayMenu(item) => {
-                    if let Some(row) = self.bar.as_ref().and_then(|bar| bar.node_rect(key)) {
-                        self.bar_menu_asked = true;
-                        self.overflow_menu_asked = None;
-                        out.push(IslandAction::OpenTrayMenu {
-                            item,
-                            row,
-                            keyboard: false,
-                            at: output_point(self.pointer),
-                        });
-                    }
-                }
+                PieceAction::TrayMenu(item) => out.extend(self.tray_menu_request(key, item, now)),
                 PieceAction::TrayContext(item) => {
                     let (x, y) = output_point(self.pointer);
                     out.push(IslandAction::Tray(TrayCommand::ContextMenu(item, x, y)));
@@ -1970,51 +2007,6 @@ impl Island {
         self.menu = Some(id);
     }
 
-    /// Opens the first level of a tray item's menu, of `size`, below its
-    /// page `row` or bar icon (the rect [`IslandAction::OpenTrayMenu`]
-    /// carried), and returns its popup. `None` while another menu is open,
-    /// or, for a page row's menu, while the Tray page is not the one shown
-    /// (the person switched pages before the host answered).
-    pub fn open_tray_menu(
-        &mut self,
-        row: Rect,
-        size: (f32, f32),
-        menu: Box<dyn PopupShell>,
-        ctl: &mut SurfaceCtl<'_>,
-    ) -> Option<PopupId> {
-        let on_bar = self.bar_menu_asked && self.bar.is_some();
-        if self.menu.is_some() || self.tray_menu.is_some() || !(on_bar || self.on_tray_page()) {
-            return None;
-        }
-        let id = ctl.open_popup(crate::tray::menu::placement(&self.theme, row), size, menu);
-        tracing::debug!(output = %self.output, popup = id.0, on_bar, "island: tray menu opened");
-        self.tray_menu = Some(id);
-        self.tray_menu_on_bar = on_bar;
-        let asked = self.overflow_menu_asked.take();
-        self.tray_menu_from_window = asked.filter(|_| on_bar);
-        self.bar_menu_asked = false;
-        Some(id)
-    }
-
-    /// Whether the tray card hangs from an overflow window that is no longer
-    /// open, or that no longer lists the card's app (it was shown, or it
-    /// went): the card goes with it.
-    pub(crate) fn tray_card_orphaned(&self) -> bool {
-        let Some(item) = self.tray_menu_from_window.as_ref() else {
-            return false;
-        };
-        let listed = self.sheets.is_open()
-            && self.sheets.kind() == Some(SheetKind::TrayOverflow)
-            && self.overflow_rows().iter().any(|(_, row)| row.id == *item);
-        self.tray_menu.is_some() && !listed
-    }
-
-    /// Whether a tray item's menu hangs from this Island right now.
-    #[must_use]
-    pub fn tray_menu_open(&self) -> bool {
-        self.tray_menu.is_some()
-    }
-
     /// Whether the page lists tray items right now.
     fn on_tray_page(&self) -> bool {
         self.state.is_open() && self.state.shown_page() == PageId::TRAY
@@ -2039,22 +2031,21 @@ impl Island {
     /// host. A click and the keyboard's activation both activate the item;
     /// the keyboard's way to the menu is the Menu key or Shift+F10
     /// ([`Island::menu_key`]), as the pointer's is the right button.
-    fn tray_actions(&mut self, event: &UiEvent) -> Vec<IslandAction> {
+    fn tray_actions(&mut self, event: &UiEvent, now: Instant) -> Vec<IslandAction> {
         match event {
             UiEvent::Click(key) | UiEvent::Activate(key) => {
                 let keyboard = matches!(event, UiEvent::Activate(_));
-                self.tray_row(*key)
-                    .map(|(index, row)| {
-                        // An item that is only a menu opens it on the click.
-                        if row.item_is_menu {
-                            self.menu_for(index, row, keyboard, self.pointer)
-                        } else {
-                            Some(IslandAction::Tray(TrayCommand::Activate(row.id.clone())))
-                        }
-                    })
-                    .into_iter()
-                    .flatten()
-                    .collect()
+                let Some((index, row)) = self.tray_row(*key) else {
+                    return Vec::new();
+                };
+                // An item that is only a menu opens it on the click.
+                if row.item_is_menu {
+                    self.menu_for(index, keyboard, self.pointer, now)
+                        .into_iter()
+                        .collect()
+                } else {
+                    vec![IslandAction::Tray(TrayCommand::Activate(row.id.clone()))]
+                }
             }
             UiEvent::Scroll(key, horizontal, vertical) => {
                 self.scroll_actions(*key, *horizontal, *vertical)
@@ -2066,32 +2057,20 @@ impl Island {
         }
     }
 
-    fn open_menu_action(
-        &self,
-        item: ItemId,
-        index: usize,
-        keyboard: bool,
-        at: (i32, i32),
-    ) -> Option<IslandAction> {
-        Some(IslandAction::OpenTrayMenu {
-            item,
-            row: self.tray_row_rect(index)?,
-            keyboard,
-            at,
-        })
-    }
-
     /// What the menu of the tray row at `index` asks for: its dbusmenu when
-    /// it serves one, else the item's own through `ContextMenu`. `pointer`
-    /// is where the pointer was; the keyboard's menu is placed at the row's
-    /// centre instead.
+    /// it serves one, as a card hung from the row before the app is asked
+    /// (the app's sync only follows a menu something holds), else the item's
+    /// own through `ContextMenu`; a card already open on the row folds and
+    /// asks for nothing. `pointer` is where the pointer was; the keyboard's
+    /// menu is placed at the row's centre instead.
     fn menu_for(
-        &self,
+        &mut self,
         index: usize,
-        row: &TrayRow,
         keyboard: bool,
         pointer: (f32, f32),
+        now: Instant,
     ) -> Option<IslandAction> {
+        let row = self.tray_rows.get(index)?.clone();
         let rect = self.tray_row_rect(index)?;
         let at = output_point(if keyboard {
             (rect.x + rect.w / 2.0, rect.y + rect.h / 2.0)
@@ -2101,7 +2080,15 @@ impl Island {
         // An item with an `Id` also gets the shell's own card (hide or show);
         // the host asks the app for its own menu when it has no dbusmenu.
         if row.has_menu || !row.sni_id.is_empty() {
-            return self.open_menu_action(row.id.clone(), index, keyboard, at);
+            return match self.toggle_tray_card(index, row.id.clone(), keyboard, now) {
+                Some(CardToggle::Asked) => Some(IslandAction::AskTrayMenu { item: row.id, at }),
+                Some(CardToggle::Folded) => None,
+                // No room for a card under the row: the app's own menu
+                // opens at the pointer, as for an item with no dbusmenu.
+                None => Some(IslandAction::Tray(TrayCommand::ContextMenu(
+                    row.id, at.0, at.1,
+                ))),
+            };
         }
         Some(IslandAction::Tray(TrayCommand::ContextMenu(
             row.id.clone(),
@@ -2163,7 +2150,7 @@ impl Island {
 
     /// A middle click on a tray row activates the item secondarily; a right
     /// click asks for its menu.
-    fn other_button(&self, x: f32, y: f32, button: u32) -> Vec<IslandAction> {
+    fn other_button(&mut self, x: f32, y: f32, button: u32, now: Instant) -> Vec<IslandAction> {
         if !self.on_tray_page() {
             return Vec::new();
         }
@@ -2172,13 +2159,12 @@ impl Island {
         let Some(index) = hit else {
             return Vec::new();
         };
-        let row = &self.tray_rows[index];
         match button {
             BTN_MIDDLE => vec![IslandAction::Tray(TrayCommand::SecondaryActivate(
-                row.id.clone(),
+                self.tray_rows[index].id.clone(),
             ))],
             BTN_RIGHT => self
-                .menu_for(index, row, false, (x, y))
+                .menu_for(index, false, (x, y), now)
                 .into_iter()
                 .collect(),
             _ => Vec::new(),
@@ -2186,13 +2172,13 @@ impl Island {
     }
 
     /// The Menu key (or Shift+F10) on the focused tray row: its menu.
-    fn menu_key(&self) -> Vec<IslandAction> {
+    fn menu_key(&mut self, now: Instant) -> Vec<IslandAction> {
         let Some(id) = self.page.highlight().focused else {
             return Vec::new();
         };
         match self.tray_row(self.page.key_of(id)) {
-            Some((index, row)) => self
-                .menu_for(index, row, true, self.pointer)
+            Some((index, _)) => self
+                .menu_for(index, true, self.pointer, now)
                 .into_iter()
                 .collect(),
             _ => Vec::new(),
@@ -2343,31 +2329,12 @@ impl Island {
         }
     }
 
-    /// Closes the menus from the Island's side; the runtime still reports
-    /// `PopupClosed`, which then finds nothing to do. The polkit prompt calls
-    /// it on every Island, a bar icon's menu included: a popup with a grab
-    /// could otherwise keep the keyboard from the card (N-25).
+    /// Closes the page's overflow menu from the Island's side; the runtime
+    /// still reports `PopupClosed`, which then finds nothing to do. The polkit
+    /// prompt calls it on every Island: a popup with a grab could otherwise
+    /// keep the keyboard from the card (N-25).
     pub(crate) fn close_menu(&mut self, ctl: &mut SurfaceCtl<'_>) {
-        self.tray_menu_on_bar = false;
-        self.tray_menu_from_window = None;
-        for id in [self.menu.take(), self.tray_menu.take()]
-            .into_iter()
-            .flatten()
-        {
-            ctl.close_popup(id);
-            ctl.request_redraw();
-        }
-    }
-
-    /// Closes the menus that hang from the page: the overflow menu and a
-    /// Tray row's; a bar icon's menu does not depend on the page.
-    fn close_page_menus(&mut self, ctl: &mut SurfaceCtl<'_>) {
-        let tray = if self.tray_menu_on_bar {
-            None
-        } else {
-            self.tray_menu.take()
-        };
-        for id in [self.menu.take(), tray].into_iter().flatten() {
+        if let Some(id) = self.menu.take() {
             ctl.close_popup(id);
             ctl.request_redraw();
         }
@@ -2380,23 +2347,15 @@ impl Island {
     /// press on the Island or the menu's own choice or Escape closes only
     /// the menu. Returns whether the popup was this Island's menu.
     fn menu_closed(&mut self, id: PopupId, reason: CloseReason, now: Instant) -> bool {
-        if self.menu == Some(id) {
-            self.menu = None;
-        } else if self.tray_menu == Some(id) {
-            self.tray_menu = None;
-            self.tray_menu_on_bar = false;
-            self.tray_menu_from_window = None;
-        } else {
+        if self.menu != Some(id) {
             return false;
         }
+        self.menu = None;
         if reason == CloseReason::Dismissed {
             if self.state.is_open() {
                 self.close(now);
-            } else if self.sheets.page().is_some()
-                || self.sheets.kind() == Some(SheetKind::TrayOverflow)
-            {
-                // A page sheet closes as the page does, and so does the
-                // tray's window a card hangs from.
+            } else if self.sheets.page().is_some() {
+                // A page sheet closes as the page does.
                 self.sheets.drop_queue();
                 self.close_sheet(now);
             }
@@ -3063,14 +3022,13 @@ mod tests {
         );
         assert_eq!(
             click_at(&mut island, icon, BTN_RIGHT, t0),
-            [IslandAction::OpenTrayMenu {
+            [IslandAction::AskTrayMenu {
                 item: id.clone(),
-                row: rect,
-                keyboard: false,
                 at: (icon.0.round() as i32, icon.1.round() as i32),
             }]
         );
-        assert!(island.bar_menu_asked);
+        assert_eq!(island.sheets.kind(), Some(SheetKind::TrayMenu));
+        assert_eq!(island.tray_menus_held(), std::slice::from_ref(&id));
         let wheel = InputEvent::Axis {
             x: icon.0,
             y: icon.1,
@@ -3593,20 +3551,18 @@ mod tests {
             [IslandAction::Tray(TrayCommand::Activate(id))]
         );
         assert!(!island.sheets.is_open());
-        // A right click on the icon asks for its menu and closes the page.
+        // A right click on the icon asks for its menu and closes the page;
+        // the menu's window waits for the page to be gone.
         let t2 = t1 + ms(500);
         step(&mut island, t2);
         island.open(PageId::ACTIVITY, t2);
         let actions = click_at(&mut island, icon, BTN_RIGHT, t2);
         assert!(matches!(
             actions.as_slice(),
-            [IslandAction::OpenTrayMenu {
-                keyboard: false,
-                ..
-            }]
+            [IslandAction::AskTrayMenu { .. }]
         ));
         assert!(!island.state.is_open());
-        assert!(island.bar_menu_asked);
+        assert_eq!(island.tray_menus_held().len(), 1, "it waits to open");
     }
 
     #[test]
@@ -3661,8 +3617,8 @@ mod tests {
         let inside = centre(page);
         assert!(!island.on_bar(inside.0, inside.1, t0));
         // A right click on the page's first row asks for its menu: the
-        // page's, so the bar's request is forgotten.
-        island.bar_menu_asked = true;
+        // page's, which holds it as a card under the row and leaves the page
+        // open.
         let row = match island.tray_row_rect(0) {
             Some(r) => centre(r),
             None => panic!("no tray row"),
@@ -3670,9 +3626,12 @@ mod tests {
         let actions = click_at(&mut island, row, BTN_RIGHT, t0);
         assert!(matches!(
             actions.as_slice(),
-            [IslandAction::OpenTrayMenu { .. }]
+            [IslandAction::AskTrayMenu { .. }]
         ));
-        assert!(!island.bar_menu_asked);
+        assert_eq!(
+            island.tray_menus_held(),
+            vec![island.tray_rows[0].id.clone()]
+        );
         assert!(island.state.is_open());
     }
 
@@ -4034,7 +3993,7 @@ mod tests {
         assert_eq!(island.scroll_actions(row, f32::NAN, f32::INFINITY), vec![]);
         // The same events through the tree's Scroll event.
         assert_eq!(
-            island.tray_actions(&UiEvent::Scroll(row, 0.0, 15.0)),
+            island.tray_actions(&UiEvent::Scroll(row, 0.0, 15.0), Instant::now()),
             vec![scroll(-1, Orientation::Vertical)]
         );
     }
@@ -4046,155 +4005,28 @@ mod tests {
         assert!(rect0.is_some_and(|r| r.w > 0.0 && r.h > 0.0));
         let (a, b) = (id_of(&island, 0), id_of(&island, 1));
         assert_eq!(
-            island.tray_actions(&UiEvent::Click(tray_page::row_key(0))),
+            island.tray_actions(&UiEvent::Click(tray_page::row_key(0)), Instant::now()),
             vec![IslandAction::Tray(TrayCommand::Activate(a.clone()))]
         );
         // Enter or Space on a row with a menu activates the item as a click
-        // does; the menu has its own key (`the_menu_key_opens...`).
+        // does; the menu has its own key (`the_menu_key_unfolds...`).
         assert_eq!(
-            island.tray_actions(&UiEvent::Activate(tray_page::row_key(0))),
+            island.tray_actions(&UiEvent::Activate(tray_page::row_key(0)), Instant::now()),
             vec![IslandAction::Tray(TrayCommand::Activate(a))]
         );
         assert_eq!(
-            island.tray_actions(&UiEvent::Activate(tray_page::row_key(1))),
+            island.tray_actions(&UiEvent::Activate(tray_page::row_key(1)), Instant::now()),
             vec![IslandAction::Tray(TrayCommand::Activate(b))]
         );
         // Neither a stranger's key nor a closed page acts.
         assert!(island
-            .tray_actions(&UiEvent::Click(Key::named("close")))
+            .tray_actions(&UiEvent::Click(Key::named("close")), Instant::now())
             .is_empty());
         island.close(Instant::now());
         island.state.close(Instant::now(), true);
         assert!(island
-            .tray_actions(&UiEvent::Click(tray_page::row_key(0)))
+            .tray_actions(&UiEvent::Click(tray_page::row_key(0)), Instant::now())
             .is_empty());
-    }
-
-    #[test]
-    fn middle_click_activates_secondarily_and_right_click_asks_for_the_menu() {
-        let (island, _) = tray_island(2);
-        let centre = |i: usize| {
-            island
-                .tray_row_rect(i)
-                .map(|r| (r.x + r.w / 2.0, r.y + r.h / 2.0))
-                .unwrap_or_default()
-        };
-        let (x0, y0) = centre(0);
-        let (x1, y1) = centre(1);
-        let (a, b) = (id_of(&island, 0), id_of(&island, 1));
-        assert_eq!(
-            island.other_button(x1, y1, BTN_MIDDLE),
-            vec![IslandAction::Tray(TrayCommand::SecondaryActivate(b))]
-        );
-        assert_eq!(
-            island.other_button(x0, y0, BTN_RIGHT),
-            island
-                .open_menu_action(a, 0, false, (x0.round() as i32, y0.round() as i32))
-                .into_iter()
-                .collect::<Vec<_>>()
-        );
-        // A right click on an item without a menu asks the item for its
-        // own, at the pointer; a click between rows and any other button do
-        // nothing.
-        assert_eq!(
-            island.other_button(x1 + 0.4, y1, BTN_RIGHT),
-            vec![IslandAction::Tray(TrayCommand::ContextMenu(
-                id_of(&island, 1),
-                x1.round() as i32,
-                y1.round() as i32
-            ))]
-        );
-        assert!(island.other_button(1.0, 1.0, BTN_MIDDLE).is_empty());
-        assert!(island.other_button(x0, y0, 0x113).is_empty());
-    }
-
-    #[test]
-    fn the_menu_key_opens_the_menu_of_the_focused_row() {
-        let (mut island, _) = tray_island(2);
-        assert!(island.menu_key().is_empty(), "nothing focused");
-        // Tab focuses the first row (it has a menu), Tab again the second.
-        let tab = InputEvent::Key {
-            keysym: 0xff09,
-            utf8: None,
-            modifiers: celestina_wayland::Modifiers::default(),
-            pressed: true,
-            serial: 0,
-        };
-        let tab_to = |island: &mut Island, want: Key| {
-            for _ in 0..30 {
-                island.page_input.key(&mut island.page, &tab);
-                let on = island.page.highlight().focused;
-                if on.is_some_and(|id| island.page.key_of(id) == want) {
-                    return;
-                }
-            }
-            panic!("the focus never reached {want:?}");
-        };
-        tab_to(&mut island, tray_page::row_key(0));
-        assert_eq!(island.menu_key().len(), 1);
-        assert!(matches!(
-            island.menu_key().first(),
-            Some(IslandAction::OpenTrayMenu { keyboard: true, .. })
-        ));
-        tab_to(&mut island, tray_page::row_key(1));
-        assert!(
-            matches!(
-                island.menu_key().as_slice(),
-                [IslandAction::Tray(TrayCommand::ContextMenu(..))]
-            ),
-            "the second row has no dbusmenu: the item's own menu"
-        );
-    }
-
-    #[test]
-    fn item_is_menu_opens_the_menu_on_left_click() {
-        let (mut island, _) = tray_island(3);
-        island.tray_rows[0].item_is_menu = true;
-        island.tray_rows[1].item_is_menu = true;
-        island.pointer = (30.4, 40.6);
-        // With a dbusmenu: its menu opens, not an activation.
-        let first = island.tray_actions(&UiEvent::Click(tray_page::row_key(0)));
-        assert!(
-            matches!(
-                first.as_slice(),
-                [IslandAction::OpenTrayMenu {
-                    keyboard: false,
-                    at: (30, 41),
-                    ..
-                }]
-            ),
-            "{first:?}"
-        );
-        // Without one: the item's own menu, at the pointer.
-        assert_eq!(
-            island.tray_actions(&UiEvent::Click(tray_page::row_key(1))),
-            vec![IslandAction::Tray(TrayCommand::ContextMenu(
-                id_of(&island, 1),
-                30,
-                41
-            ))]
-        );
-        // An item that is not only a menu still activates.
-        assert_eq!(
-            island.tray_actions(&UiEvent::Click(tray_page::row_key(2))),
-            vec![IslandAction::Tray(TrayCommand::Activate(id_of(&island, 2)))]
-        );
-    }
-
-    #[test]
-    fn the_trays_first_level_closes_like_the_overflow_menu() {
-        let t0 = Instant::now();
-        let mut island = Island::new("DP-1", (760.0, 560.0));
-        island.open(PageId::TRAY, t0);
-        island.tray_menu = Some(PopupId(5));
-        // Escape or a choice in the menu: the page stays.
-        assert!(island.menu_closed(PopupId(5), CloseReason::Shell, t0));
-        assert!(island.tray_menu.is_none() && island.state.is_open());
-        // The compositor's dismissal (a click outside) closes the page.
-        island.tray_menu = Some(PopupId(6));
-        assert!(!island.menu_closed(PopupId(1), CloseReason::Dismissed, t0));
-        assert!(island.menu_closed(PopupId(6), CloseReason::Dismissed, t0));
-        assert!(!island.state.is_open());
     }
 
     #[test]
@@ -4377,6 +4209,7 @@ mod tests {
                 do_not_disturb: false,
                 history: &[],
                 items: &[],
+                tray_card: None,
                 sysmon: None,
                 weather: None,
                 today: None,
@@ -6899,6 +6732,8 @@ mod tests {
     mod notice_card;
     mod open_piece;
     mod page_sheets;
+    mod tray_menu;
     mod tray_overflow;
+    mod tray_page_card;
     mod window;
 }

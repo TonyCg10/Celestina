@@ -42,6 +42,7 @@ impl Island {
             do_not_disturb: self.do_not_disturb,
             history: &self.presented,
             items: &self.tray_rows,
+            tray_card: self.tray_card_shown,
             sysmon: self.page_sysmon.as_ref(),
             weather: self.weather.as_ref(),
             today: self.today,
@@ -127,6 +128,8 @@ impl Island {
     fn sheet_cx(&self, page: PageId) -> PageCx<'_> {
         PageCx {
             content_w: self.declared_content_w(page),
+            // The card is the Island page's own.
+            tray_card: None,
             ..self.page_cx()
         }
     }

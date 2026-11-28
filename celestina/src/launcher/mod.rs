@@ -36,7 +36,6 @@
 pub mod commands;
 pub mod groups;
 pub mod recent;
-pub mod scrolling;
 pub mod selector;
 pub mod spawn;
 pub mod state;
@@ -54,7 +53,7 @@ use celestina_wayland::{FrameCx, InputEvent, Modifiers, OutputId, SurfaceCtl, Su
 pub use commands::{commands_for, Switch};
 pub use state::{AppRow, LauncherState, ListView, Row, Source, Tab};
 
-use scrolling::THUMB_LINGER;
+use crate::scrolling::{self, THUMB_LINGER};
 
 use crate::bubbles::Bubbles;
 use crate::island::state::SILHOUETTE_STEP;

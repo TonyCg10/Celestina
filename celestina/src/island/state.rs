@@ -109,6 +109,18 @@ impl IslandState {
         );
     }
 
+    /// [`Self::request_page_size`] for a size that moves every frame (a menu's
+    /// card unfolding in the page): the shown rect is the new size at once,
+    /// with no resize motion of its own to lag behind it.
+    pub fn follow_page_size(&mut self, size: (f32, f32)) {
+        let valid = |v: f32| v.is_finite() && v > 0.0;
+        if !valid(size.0) || !valid(size.1) || size == self.request {
+            return;
+        }
+        self.request = size;
+        self.resize.set(1.0);
+    }
+
     /// The largest page the surface allows: what [`Self::page_size`] clamps
     /// a request to.
     #[must_use]

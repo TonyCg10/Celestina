@@ -67,6 +67,9 @@ pub struct SheetMotion {
     /// close: the content it fades from, whole unless it cut an open or a
     /// travel short.
     old: Shown,
+    /// An open waiting for its menu: it stops at [`drop::OPEN_HOLD`] (at the
+    /// start under reduced motion, which has no drop) until released.
+    holding: bool,
 }
 
 /// `v` when finite, else 0.
@@ -154,6 +157,7 @@ impl SheetMotion {
                 alpha: 1.0,
                 blur: 0.0,
             },
+            holding: false,
         }
     }
 
@@ -280,8 +284,61 @@ impl SheetMotion {
         })
     }
 
+    /// How far into its flight the clock is. A held open stops at its hold
+    /// point.
     fn elapsed(&self, now: Instant) -> Duration {
-        now.saturating_duration_since(self.start)
+        let raw = now.saturating_duration_since(self.start);
+        if self.holding {
+            raw.min(self.hold_point())
+        } else {
+            raw
+        }
+    }
+
+    /// Where a held open stops: [`drop::OPEN_HOLD`] of its time, or its
+    /// start under reduced motion.
+    fn hold_point(&self) -> Duration {
+        if self.reduced {
+            Duration::ZERO
+        } else {
+            self.duration.mul_f32(drop::OPEN_HOLD)
+        }
+    }
+
+    /// An open in progress stops at [`drop::OPEN_HOLD`] when it gets there
+    /// (before that it runs on), until [`SheetMotion::release`]. Under
+    /// reduced motion it shows nothing until released. Does nothing for a
+    /// close, a travel or an open that has finished.
+    pub fn hold(&mut self, now: Instant) {
+        if self.kind == Kind::Open && self.flying(now) {
+            self.holding = true;
+        }
+    }
+
+    /// Lets a held open go on from where it stopped, from `now`: its start
+    /// moves by the time it was held. A hold not reached yet is dropped.
+    pub fn release(&mut self, now: Instant) {
+        if !self.holding {
+            return;
+        }
+        let at = self.elapsed(now);
+        self.holding = false;
+        if let Some(start) = now.checked_sub(at) {
+            self.start = start;
+        }
+    }
+
+    /// The open has stopped at its hold point and waits: no clock runs.
+    #[must_use]
+    pub fn is_held(&self, now: Instant) -> bool {
+        self.holding && now.saturating_duration_since(self.start) >= self.hold_point()
+    }
+
+    /// Whether a travel has run its course and the window rests (what a
+    /// window kept for a menu still being asked for does until it answers).
+    #[must_use]
+    pub fn travel_settled(&self, now: Instant) -> bool {
+        self.kind == Kind::Travel && !self.flying(now)
     }
 
     fn flying(&self, now: Instant) -> bool {
@@ -292,6 +349,11 @@ impl SheetMotion {
     fn fraction(&self, now: Instant) -> f32 {
         if self.duration.is_zero() {
             return 1.0;
+        }
+        if self.is_held(now) && !self.reduced {
+            // Just under the open phase: the held drop is the bulb, whatever
+            // the clock's rounding does at the boundary.
+            return drop::OPEN_HOLD.next_down();
         }
         (self.elapsed(now).as_secs_f32() / self.duration.as_secs_f32()).clamp(0.0, 1.0)
     }
@@ -438,6 +500,9 @@ impl SheetMotion {
 
     /// Whether a clock is still running and the surface needs a frame.
     pub fn wants_frame(&self, now: Instant) -> bool {
+        if self.is_held(now) {
+            return false;
+        }
         if self.flying(now) {
             return true;
         }
@@ -1001,5 +1066,158 @@ mod tests {
         assert_eq!(m.content_blur_px(at), 0.0);
         assert!(m.old_content(at).is_none());
         assert!(!m.wants_frame(at));
+    }
+
+    #[test]
+    fn a_held_open_stops_as_a_drop_at_52_percent() {
+        let t0 = Instant::now();
+        let mut m = opened(t0);
+        m.hold(t0);
+        let at = frame_of(&m, ms(t0, 239.2));
+        let over = Theme::dark().overshoot;
+        let want = drop::open_frame(
+            drop::OPEN_HOLD.next_down(),
+            target(),
+            Source::of(pill()),
+            over,
+            20.0,
+        );
+        assert!(near_frame(at, want));
+        assert!(at.liquid.is_some_and(|l| l.bulb.is_some()));
+        assert!(near_frame(frame_of(&m, ms(t0, 900.0)), at));
+        assert!(near_frame(frame_of(&m, ms(t0, 5000.0)), at));
+        assert!(m.wants_frame(ms(t0, 100.0)));
+        assert!(!m.is_held(ms(t0, 100.0)));
+        assert!(m.is_held(ms(t0, 240.0)));
+        assert!(!m.wants_frame(ms(t0, 240.0)));
+        assert!(!m.wants_frame(ms(t0, 900.0)));
+        let shown = m.content_shown(ms(t0, 900.0));
+        let held = drop::open_frame(
+            drop::OPEN_HOLD.next_down(),
+            target(),
+            Source::of(pill()),
+            over,
+            20.0,
+        );
+        assert!(near(shown.alpha, held.content) && near(shown.blur, held.blur));
+    }
+
+    #[test]
+    fn a_release_after_the_hold_opens_in_the_remaining_221_ms() {
+        let t0 = Instant::now();
+        let mut m = opened(t0);
+        m.hold(t0);
+        let rel = ms(t0, 900.0);
+        m.release(rel);
+        assert!(!m.is_held(rel));
+        assert!(m.wants_frame(ms(rel, 100.0)));
+        let over = Theme::dark().overshoot;
+        for n in [10.0f32, 50.0, 110.0, 160.0, 220.0] {
+            let t = drop::OPEN_HOLD + n / 460.0;
+            let want = drop::open_frame(t, target(), Source::of(pill()), over, 20.0);
+            assert!(near_frame(frame_of(&m, ms(rel, n)), want), "at {n} ms");
+        }
+        assert!(m.wants_frame(ms(rel, 220.0)));
+        assert_eq!(
+            frame_of(&m, ms(rel, 221.2)),
+            DropFrame::window(target(), 20.0)
+        );
+        assert!(!m.wants_frame(ms(rel, 222.0)));
+        // Content opacity (t - 0.6) / 0.34 on the resumed clock.
+        let t = drop::OPEN_HOLD + 150.0 / 460.0;
+        let want = ((t - 0.6) / 0.34).clamp(0.0, 1.0);
+        assert!(near(m.content_shown(ms(rel, 150.0)).alpha, want));
+    }
+
+    #[test]
+    fn a_release_before_52_percent_never_stops_the_drop() {
+        let t0 = Instant::now();
+        let plain = opened(t0);
+        let mut m = opened(t0);
+        m.hold(t0);
+        m.release(ms(t0, 100.0));
+        assert!(!m.is_held(ms(t0, 300.0)));
+        let mut n = 0.0;
+        while n <= 500.0 {
+            let at = ms(t0, n);
+            assert!(near_frame(frame_of(&m, at), frame_of(&plain, at)), "{n}");
+            assert_eq!(m.wants_frame(at), plain.wants_frame(at), "{n}");
+            n += 20.0;
+        }
+    }
+
+    #[test]
+    fn closing_a_held_drop_rises_back_into_the_capsule() {
+        let t0 = Instant::now();
+        let mut m = opened(t0);
+        m.hold(t0);
+        let at = ms(t0, 900.0);
+        let shown = frame_of(&m, at);
+        m.close(shown.rect, shown.radius, pill(), at);
+        assert!(m.is_closing());
+        assert!(!m.is_held(at));
+        let mut prev = shown.rect.h;
+        let mut n = 0.0;
+        while n < 400.0 {
+            let f = frame_of(&m, ms(at, n));
+            assert!(f.rect.h <= prev + 1e-3, "{n}: {} > {prev}", f.rect.h);
+            assert!(f.rect.w <= shown.rect.w + 1e-3, "{n}");
+            prev = f.rect.h;
+            n += 20.0;
+        }
+        assert!(m.wants_frame(ms(at, 399.0)));
+        assert!(m.closed(ms(at, 400.0)));
+    }
+
+    #[test]
+    fn a_hold_on_anything_but_an_open_in_progress_does_nothing() {
+        let t0 = Instant::now();
+        let mut done = opened(t0);
+        done.hold(ms(t0, 900.0));
+        assert!(!done.is_held(ms(t0, 1000.0)));
+        let (mut c, at) = closing(t0);
+        c.hold(ms(at, 10.0));
+        assert!(!c.is_held(ms(at, 300.0)));
+        assert!(!c.wants_frame(ms(at, 400.0)));
+        let mut tr = opened(t0);
+        tr.travel(
+            target(),
+            20.0,
+            Shown {
+                alpha: 1.0,
+                blur: 0.0,
+            },
+            &Theme::dark(),
+            ms(t0, 900.0),
+        );
+        tr.hold(ms(t0, 910.0));
+        assert!(!tr.is_held(ms(t0, 1200.0)));
+        let mut r = opened(t0);
+        r.release(ms(t0, 10.0));
+        assert!(near_frame(
+            frame_of(&r, ms(t0, 200.0)),
+            frame_of(&opened(t0), ms(t0, 200.0))
+        ));
+    }
+
+    #[test]
+    fn reduced_motion_holds_with_nothing_shown_and_fades_in_on_release() {
+        let t0 = Instant::now();
+        let mut m = SheetMotion::open(pill(), &Theme::dark(), t0, true);
+        m.hold(t0);
+        for n in [0.0f32, 100.0, 900.0] {
+            let f = frame_of(&m, ms(t0, n));
+            assert!(near(f.content, 0.0) && near(f.glass, 0.0), "at {n} ms");
+        }
+        assert!(m.is_held(t0));
+        assert!(!m.wants_frame(ms(t0, 900.0)));
+        let rel = ms(t0, 900.0);
+        m.release(rel);
+        assert!(m.wants_frame(ms(rel, 50.0)));
+        let f = frame_of(&m, ms(rel, 75.0));
+        assert!(near(f.content, 0.5) && near(f.glass, 0.5));
+        let f = frame_of(&m, ms(rel, 150.0));
+        assert!(near(f.content, 1.0) && near(f.glass, 1.0));
+        assert!(!m.wants_frame(ms(rel, 150.0)));
     }
 }

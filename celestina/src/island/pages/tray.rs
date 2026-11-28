@@ -22,7 +22,12 @@ use crate::{
         state::PAGE_SIZE,
         view::{centred, chrome_height, text_style},
     },
-    tray::{model::FALLBACK_ICON, pick_pixmap, ItemId, Pixmap, Status, TrayItem},
+    sheet::tray_overflow::page_card_slot,
+    tray::{
+        card::{CardView, MARGINS},
+        model::FALLBACK_ICON,
+        pick_pixmap, ItemId, Pixmap, Status, TrayItem,
+    },
 };
 
 /// An item's icon, logical px.
@@ -351,13 +356,33 @@ pub fn index_of(key: Key, count: usize) -> Option<usize> {
     (0..count.min(MAX_ROWS)).find(|&i| row_key(i) == key)
 }
 
+/// How many rows the page draws for `cx`: what fits, at most [`MAX_ROWS`].
+#[must_use]
+pub(crate) fn drawn_len(cx: &PageCx<'_>) -> usize {
+    drawn(cx.items, cx).len()
+}
+
+/// How many rows the page could draw for `cx` with no card on it: what
+/// fits, at most [`MAX_ROWS`]. Where an app's row may be found again when
+/// the list changes under an open card.
+#[must_use]
+pub(crate) fn fitting_len(cx: &PageCx<'_>) -> usize {
+    let room = (cx.max_size.1 - chrome_height(cx.theme)).max(0.0);
+    let fit = (room / cx.theme.row_height).floor() as usize;
+    cx.items.len().min(fit.min(MAX_ROWS))
+}
+
 /// The rows of `items` that are drawn on a page of `max_size`: what fits,
 /// at most [`MAX_ROWS`]. The rest is not built, so nothing invisible can be
 /// focused or clicked.
 fn drawn<'a>(items: &'a [TrayRow], cx: &PageCx<'_>) -> &'a [TrayRow] {
-    let room = (cx.max_size.1 - chrome_height(cx.theme)).max(0.0);
-    let fit = (room / cx.theme.row_height).floor() as usize;
-    &items[..items.len().min(fit.min(MAX_ROWS))]
+    // An open card keeps room under its row: the rows that do not fit under
+    // its box are not drawn, so nothing out of sight takes the focus.
+    let kept = cx
+        .tray_card
+        .filter(CardView::shown)
+        .map_or(usize::MAX, |card| card.rows);
+    &items[..fitting_len(cx).min(kept)]
 }
 
 /// The Tray page.
@@ -390,13 +415,24 @@ impl PageView for Tray {
                 copy::TRAY_EMPTY,
             ));
         }
-        view::col(Key::named("tray")).child(
-            view::col(Key::named("tray-rows")).children(
-                rows.iter()
-                    .enumerate()
-                    .map(|(i, r)| item_row(cx.theme, i, r, display_title(r))),
-            ),
-        )
+        let mut children = Vec::with_capacity(rows.len() + 1);
+        for (i, r) in rows.iter().enumerate() {
+            let mine = cx.tray_card.filter(|c| c.index == i);
+            let look = RowLook {
+                held: mine.is_some_and(|c| c.held),
+                open: mine.is_some_and(|c| c.answered),
+            };
+            children.push(item_row_looking(theme, i, r, display_title(r), look));
+            if let Some(card) = mine {
+                children.push(page_card_slot(theme, card.shown().then_some(card.box_h)));
+            }
+        }
+        if cx.tray_card.is_none_or(|c| c.index >= rows.len()) {
+            // Always in the tree, out of the layout: a box never enters or
+            // leaves with a fade of the page's tree.
+            children.push(page_card_slot(theme, None));
+        }
+        view::col(Key::named("tray")).child(view::col(Key::named("tray-rows")).children(children))
     }
 
     /// The default size, taller when the rows need it, up to the surface.
@@ -405,7 +441,12 @@ impl PageView for Tray {
             return PAGE_SIZE;
         }
         let rows = drawn(cx.items, cx).len();
-        let needed = chrome_height(cx.theme) + rows as f32 * cx.theme.row_height;
+        // The open menu's card under its row: its box and the 6 px around it.
+        let card = cx
+            .tray_card
+            .filter(CardView::shown)
+            .map_or(0.0, |c| c.box_h + MARGINS);
+        let needed = chrome_height(cx.theme) + rows as f32 * cx.theme.row_height + card;
         (PAGE_SIZE.0, PAGE_SIZE.1.max(needed))
     }
 }
@@ -439,18 +480,44 @@ pub(crate) fn title_weight(row: &TrayRow) -> Weight {
     }
 }
 
+/// How a row looks while the app's menu hangs from it as a card
+/// (CEL-D-016).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct RowLook {
+    /// The row is the card's: it shows its press fill (`Role::ControlHover`),
+    /// from the press until the card starts to fold.
+    pub held: bool,
+    /// The app has answered and the card is open: the title is semibold.
+    pub open: bool,
+}
+
 /// The row of the item at `index` of the list: its icon, `title` (the page
 /// passes [`display_title`]; the tray's overflow window cuts it to the room
-/// the row has) and, when it is not simply active, a status word.
-pub(crate) fn item_row(theme: &Theme, index: usize, row: &TrayRow, title: &str) -> View {
+/// the row has) and, when it is not simply active, a status word; `look` is
+/// how the open menu's card changes it.
+pub(crate) fn item_row_looking(
+    theme: &Theme,
+    index: usize,
+    row: &TrayRow,
+    title: &str,
+    look: RowLook,
+) -> View {
+    let weight = if look.open {
+        Weight::Semibold
+    } else {
+        title_weight(row)
+    };
     let title_role = match row.status {
         Status::Passive => Role::TextFaint,
         Status::Active | Status::NeedsAttention => Role::TextHi,
     };
     let icon_key = Key::indexed("tray-icon", index as u64);
     let icon = icon_view(icon_key, &row.icon);
-    centred(view::row(row_key(index)))
-        .height(theme.row_height)
+    let mut line = centred(view::row(row_key(index)));
+    if look.held {
+        line = line.fill(Role::ControlHover);
+    }
+    line.height(theme.row_height)
         .padding_xy(theme.spacing.md, 0.0)
         .gap(theme.spacing.md)
         .radius(theme.radius_md)
@@ -461,7 +528,7 @@ pub(crate) fn item_row(theme: &Theme, index: usize, row: &TrayRow, title: &str) 
             view::text(
                 Key::indexed("tray-title", index as u64),
                 title,
-                text_style(theme.type_scale.body, title_weight(row), false, title_role),
+                text_style(theme.type_scale.body, weight, false, title_role),
             )
             .grow(),
         )
@@ -497,6 +564,7 @@ mod tests {
             do_not_disturb: false,
             history: &[],
             items,
+            tray_card: None,
             sysmon: None,
             weather: None,
             today: None,
@@ -602,7 +670,11 @@ mod tests {
             row("bt", Status::Active, RowIcon::default()),
         ];
         let v = page_with(&NameOwner::default(), &items);
-        let rows = &v.children[0].children;
+        // The card's slot ends the rows, hidden, so a box never fades in.
+        let all = &v.children[0].children;
+        assert_eq!(all.len(), 4);
+        assert_eq!(all[3].key, Key::named("tray-card-slot"));
+        let rows = &all[..3];
         let keys: Vec<Key> = rows.iter().map(|r| r.key).collect();
         assert_eq!(keys, vec![row_key(0), row_key(1), row_key(2)]);
         assert!(rows.iter().all(|r| r.interactive && r.focusable));
@@ -677,6 +749,7 @@ mod tests {
             do_not_disturb: false,
             history: &[],
             items: &many,
+            tray_card: None,
             sysmon: None,
             weather: None,
             today: None,

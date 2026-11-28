@@ -15,12 +15,16 @@ use taffy::{AlignItems, JustifyContent, LengthPercentageAuto};
 use super::{
     commands::Switch,
     groups::Group,
-    scrolling, selector,
+    selector,
     state::{AppRow, LauncherState, ListView, Row, Source, Tab, GRID_COLUMNS},
 };
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::{copy, island::pages::activity::truncate_title};
+use crate::{
+    copy,
+    island::pages::activity::truncate_title,
+    scrolling::{self, THUMB_INSET, THUMB_RADIUS, THUMB_W},
+};
 
 /// The card's width, logical px.
 pub const LAUNCHER_W: f32 = 560.0;
@@ -29,11 +33,6 @@ pub const AREA_ROWS: usize = 8;
 /// Rows built beyond each edge of the area, so a row that enters with the
 /// tree's entrance animation enters out of view.
 pub const BUILD_MARGIN: usize = 4;
-/// The scroll bar's width, its distance from the area's right edge and its
-/// corner radius.
-const THUMB_W: f32 = 4.0;
-const THUMB_INSET: f32 = 2.0;
-const THUMB_RADIUS: f32 = 2.0;
 /// A row's icon.
 pub const ICON_SIZE: f32 = 24.0;
 /// The search glyph in the field.

@@ -47,10 +47,20 @@ impl Tree {
 
     /// [`Tree::paint`] with the subtrees of the nodes keyed in `hidden` painted
     /// by nobody: the rest of the walk is unchanged and the node keeps its
-    /// place in the layout. No caller in `src/` yet: CEL-D-016 paints a row's
-    /// card with it.
+    /// place in the layout. The tray's windows paint their rows blurred
+    /// apart from the rest with it and [`Tree::paint_node`].
     pub fn paint_hiding(&mut self, painter: &mut Painter, now: Instant, hidden: &[Key]) {
         self.paint_scoped(painter, now, Scope::All, hidden);
+    }
+
+    /// Paints the node keyed `key` and its subtree alone, where the whole
+    /// walk would put them (its ancestors' slides apply). Nothing for a key
+    /// the tree does not have.
+    pub fn paint_node(&mut self, painter: &mut Painter, now: Instant, key: Key) {
+        let Some(id) = self.node_by_key(key) else {
+            return;
+        };
+        self.paint_scoped(painter, now, Scope::Only(id), &[]);
     }
 
     /// Paints what is inside the node `id` alone (its children's subtrees,
@@ -176,6 +186,10 @@ impl Tree {
         let theme = painter.theme().clone();
         let base = match scope {
             Scope::Inside(root) => self.slide_of(root, now),
+            Scope::Only(id) => self
+                .slot(id)
+                .and_then(|s| s.parent)
+                .map_or((0.0, 0.0), |parent| self.slide_of(parent, now)),
             _ => (0.0, 0.0),
         };
         let mut shifts: Vec<(f32, f32)> = vec![base];

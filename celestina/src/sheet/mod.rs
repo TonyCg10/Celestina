@@ -19,6 +19,7 @@ pub mod geometry;
 pub mod liquid;
 pub mod motion;
 pub mod subtitle;
+pub mod tray_menu;
 pub mod tray_overflow;
 pub mod workspaces;
 
@@ -31,9 +32,13 @@ use celestina_wayland::InputEvent;
 pub use body::{BodyOutcome, PageBody, SheetBody, TrayOverflowBody, WorkspacesBody};
 use drop::{DropFrame, Source};
 use geometry::Edge;
-use motion::SheetMotion;
+use motion::{SheetMotion, Shown};
+pub use tray_menu::TrayMenuBody;
 
-use crate::pieces::{PageId, SheetKind};
+use crate::{
+    pieces::{PageId, SheetKind},
+    tray::{menu::ShellEntry, ItemId, MenuTree},
+};
 
 /// The text measure of the caller: `(text, style, max width)` to `(width,
 /// height)`.
@@ -174,7 +179,7 @@ fn same(a: Rect, b: Rect) -> bool {
 
 /// `ev` with its pointer position moved by (`-dx`, `-dy`): the event in the
 /// body's own coordinates.
-fn translated(ev: &InputEvent, dx: f32, dy: f32) -> InputEvent {
+pub(crate) fn translated(ev: &InputEvent, dx: f32, dy: f32) -> InputEvent {
     match ev {
         InputEvent::PointerMotion { x, y } => InputEvent::PointerMotion {
             x: x - dx,
@@ -359,13 +364,132 @@ impl Sheets {
             .and_then(|o| o.body.tray_overflow_body_mut())
     }
 
+    /// The tray menus the sheet holds, each with whether its app has not
+    /// answered: the open window's (not closing), a card of it, and the
+    /// queued one's, which waits for the Island's page to close.
+    fn held_menus(&self) -> Vec<(ItemId, bool)> {
+        let open = self
+            .open
+            .as_ref()
+            .filter(|o| !o.motion.is_closing())
+            .and_then(|o| o.body.held_menu());
+        let queued = match &self.queued {
+            Some(Next::Sheet(request)) => request.body.held_menu(),
+            _ => None,
+        };
+        open.into_iter().chain(queued).collect()
+    }
+
+    /// The tray menus this sheet holds, waiting or shown: never one that is
+    /// closing or that a switch left.
+    #[must_use]
+    pub fn tray_menus_held(&self) -> Vec<ItemId> {
+        self.held_menus()
+            .into_iter()
+            .map(|(item, _)| item)
+            .collect()
+    }
+
+    /// Whether `item`'s menu is shown, its app having answered.
+    #[must_use]
+    pub fn tray_menu_shown(&self, item: &ItemId) -> bool {
+        self.held_menus()
+            .iter()
+            .any(|(held, waiting)| held == item && !waiting)
+    }
+
+    /// Whether `item`'s menu is held and its app has not answered.
+    #[must_use]
+    pub fn tray_menu_waiting(&self, item: &ItemId) -> bool {
+        self.held_menus()
+            .iter()
+            .any(|(held, waiting)| held == item && *waiting)
+    }
+
+    /// Gives `item`'s held tray menu the app's `tree` (and `shell`'s entry):
+    /// the window opens to its size, the card unfolds, or the window shows
+    /// the republish. `false` when no window (or queued one) holds `item`.
+    pub fn arrive_tray_menu(
+        &mut self,
+        item: &ItemId,
+        theme: &Theme,
+        tree: MenuTree,
+        shell: Option<ShellEntry>,
+        reduced: bool,
+        now: Instant,
+    ) -> bool {
+        if let Some(o) = self.open.as_mut().filter(|o| !o.motion.is_closing()) {
+            // A waiting body that kept the height of the window it took over
+            // (a switch on the same capsule).
+            let kept = o.body.holds_height();
+            if o.body
+                .arrive_menu(item, theme, tree.clone(), shell, reduced, now)
+            {
+                if kept && o.motion.travel_settled(now) {
+                    // The switch finished while the app was asked: the window
+                    // morphs to the menu's shape on the travel's own clock,
+                    // the content fading in.
+                    let shown = o
+                        .motion
+                        .frame(now, o.target, o.anchor.pill, o.anchor.surface);
+                    o.motion.set_reduced(reduced);
+                    o.motion.travel(
+                        shown.rect,
+                        shown.radius,
+                        Shown {
+                            alpha: 0.0,
+                            blur: 0.0,
+                        },
+                        theme,
+                        now,
+                    );
+                }
+                self.retarget(now);
+                self.bump();
+                return true;
+            }
+        }
+        if let Some(Next::Sheet(request)) = &mut self.queued {
+            if request
+                .body
+                .arrive_menu(item, theme, tree, shell, reduced, now)
+            {
+                self.bump();
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Gives up the queued window of `item`'s tray menu, if one waits.
+    pub fn drop_queued_tray_menu(&mut self, item: &ItemId) {
+        let queued = matches!(
+            &self.queued,
+            Some(Next::Sheet(request))
+                if request.body.held_menu().is_some_and(|(held, _)| held == *item)
+        );
+        if queued {
+            self.drop_queue();
+        }
+    }
+
+    /// The item of the open tray menu window (not closing).
+    #[must_use]
+    pub fn open_tray_menu_item(&self) -> Option<ItemId> {
+        self.open
+            .as_ref()
+            .filter(|o| !o.motion.is_closing())
+            .and_then(|o| o.body.held_menu())
+            .map(|(item, _)| item)
+    }
+
     /// The rect of the open body's node `key` in the surface's coordinates
     /// (where the window puts the body, less the scroll), for what hangs
     /// from it.
     #[must_use]
     pub fn body_rect(&self, key: Key, anchor: &Anchor) -> Option<Rect> {
         let o = self.open.as_ref().filter(|o| !o.motion.is_closing())?;
-        let tree = o.body.tree();
+        let tree = o.body.tree()?;
         let rect = tree.rect(tree.node_by_key(key)?);
         let at = o.place(anchor, o.body.size());
         Some(Rect {
@@ -379,7 +503,7 @@ impl Sheets {
     #[must_use]
     pub fn body_focused_key(&self) -> Option<Key> {
         let o = self.open.as_ref().filter(|o| !o.motion.is_closing())?;
-        let tree = o.body.tree();
+        let tree = o.body.tree()?;
         tree.highlight().focused.map(|id| tree.key_of(id))
     }
 
@@ -568,8 +692,15 @@ impl Sheets {
             zone,
             piece,
             kind,
-            body,
+            mut body,
         } = request;
+        if body.is_waiting() {
+            // The window of this capsule stays while the app is asked, at the
+            // height it shows (none to keep when it is itself a held drop).
+            if let Some(h) = self.shown_height(zone, anchor.surface, now) {
+                body.hold_height(h);
+            }
+        }
         let size = body.size();
         let target = Sheets::target_of(anchor, size);
         let fresh =
@@ -608,7 +739,11 @@ impl Sheets {
                 });
                 self.open = Some(fresh(motion, body, old, l.target));
             } else {
-                let motion = SheetMotion::open(anchor.pill, theme, now, reduced);
+                let mut motion = SheetMotion::open(anchor.pill, theme, now, reduced);
+                if body.is_waiting() {
+                    // A menu still being asked for: the drop holds.
+                    motion.hold(now);
+                }
                 self.open = Some(fresh(motion, body, None, target));
             }
             self.scroll = Scroll::default();
@@ -616,6 +751,20 @@ impl Sheets {
         self.hovering = false;
         self.refresh_extent();
         self.bump();
+    }
+
+    /// The height the window of capsule `zone` shows at `now` (open or still
+    /// closing), when it is a window and not only a drop's liquid.
+    fn shown_height(&self, zone: usize, surface: (f32, f32), now: Instant) -> Option<f32> {
+        let frame = match (&self.open, self.leaving.iter().find(|l| l.zone == zone)) {
+            (Some(o), _) if o.zone == zone => {
+                o.motion
+                    .frame(now, o.target, o.anchor.pill, o.anchor.surface)
+            }
+            (_, Some(l)) => l.motion.frame(now, l.target, l.pill, surface),
+            _ => return None,
+        };
+        frame.drawn.then_some(frame.rect.h)
     }
 
     /// The open window, on the request's capsule, travels to the request's
@@ -848,10 +997,14 @@ impl Sheets {
         let Some(o) = self.open.as_mut().filter(|o| !o.motion.is_closing()) else {
             return;
         };
+        if !o.body.is_waiting() {
+            // What a held drop waited for is here: it opens on.
+            o.motion.release(now);
+        }
         let size = o.body.size();
         let target = o.place(&o.anchor, size);
         if !same(target, o.target) {
-            if !slide_follows(self.slide_until, now) {
+            if !(slide_follows(self.slide_until, now) || o.body.follows_height(now)) {
                 let shown = o
                     .motion
                     .rect(now, o.target, o.anchor.pill, o.anchor.surface);
@@ -920,7 +1073,9 @@ impl Sheets {
         // or not the page then changes.
         if matches!(
             outcome,
-            BodyOutcome::Keep { changed: true } | BodyOutcome::Activate { .. }
+            BodyOutcome::Keep { changed: true }
+                | BodyOutcome::Activate { .. }
+                | BodyOutcome::TrayMenu(_)
         ) {
             self.bump();
         }
@@ -1101,6 +1256,16 @@ impl Sheets {
     #[must_use]
     pub fn body_node_rect(&self, key: Key) -> Option<Rect> {
         self.open.as_ref().and_then(|o| o.body.node_rect(key))
+    }
+
+    /// The open tray overflow body (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn overflow_body(&self) -> Option<&TrayOverflowBody> {
+        match self.open.as_ref()?.body {
+            SheetBody::TrayOverflow(ref body) => Some(body),
+            _ => None,
+        }
     }
 
     /// The open body's size (tests).
@@ -1560,6 +1725,53 @@ mod tests {
         zoned(&mut sheets, 1, bell, &other, t1);
         zoned(&mut sheets, 3, volume, &first, t1 + ms(100));
         assert_eq!(sheets.held_pieces(t1 + ms(100)), [volume, bell]);
+    }
+
+    #[test]
+    fn a_waiting_menu_taking_a_closing_window_back_keeps_the_height_it_shows() {
+        let t0 = Instant::now();
+        let volume = Key::named("volume");
+        let (mut sheets, first) = bare_open(volume, t0);
+        let other = Anchor {
+            capsule: r(200.0, 8.0, 200.0, 40.0),
+            pill: r(240.0, 14.0, 60.0, 28.0),
+            ..first
+        };
+        // Another capsule's window takes the first one's place: it closes.
+        let t1 = t0 + ms(600);
+        zoned(&mut sheets, 1, Key::named("bell"), &other, t1);
+        assert!(sheets.is_leaving());
+        // A menu of the first capsule is asked for while its window closes:
+        // the window comes back and stays as tall as it shows now.
+        let at = t1 + ms(100);
+        let kept = sheets
+            .shown_height(3, first.surface, at)
+            .expect("a window is still shown");
+        assert!(kept > 1.0, "{kept}");
+        let item = crate::tray::ItemId {
+            bus_name: ":1.7".to_owned(),
+            path: "/StatusNotifierItem".to_owned(),
+        };
+        sheets.open(
+            Request {
+                zone: 3,
+                piece: volume,
+                kind: SheetKind::TrayMenu,
+                body: SheetBody::TrayMenu(Box::new(TrayMenuBody::waiting(item, false, 496.0))),
+            },
+            &first,
+            &Theme::dark(),
+            at,
+            false,
+        );
+        for n in [0u64, 100, 250, 400] {
+            let frame = sheets.frame(&first, at + ms(n)).expect("the window");
+            assert!(
+                (frame.rect.h - kept).abs() < 0.01,
+                "{n} ms: {} of {kept}",
+                frame.rect.h
+            );
+        }
     }
 
     #[test]

@@ -138,13 +138,8 @@ pub(crate) enum Visit {
 pub(crate) enum Scope {
     /// Every visible node.
     All,
-    /// Every visible node but this one and its subtree. No caller yet
-    /// (CEL-D-016 paints a row's card with it).
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "CEL-D-016 paints a row's card with it")
-    )]
-    Except(NodeId),
+    /// This node and its subtree alone, as the whole walk would shift them.
+    Only(NodeId),
     /// The subtrees of this node's children, even when the node itself is
     /// hidden (their rects are then the ones they had when last laid out).
     Inside(NodeId),
@@ -189,6 +184,8 @@ pub struct Tree {
     pub(crate) slide_next: Option<NextSlide>,
     /// Hit-testing follows the painted rects (slides included).
     pub(crate) hit_painted: bool,
+    /// The next `apply` lets what it removes go at once ([`Tree::cut_exits`]).
+    pub(crate) cut_exits: bool,
 }
 
 /// How the slides the next layout starts run ([`Tree::slide_with`]).
@@ -239,6 +236,7 @@ impl Tree {
             helds: Vec::new(),
             slide_next: None,
             hit_painted: false,
+            cut_exits: false,
         }
     }
 
@@ -314,6 +312,13 @@ impl Tree {
         });
     }
 
+    /// The nodes the next `apply` removes go at once, with no exit fade (a
+    /// fade that stays under reduced motion would paint them over whatever
+    /// takes their place). Taken by that `apply`.
+    pub fn cut_exits(&mut self) {
+        self.cut_exits = true;
+    }
+
     /// Takes `theme`'s motion ladder and press scale for the animations
     /// started from now on (running ones finish as they were), and its
     /// slider anatomy, re-measuring every slider when it changed.
@@ -384,33 +389,22 @@ impl Tree {
     /// The visible tree in paint order under `scope`, each node entered and
     /// left. A stale or hidden scope node yields nothing.
     pub(crate) fn walk(&self, scope: Scope) -> Vec<Visit> {
-        let (mut stack, skip): (Vec<Visit>, Option<NodeId>) = match scope {
-            Scope::All => (
-                self.roots.iter().rev().map(|&r| Visit::Enter(r)).collect(),
-                None,
-            ),
-            Scope::Except(skip) => (
-                self.roots.iter().rev().map(|&r| Visit::Enter(r)).collect(),
-                Some(skip),
-            ),
+        let mut stack: Vec<Visit> = match scope {
+            Scope::All => self.roots.iter().rev().map(|&r| Visit::Enter(r)).collect(),
+            Scope::Only(id) => vec![Visit::Enter(id)],
             Scope::Inside(parent) => match self.slot(parent) {
-                Some(slot) => (
-                    slot.children
-                        .iter()
-                        .rev()
-                        .map(|&c| Visit::Enter(c))
-                        .collect(),
-                    None,
-                ),
-                None => (Vec::new(), None),
+                Some(slot) => slot
+                    .children
+                    .iter()
+                    .rev()
+                    .map(|&c| Visit::Enter(c))
+                    .collect(),
+                None => Vec::new(),
             },
         };
         let mut out = Vec::new();
         while let Some(v) = stack.pop() {
             if let Visit::Enter(id) = v {
-                if skip == Some(id) {
-                    continue;
-                }
                 let Some(slot) = self.slot(id) else {
                     continue;
                 };
@@ -717,7 +711,7 @@ mod tests {
     }
 
     #[test]
-    fn a_scoped_walk_skips_one_subtree() {
+    fn a_scoped_walk_covers_one_subtree() {
         let mut tree = Tree::new(false, &Theme::dark());
         let rows = (0..3).map(|i| {
             if i == 1 {
@@ -739,8 +733,9 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(enters(Scope::All), tree.paint_order());
-        assert_eq!(enters(Scope::Except(rows[1])), vec![card, rows[0], rows[2]]);
-        assert_eq!(enters(Scope::Except(card)), Vec::<NodeId>::new());
+        let inner = id(&tree, Key::named("inner"));
+        assert_eq!(enters(Scope::Only(rows[1])), vec![rows[1], inner]);
+        assert_eq!(enters(Scope::Only(card)), tree.paint_order());
     }
 
     #[test]

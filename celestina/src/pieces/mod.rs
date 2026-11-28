@@ -250,6 +250,10 @@ pub enum SheetKind {
     Workspaces,
     /// The tray's hidden apps, from its chevron (CEL-I-012).
     TrayOverflow,
+    /// A tray app's menu, from its bar icon (CEL-D-016): the window opens
+    /// as a held drop and shows the menu once the app answers. It is opened
+    /// by [`PieceAction::TrayMenu`], never by [`PieceAction::Sheet`].
+    TrayMenu,
 }
 
 /// What the Volume piece asks for. The default output is the one it drives;

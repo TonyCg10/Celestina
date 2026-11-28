@@ -8,7 +8,7 @@
 //! first ([`super::usage`]). An empty query, or one of only separators,
 //! answers from the [`Tab`]: the recent applications, the whole index by
 //! name, or one group. Every answer is a row: the view scrolls the list
-//! ([`super::scrolling`]) or lays it out as a grid.
+//! ([`crate::scrolling`]) or lays it out as a grid.
 //!
 //! The `Mod+K` selector is the same state over the bubbles [`Source`]: its
 //! rows are Melibea's minimised windows ([`super::selector`]), and no query

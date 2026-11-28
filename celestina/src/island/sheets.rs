@@ -30,9 +30,10 @@ use crate::{
         drop::{self, DropFrame, Source},
         geometry::{self, Edge, Hit},
         workspaces::workspaces_view,
-        Anchor, BodyOutcome, Next, Request, SheetBody, TrayOverflowBody, WindowGlass,
+        Anchor, BodyOutcome, Next, Request, SheetBody, TrayMenuBody, TrayOverflowBody, WindowGlass,
         WorkspacesBody,
     },
+    tray::{card::CardToggle, menu::ShellEntry, pane::MenuOutcome, ItemId, MenuTree, TrayCommand},
 };
 
 /// One Haze fill of the glass under the bar (CEL-D-013).
@@ -379,6 +380,12 @@ impl Island {
                 self.open_tray_overflow_sheet(key, now);
                 return None;
             }
+            SheetKind::TrayMenu => {
+                // A tray menu opens from its icon's own action, which also
+                // asks the app for the menu.
+                tracing::debug!("island: a tray menu sheet was requested as a plain sheet");
+                return None;
+            }
             SheetKind::Session => {
                 let core = SessionCore::new(&self.theme, self.reduced, now);
                 self.open_sheet_at(
@@ -391,6 +398,130 @@ impl Island {
             }
         };
         Some(IslandAction::OpenLevelSheet { kind, piece: key })
+    }
+
+    /// What the menu action of a bar icon asks for: the window of its menu
+    /// opens now as a held drop and the app is asked for the menu
+    /// ([`IslandAction::AskTrayMenu`]); the icon of the menu already open
+    /// closes it. `None` when the bar has no such icon or nothing may open.
+    pub(super) fn tray_menu_request(
+        &mut self,
+        key: Key,
+        item: ItemId,
+        now: Instant,
+    ) -> Option<IslandAction> {
+        if self.sheets.piece() == Some(key) {
+            self.sheets.drop_queue();
+            self.close_sheet(now);
+            return None;
+        }
+        let max_h = geometry::max_height(self.size);
+        let body = TrayMenuBody::waiting(item.clone(), false, max_h);
+        let opened = self.open_sheet_at(
+            key,
+            SheetKind::TrayMenu,
+            SheetBody::TrayMenu(Box::new(body)),
+            now,
+        );
+        opened.then(|| IslandAction::AskTrayMenu {
+            item,
+            at: output_point(self.pointer),
+        })
+    }
+
+    /// Whether a primary press on `key` finds the window of a tray menu open
+    /// on that icon: the press only closes it (the icon's own action would
+    /// activate the app under the menu).
+    pub(super) fn closes_its_tray_menu(&self, key: Key) -> bool {
+        self.sheets.piece() == Some(key) && self.sheets.kind() == Some(SheetKind::TrayMenu)
+    }
+
+    /// The app answered with `tree` for `item`: the window that holds the
+    /// menu opens to its size, or shows the republish. `false` when nothing
+    /// on this Island holds `item`.
+    pub fn tray_menu_arrived(
+        &mut self,
+        item: &ItemId,
+        tree: MenuTree,
+        shell: Option<ShellEntry>,
+        now: Instant,
+    ) -> bool {
+        if self.tray_card_holds(item) {
+            return self.arrive_tray_card(item, tree, shell, now);
+        }
+        self.sheets
+            .arrive_tray_menu(item, &self.theme, tree, shell, self.reduced, now)
+    }
+
+    /// The app has no menu for `item` and the shell has no entry to show in
+    /// its place: the waiting window closes.
+    pub fn tray_menu_failed(&mut self, item: &ItemId, now: Instant) {
+        if self.tray_card_holds(item) && !self.tray_card_shows(item) {
+            // A card has nothing to show: it goes, the page stays.
+            self.drop_tray_card();
+            return;
+        }
+        if !self.sheets.tray_menu_waiting(item) {
+            return;
+        }
+        if self.sheets.open_tray_menu_item().as_ref() == Some(item) {
+            if let Some(body) = self.sheets.tray_overflow_body_mut() {
+                // A card has nothing to show: it goes, the window stays.
+                body.drop_card(now);
+                return;
+            }
+            self.sheets.drop_queue();
+            self.close_sheet(now);
+        } else {
+            // It was still waiting behind the page that is closing.
+            self.sheets.drop_queued_tray_menu(item);
+        }
+    }
+
+    /// The tray menus this Island holds, waiting or shown: the ones whose
+    /// window is open or waits to open, not a closing one.
+    #[must_use]
+    pub fn tray_menus_held(&self) -> Vec<ItemId> {
+        let mut held = self.sheets.tray_menus_held();
+        held.extend(self.tray_card_item());
+        held
+    }
+
+    /// Whether `item`'s menu is on screen here: its app answered and the
+    /// window holds it. A republish then refreshes it in place.
+    #[must_use]
+    pub fn tray_menu_shown(&self, item: &ItemId) -> bool {
+        self.sheets.tray_menu_shown(item) || self.tray_card_shows(item)
+    }
+
+    /// What the person did in the open tray menu: an entry chosen goes to
+    /// its app and closes the window, and so does the shell's entry; a
+    /// submenu asks the app about it; going back or staying asks nothing.
+    fn tray_menu_outcome(&mut self, outcome: MenuOutcome, now: Instant) -> Vec<IslandAction> {
+        let Some(item) = self.sheets.open_tray_menu_item() else {
+            return Vec::new();
+        };
+        match outcome {
+            MenuOutcome::Choose(id) => {
+                self.sheets.drop_queue();
+                self.close_sheet(now);
+                vec![IslandAction::Tray(TrayCommand::MenuEvent(item, id))]
+            }
+            MenuOutcome::Shell(entry) => {
+                self.sheets.drop_queue();
+                self.close_sheet(now);
+                vec![IslandAction::TrayShellEntry(item, entry)]
+            }
+            MenuOutcome::Submenu(id) => {
+                vec![IslandAction::Tray(TrayCommand::AboutToShow(item, id))]
+            }
+            MenuOutcome::Close => {
+                self.sheets.drop_queue();
+                self.close_sheet(now);
+                Vec::new()
+            }
+            MenuOutcome::Back | MenuOutcome::Keep { .. } => Vec::new(),
+        }
     }
 
     /// The workspaces list and its body ids, from the model: one row per
@@ -466,7 +597,13 @@ impl Island {
         let Some(rows) = self.overflow_list() else {
             return false;
         };
-        let body = TrayOverflowBody::new(&self.theme, self.reduced, rows, now);
+        let body = TrayOverflowBody::new(
+            &self.theme,
+            self.reduced,
+            rows,
+            geometry::max_height(self.size),
+            now,
+        );
         self.open_sheet_at(
             piece,
             SheetKind::TrayOverflow,
@@ -537,17 +674,20 @@ impl Island {
                 vec![IslandAction::Tray(command)]
             }
             PieceAction::TrayMenu(item) => {
-                let Some(row) = rect else {
-                    return Vec::new();
-                };
-                self.bar_menu_asked = true;
-                self.overflow_menu_asked = Some(item.clone());
-                vec![IslandAction::OpenTrayMenu {
-                    item,
-                    row,
-                    keyboard,
-                    at: at(rect, self.pointer),
-                }]
+                // The card hangs from the row before the app is asked: the
+                // app's sync only follows a menu some window holds.
+                let reduced = self.reduced;
+                let toggled = self
+                    .sheets
+                    .tray_overflow_body_mut()
+                    .map(|body| body.toggle_card(index, item.clone(), keyboard, reduced, now));
+                match toggled {
+                    Some(CardToggle::Asked) => vec![IslandAction::AskTrayMenu {
+                        item,
+                        at: at(rect, self.pointer),
+                    }],
+                    Some(CardToggle::Folded) | None => Vec::new(),
+                }
             }
             PieceAction::TrayContext(item) => {
                 let (x, y) = at(rect, self.pointer);
@@ -625,6 +765,7 @@ impl Island {
     pub(super) fn sheets_before_layout(&mut self, now: Instant, measure: &mut Measure<'_>) {
         self.open_what_waited(now);
         self.sheets.sync(&self.theme, now, measure);
+        self.tray_card_sync(now, measure);
     }
 
     /// Opens what waited for the close to end, if that has ended.
@@ -885,6 +1026,7 @@ impl Island {
                 };
                 self.page_action(page, key, now).into_iter().collect()
             }
+            BodyOutcome::TrayMenu(outcome) => self.tray_menu_outcome(outcome, now),
             BodyOutcome::More { rect, keyboard } => {
                 vec![IslandAction::OpenMenu {
                     more: rect,

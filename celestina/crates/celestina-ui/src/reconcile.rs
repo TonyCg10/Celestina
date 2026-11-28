@@ -69,6 +69,7 @@ impl Tree {
         if self.highlight.focused.is_some_and(|f| !self.is_shown(f)) {
             self.highlight.focused = None;
         }
+        self.cut_exits = false;
     }
 
     /// Updates node `id` in place from `view` (same key) and reconciles
@@ -259,11 +260,15 @@ impl Tree {
     /// parent's taffy children are rebuilt by the caller), hit-test and
     /// focus; a focus inside it is dropped now.
     fn leave(&mut self, id: NodeId, now: Instant) {
-        let exit = self.duration(Motion::Exit);
+        let (exit, cut) = (self.duration(Motion::Exit), self.cut_exits);
         if let Some(slot) = self.slot_mut(id) {
             slot.leaving = true;
-            slot.opacity
-                .animate_to(0.0, exit, LINEAR, now, Reduced::Opacity);
+            if cut {
+                slot.opacity.set(0.0);
+            } else {
+                slot.opacity
+                    .animate_to(0.0, exit, LINEAR, now, Reduced::Opacity);
+            }
         }
         if self
             .highlight

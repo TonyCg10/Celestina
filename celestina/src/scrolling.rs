@@ -1,11 +1,17 @@
-//! The arithmetic of the launcher's scrolled list: which offset reveals a
-//! row, which rows to build and where the scroll bar sits. Pure, in logical
-//! pixels. Non-finite inputs count as zero and results are always finite
+//! The arithmetic of a scrolled list (the launcher's, the tray menu pane's):
+//! which offset reveals a row, which rows to build and where the scroll bar
+//! sits. Pure, in logical pixels. Non-finite inputs count as zero and results are always finite
 //! and clamped.
 
 use std::ops::Range;
 use std::time::Duration;
 
+/// The scroll bar's width.
+pub(crate) const THUMB_W: f32 = 4.0;
+/// The scroll bar's distance from the area's right edge.
+pub(crate) const THUMB_INSET: f32 = 2.0;
+/// The scroll bar's corner radius.
+pub(crate) const THUMB_RADIUS: f32 = 2.0;
 /// The shortest the scroll bar's thumb gets.
 pub const THUMB_MIN: f32 = 24.0;
 /// How long the scroll bar stays after the offset last changed.

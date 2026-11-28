@@ -30,6 +30,7 @@ use crate::{
     },
     pieces::{self, PageId},
     providers::{niri::NiriModel, sysmon::SysReading, weather::WeatherReading},
+    tray::card::CardView,
 };
 
 /// The widest an explanation line gets before it wraps, logical px.
@@ -122,6 +123,9 @@ pub struct PageCx<'a> {
     pub history: &'a [HistoryRow],
     /// The tray's items (CEL-1-G).
     pub items: &'a [TrayRow],
+    /// The card an item's menu hangs from under its row on the Tray page
+    /// (CEL-D-016); `None` for every other page and while no menu is open.
+    pub tray_card: Option<CardView>,
     /// The system monitor's newest reading (not the bar's held-back one).
     pub sysmon: Option<&'a SysReading>,
     /// The weather's reading; `None` while there is no fresh one.
@@ -262,6 +266,7 @@ pub(crate) fn wants_of(
         do_not_disturb: false,
         history: &[],
         items: &[],
+        tray_card: None,
         sysmon: None,
         weather: None,
         today: None,
@@ -325,6 +330,7 @@ mod tests {
             do_not_disturb: false,
             history: &history,
             items: &items,
+            tray_card: None,
             sysmon: None,
             weather: None,
             today: None,
@@ -556,6 +562,7 @@ mod tests {
             do_not_disturb: false,
             history: &fixture.history,
             items: &fixture.items,
+            tray_card: None,
             sysmon: None,
             weather: None,
             today: None,
@@ -740,6 +747,8 @@ mod tests {
                 "  Key(15449967088153426993) box",
                 "   Key(18105184591219638107) icon",
                 "   Key(2240127760833934058) text \"blueman\"",
+                "  Key(17172340127859460493) box",
+                "   Key(3263412749116511134) box",
             ],
         },
         Pinned {

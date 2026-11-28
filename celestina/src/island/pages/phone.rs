@@ -306,6 +306,7 @@ mod tests {
             do_not_disturb: false,
             history: &[],
             items: &[],
+            tray_card: None,
             phone,
             sysmon: None,
             weather: None,
